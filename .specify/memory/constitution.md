@@ -1,50 +1,97 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report
+- Version change: 初始模板 → 1.0.0
+- Modified principles: 无（首次建立）
+- Added sections: 核心原则、技术与数据约束、研发工作流与质量门禁、治理
+- Removed sections: 无
+- Templates requiring updates:
+  - ✅ `.specify/templates/plan-template.md`
+  - ✅ `.specify/templates/spec-template.md`
+  - ✅ `.specify/templates/tasks-template.md`
+  - ✅ `.specify/templates/commands/`（目录不存在，无需更新）
+- Follow-up TODOs: 无
+-->
+
+# ItemTrace Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. HarmonyOS 原生优先与 SDK 可证实性
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+所有实现必须使用 HarmonyOS 6.1 原生工程能力、ArkTS、ArkUI 和 Stage Model，
+不得以 Android、iOS、WebView 或 H5 方案替代主应用实现。每项功能开始前必须检查
+当前工程结构、SDK 版本、`entry` 模块、`module.json5`、`oh-package.json5` 与
+`build-profile.json5`。提醒、通知、相册、相机、扫码、服务卡片和分享等系统能力，
+只有在当前 SDK、依赖和权限配置均已验证后才能接入；未验证时必须在设计中标为
+“需要查证”，并通过可替换的抽象边界隔离。理由：避免编造 API 或配置导致工程不可构建。
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### II. 本地优先、最小权限与数据可控
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+物品、位置、图片索引、提醒规则和备注默认仅保存于设备本地。结构化业务数据必须优先
+使用 RDB Store，轻量偏好必须使用 Preferences；MVP 不得引入账号、后端、云同步、
+广告或第三方统计。任何新增权限必须在规格和计划中写明用途、触发时机、最小授权范围及
+用户拒绝后的降级体验。删除或批量删除必须有确认；重要数据结构变化必须提供迁移与回滚
+策略。理由：物品清单、位置、药品/食品信息和照片属于敏感数据，用户必须能掌控它们。
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### III. 领域边界、可追溯模型与最小闭环
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+每项功能必须明确 Item、Location、Category、Batch、Reminder、Asset、Tag、
+TraceEvent 的职责、关系和数据归属；新增或变更模型时必须同步更新数据模型文档。
+页面必须说明路由入口与状态管理方式，服务必须说明持久化和系统能力边界，提醒和权限
+必须说明触发、取消及失败处理。阶段 1 的最小闭环必须覆盖位置、物品 CRUD、数量、
+到期日、提前提醒、搜索/筛选、即将过期、注意事项和照片入口；未获单独规格批准的
+高级能力不得提前实现。理由：使数据演进、隐私审查和功能验收均可追溯。
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### IV. 快速、可理解且响应式的原生体验
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+新增物品必须支持最少字段快速保存，并允许后续补充；列表必须清晰展示位置路径，且将
+“在哪里”置于分类之前。首页必须优先提供快速搜索、最近添加、即将过期和低库存/待处理
+入口；空状态必须引导创建第一个位置和物品。所有界面必须针对手机、折叠屏和平板采用
+响应式布局，并保持字体清晰、层级简单和操作可达。服务卡片仅在 SDK 验证且不破坏主流程
+时用于高频入口。理由：家庭和长者场景要求低认知负担和可靠的信息查找。
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### V. Spec Kit 驱动的分阶段交付与质量门禁
+
+复杂功能必须依次完成 constitution、specify、clarify、plan、tasks、analyze、implement，
+并在实现前完整阅读对应的 specification、plan 和 tasks。每次修改前必须阅读相关文件；
+每个阶段必须可运行、可验证、可演示。实现完成后必须运行当前可用的构建、检查或测试命令，
+记录结果；构建或测试失败不得忽略，必须修复或明确记录阻塞原因及影响范围。理由：将范围
+控制、可运行性与验收证据纳入每个增量，而不是留到最后。
+
+## 技术与数据约束
+
+- 项目类型固定为 HarmonyOS 6.1 原生应用；当前工程以 `entry` Stage 模块为主，
+  支持 phone 与 tablet。新增模块或设备类型必须先在计划中说明理由与兼容性影响。
+- RDB Store 是 Item、Location、Category、Batch、Reminder、Asset、Tag 和
+  TraceEvent 等核心结构化数据的默认存储；Preferences 只保存主题、排序、筛选等轻量偏好。
+- 图片应优先通过系统相册选择器或相机能力取得，并只保存满足业务需要的本地引用与元数据。
+  不得默认上传、共享或扫描用户图片、备注和物品信息。
+- 到期、低库存和事项提醒必须优先采用已验证的 HarmonyOS Reminder 或 Notification
+  能力；不得以常驻后台任务模拟提醒。系统能力不可用、权限被拒或提醒创建失败时，应用必须
+  给出明确状态并保留应用内可见的待处理信息。
+- 扫码、服务卡片、导入导出与分享属于后续增强能力。设计必须说明输入/输出、权限、失败
+  降级和本地数据边界，且在 SDK 核验前不得写死 API、包名、权限名或配置项。
+
+## 研发工作流与质量门禁
+
+1. 每个复杂功能先建立中文规格，写明用户场景、验收条件、范围边界、数据与隐私影响。
+2. 计划必须记录实际 SDK/模块配置、技术选型、RDB 迁移方案、路由与状态管理、响应式策略、
+   系统能力核验结论及权限降级路径。
+3. 任务必须按可独立验证的用户故事和阶段排序，包含数据模型文档同步、验证命令和演示步骤。
+   任务不得以伪代码或未经证实的 API 充数。
+4. 阶段 1 仅交付本地核心闭环；阶段 2 在验证后加入拍照/选图、提醒完善、服务卡片、
+   多设备适配、扫码和分享/导出；阶段 3 才处理批次、低库存、借还、统计、备份恢复和
+   可选云同步设计。每阶段结束必须留有可复现的验证证据。
+5. 代码、数据模型、页面、服务、提醒和权限的变更必须与规格、计划和任务保持一致；
+   任何偏离都必须更新文档并在计划的复杂度跟踪中说明。
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+本宪章优先于项目内其他开发约定。每次规格、计划、任务、实现和评审都必须检查对本宪章的
+符合性，尤其是 SDK 可证实性、本地数据边界、最小权限、数据迁移、响应式体验与可验证交付。
+对原则的修订必须提交书面说明，说明变更原因、受影响模板/功能、迁移措施和验证方式；经项目
+负责人确认后更新本文件及受影响模板。版本号采用语义化规则：删除或不兼容地重定义原则时递增
+MAJOR，新增原则或实质扩大治理要求时递增 MINOR，仅澄清文字或非语义改进时递增 PATCH。
+运行时开发约定以 `AGENTS.md` 为准；功能流程以 `.specify` 下的已批准文档为准。
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-06-20 | **Last Amended**: 2026-06-20

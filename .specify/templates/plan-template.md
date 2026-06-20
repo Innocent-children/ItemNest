@@ -1,113 +1,86 @@
-# Implementation Plan: [FEATURE]
+# 实施计划：[功能名称]
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+**分支**：`[###-feature-name]` | **日期**：[日期] | **规格**：[spec.md 链接]
 
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+**输入**：`/specs/[###-feature-name]/spec.md` 中经确认的功能规格。
 
-**Note**: This template is filled in by the `/speckit-plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
+**说明**：本模板由 `/speckit-plan` 填写。所有设计结论与待查证项必须使用中文。
 
-## Summary
+## 摘要
 
-[Extract from feature spec: primary requirement + technical approach from research]
+[从功能规格提炼目标、用户价值、范围边界和拟采用的技术路径。]
 
-## Technical Context
+## 技术上下文
 
-<!--
-  ACTION REQUIRED: Replace the content in this section with the technical details
-  for the project. The structure here is presented in advisory capacity to guide
-  the iteration process.
--->
+**语言/版本**：ArkTS；HarmonyOS SDK [从 `build-profile.json5` 读取]
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
+**主要依赖**：ArkUI、Stage Model / UIAbility；[列出已验证的 Kit 与版本，未验证项标为“需要查证”]
 
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
+**存储**：RDB Store（结构化业务数据）；Preferences（轻量用户偏好）；[迁移方案或不适用]
 
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
+**测试与验证**：[当前可用的单元测试、ohosTest、构建、静态检查和手工验收命令]
 
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]
+**目标设备**：[从 `module.json5` 读取；明确手机、折叠屏、平板的适配范围]
 
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
+**项目类型**：HarmonyOS 原生移动应用，Stage Model
 
-**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]
+**性能与体验目标**：[可衡量的首屏、搜索、列表交互或数据规模目标]
 
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
+**约束**：本地优先；不得接入未获批准的账号、后端、云同步、广告或第三方统计；不得编造 API。
 
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
+**范围**：[本阶段用户故事、明确不做的内容，以及与阶段 1/2/3 的对应关系]
 
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+## 宪章检查
 
-## Constitution Check
+*门禁：Phase 0 调研前必须全部通过；Phase 1 设计完成后必须再次检查。未通过项必须填入复杂度跟踪。*
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+- [ ] 已读取并记录当前 `build-profile.json5`、`oh-package.json5`、`entry/oh-package.json5`、
+  `entry/src/main/module.json5` 与实际 `entry` 模块结构。
+- [ ] 技术实现使用 ArkTS、ArkUI 与 Stage Model；未以 Android/iOS/WebView/H5 替代原生主流程。
+- [ ] 数据存储边界已定义：结构化数据使用 RDB Store，轻量偏好使用 Preferences，并已说明迁移策略。
+- [ ] 本地优先与隐私边界已定义；没有未经单独批准的账号、后端、云同步、广告或第三方统计。
+- [ ] 每个系统能力均已核验 SDK、依赖、权限和失败降级；未核验能力已标记“需要查证”并隔离。
+- [ ] 页面路由、状态管理、服务边界、提醒生命周期与权限触发/拒绝体验已定义。
+- [ ] 响应式布局覆盖目标设备；新增物品、位置路径、搜索、空状态和提醒信息满足体验原则。
+- [ ] 任务拆分支持按阶段独立构建、测试或演示，并列出实际验证命令。
 
-[Gates determined based on constitution file]
+## 项目结构
 
-## Project Structure
-
-### Documentation (this feature)
+### 功能文档
 
 ```text
-specs/[###-feature]/
-├── plan.md              # This file (/speckit-plan command output)
-├── research.md          # Phase 0 output (/speckit-plan command)
-├── data-model.md        # Phase 1 output (/speckit-plan command)
-├── quickstart.md        # Phase 1 output (/speckit-plan command)
-├── contracts/           # Phase 1 output (/speckit-plan command)
-└── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
+specs/[###-feature-name]/
+├── plan.md
+├── research.md
+├── data-model.md
+├── quickstart.md
+├── contracts/
+└── tasks.md
 ```
 
-### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
+### 源码
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
-
-tests/
-├── contract/
-├── integration/
-└── unit/
-
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
+AppScope/
+entry/
+├── src/main/ets/
+│   ├── entryability/
 │   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+│   ├── components/       # 按功能需要创建
+│   ├── models/           # 按功能需要创建
+│   ├── services/         # 按功能需要创建
+│   └── repositories/     # 按功能需要创建
+├── src/main/resources/
+├── src/test/
+└── src/ohosTest/
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**结构决策**：[说明实际修改的目录、模块归属，以及为什么未新增或新增其他模块。]
 
-## Complexity Tracking
+## 复杂度跟踪
 
-> **Fill ONLY if Constitution Check has violations that must be justified**
+> 仅在宪章检查存在例外时填写；每项例外必须获得明确批准。
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+| 例外 | 必要原因 | 拒绝的更简单方案 | 隐私、兼容性与验证影响 |
+|---|---|---|---|
+| [例如：新增可替换的扫码适配层] | [具体业务原因] | [为什么不能只用手工录入] | [权限、SDK 核验和降级验证] |
