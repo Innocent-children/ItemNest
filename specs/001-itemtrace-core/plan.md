@@ -231,8 +231,9 @@ Phase 0 必须将上表中的精确权限名、Kit 可用性和 `module.json5` �
 | Phase 3：增强管理 | Batch、阈值型低库存提醒、借还、独立位置/分类、导入导出、备份恢复、搜索增强。 | 每个新表提供迁移/回滚验证；对导入导出和备份恢复使用本地样本验证数据完整性。 |
 
 **验证方式**：使用 DevEco Studio 对 `entry` 执行构建和设备/模拟器运行；本地测试放在
-`entry/src/test/`，设备测试放在 `entry/src/ohosTest/`。当前仓库未提供可直接确认的命令行包装器，
-因此 Phase 0 先在本机 DevEco 环境记录实际可用构建和测试命令，禁止虚构命令或成功结果。
+`entry/src/test/`，设备测试放在 `entry/src/ohosTest/`。Phase 0 已确认 `hvigorw.bat tasks` 与
+`hvigorw.bat assembleApp --no-daemon` 可用；设备测试命令仍须在本机 DevEco 环境确认后补充，
+禁止虚构命令或成功结果。
 
 ## 复杂度跟踪
 

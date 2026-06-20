@@ -70,10 +70,10 @@
 
 ## 系统能力核验门禁
 
-本次计划未编造任何未确认的 HarmonyOS API、包名、权限名或 `module.json5` 配置项。官方文档
-检索在当前访问环境被 403 阻断，且项目没有可见 SDK 环境变量或已声明相关依赖；因此以下事项
-必须在本机 DevEco Studio 的 HarmonyOS 6.1.1(24) SDK 文档、依赖解析和最小构建验证中确认后
-才能进入实现任务：
+本次计划未编造任何未确认的 HarmonyOS API、包名、权限名或 `module.json5` 配置项。官方在线文档
+检索在当前访问环境被 403 阻断，且项目没有已声明的系统能力依赖；Phase 0 已在本机工具链 SDK 中
+确认下列声明文件存在。精确权限、调用语义和模块配置仍必须在对应实现前结合 SDK 声明、依赖解析
+和最小构建验证确认：
 
 | 能力 | 实现前必须确认 | 计划中的安全边界 |
 |---|---|---|
@@ -91,3 +91,57 @@
    取消/拒绝/失败行为与清理动作。
 3. 任何未通过的核验都不得阻塞 Phase 1；必须保留 Adapter 接口和应用内降级，不得提前调用。
 4. 将实际可用的构建、测试和设备运行命令补充到 [quickstart.md](quickstart.md)。
+
+## Phase 0 执行记录（2026-06-20）
+
+### T001、T002：工程与模块核验
+
+- 根 `build-profile.json5` 已确认：目标和兼容 SDK 均为 `6.1.1(24)`，运行时为 HarmonyOS，
+  模块清单仅有 `entry`。
+- 根 `oh-package.json5` 的模型版本为 `6.1.1`，仅声明 `@ohos/hypium` 与 `@ohos/hamock`
+  开发依赖；`entry/oh-package.json5` 没有业务依赖。
+- `entry/build-profile.json5` 使用 `stageMode`，目标为 `default` 与 `ohosTest`；
+  `entry/src/main/module.json5` 声明 `entry` Stage 模块、`EntryAbility`、`phone`、`tablet` 和
+  现有备份 Extension。
+- ETS 当前只有 `entryability/EntryAbility.ets`、`entrybackupability/EntryBackupAbility.ets` 与
+  示例 `pages/Index.ets`；本地测试位于 `entry/src/test/`，设备测试位于 `entry/src/ohosTest/`。
+- 项目是 Git 仓库，现有 `.gitignore` 已覆盖 `oh_modules/`、构建目录、`.hvigor/`、`.idea/` 与
+  测试产物；未检测到 Docker、ESLint、Prettier、npm 发布、Terraform 或 Helm 配置，无需新增其他
+  忽略文件。
+
+### T003：HarmonyOS 系统能力核验
+
+本机实际构建工具链 SDK 根目录为
+`C:\Applications\Huawei\command-line-tools\sdk\default\openharmony`。下表的“已发现”仅表示
+SDK 声明存在，不等同于已经配置权限或可以直接写入业务代码；精确调用、权限和 `module.json5`
+配置仍须在对应 Phase 2 任务中按 SDK 声明复核。
+
+| 能力 | 本机 SDK 声明证据 | Phase 0 结论 | 实施约束 |
+|---|---|---|---|
+| RDB Store | `ets/kits/@kit.ArkData.d.ts`、`ets/api/@ohos.data.relationalStore.d.ts` | 已发现 | Phase 1 可在实现前复核导入、打开、升级和事务语义后封装 `RdbDatabase`。 |
+| Preferences | `ets/kits/@kit.ArkData.d.ts`、`ets/api/@ohos.data.preferences.d.ts` | 已发现 | 仅 Phase 2 使用；不得存放 Item 或图片业务数据。 |
+| 提醒/通知 | `ets/kits/@kit.BackgroundTasksKit.d.ts`、`ets/kits/@kit.NotificationKit.d.ts`、提醒声明文件 | 已发现 | Phase 2 先确认权限、创建/更新/取消语义与后台限制，再实现 `ReminderAdapter`。 |
+| 相册选择 | `ets/kits/@kit.MediaLibraryKit.d.ts`、文件选择/照片访问声明 | 已发现 | 仅在用户主动选择照片时接入；先确认授权与本地副本策略。 |
+| 相机 | `ets/kits/@kit.CameraKit.d.ts`、相机选择声明 | 已发现 | 仅在用户主动拍摄时接入；先确认权限、返回结果与取消路径。 |
+| Form Kit | `ets/kits/@kit.FormKit.d.ts`、`FormExtensionAbility`/Provider 声明 | 已发现 | Phase 2 先确认 Extension 配置和刷新生命周期；卡片只读汇总计数。 |
+| 扫码 | 未找到可直接作为通用扫码能力的明确 SDK 声明 | 待后续能力核验 | 继续保留 `ScanAdapter` 和手工输入降级；不得写死 Scan Kit 依赖或权限。 |
+
+### T004：构建与测试路径核验
+
+- 已确认命令行工具：`hvigorw.bat` 和 `ohpm.bat` 位于本机 Huawei command-line tools。
+- 已执行 `hvigorw.bat tasks`：成功列出 `entry` 与应用级任务，包含 `assembleApp`。
+- 已执行 `hvigorw.bat assembleApp --no-daemon`：构建成功，耗时约 9 秒，生成 `entry/build/` 产物。
+- 构建警告：当前 `build-profile.json5` 未配置签名，因此跳过 HAP/App 签名；这不阻塞本地编译，
+  但在真机安装前必须由签名配置任务单独处理。另有现有混淆配置建议，不在本阶段修改。
+- 当前 `hvigorw tasks` 未列出可直接调用的设备测试任务。Phase 1 开始后，本地测试以
+  `entry/src/test/` 为目标；设备测试使用 DevEco Studio 选择 `ohosTest` 目标或在工具任务出现后
+  补充已验证命令。
+
+### T005、T006：治理核验与 Phase 1 准入结论
+
+- 已读取 `AGENTS.md`、宪章、规格、计划、数据模型、契约、研究、验证指南和任务清单。所有文档
+  一致要求 ArkTS、ArkUI、Stage Model、RDB Store、本地优先和最小权限。
+- 未发现后端、账号、云同步、多人共享、广告、第三方统计或常驻后台任务要求；这些能力不得在
+  后续任务中引入。
+- **Phase 1 准入：通过。** 可开始 Item 模型、字段校验、RDB Schema/DAO/Repository 和页面路由。
+  Phase 2 的提醒、图片、Form Kit 和扫码必须继续经过各自 API/权限核验；扫码保持可替换 Adapter。

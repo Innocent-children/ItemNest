@@ -19,12 +19,12 @@ description: "ItemTrace 本地物品追踪核心闭环的可执行任务清单"
 
 **目标**：在写入业务代码前确认项目、SDK、模块、文档和可用验证路径；所有不确定系统能力均先查证。
 
-- [ ] T001 文件：`build-profile.json5`、`entry/build-profile.json5`、`oh-package.json5`、`entry/oh-package.json5`；输入：当前工程配置；输出：`specs/001-itemtrace-core/research.md` 的 SDK、依赖与构建配置核验记录；验收：明确目标 SDK 为 `6.1.1(24)`、依赖现状与任何配置缺口。
-- [ ] T002 [P] 文件：`entry/src/main/module.json5`、`entry/src/main/ets/`；输入：模块清单与 ETS 文件树；输出：`research.md` 的 `entry` 模块、Stage 模型、主入口、phone/tablet 与现有页面记录；验收：确认 `EntryAbility`、`Index.ets` 和测试目录的实际路径。
-- [ ] T003 [P] 文件：本机 DevEco Studio SDK 文档、`specs/001-itemtrace-core/research.md`；输入：HarmonyOS `6.1.1(24)` SDK；输出：RDB Store、Preferences、提醒/通知、相册、相机、Form Kit、扫码的 Kit/权限/配置核验表；验收：先查证 API，再实现抽象封装；每项标为“可用并附证据”或“不可用/待后续版本”，未确认项不写入实现配置。
-- [ ] T004 [P] 文件：`hvigorfile.ts`、`entry/hvigorfile.ts`、`entry/src/test/`、`entry/src/ohosTest/`、`quickstart.md`；输入：本机 DevEco Studio 构建和测试能力；输出：可复现的构建、运行、本地测试和设备测试命令；验收：至少一条构建检查命令或 IDE 操作被实际执行并记录结果，失败必须写明原因。
-- [ ] T005 [P] 文件：`AGENTS.md`、`.specify/memory/constitution.md`、`specs/001-itemtrace-core/{spec.md,plan.md,data-model.md}`；输入：治理与设计文档；输出：`research.md` 的已读文件和本地优先/SDK 核验约束摘要；验收：记录没有云同步、账号、后端和常驻后台任务的限制。
-- [ ] T006 文件：`specs/001-itemtrace-core/research.md`；输入：T001–T005 的核验结果；输出：更新后的工程现状报告与 Phase 1 准入结论；验收：报告列出可立即实现的本地能力、必须隔离的系统能力和实际验证命令。
+- [X] T001 文件：`build-profile.json5`、`entry/build-profile.json5`、`oh-package.json5`、`entry/oh-package.json5`；输入：当前工程配置；输出：`specs/001-itemtrace-core/research.md` 的 SDK、依赖与构建配置核验记录；验收：明确目标 SDK 为 `6.1.1(24)`、依赖现状与任何配置缺口。
+- [X] T002 [P] 文件：`entry/src/main/module.json5`、`entry/src/main/ets/`；输入：模块清单与 ETS 文件树；输出：`research.md` 的 `entry` 模块、Stage 模型、主入口、phone/tablet 与现有页面记录；验收：确认 `EntryAbility`、`Index.ets` 和测试目录的实际路径。
+- [X] T003 [P] 文件：本机 DevEco Studio SDK 文档、`specs/001-itemtrace-core/research.md`；输入：HarmonyOS `6.1.1(24)` SDK；输出：RDB Store、Preferences、提醒/通知、相册、相机、Form Kit、扫码的 Kit/权限/配置核验表；验收：先查证 API，再实现抽象封装；每项标为“可用并附证据”或“不可用/待后续版本”，未确认项不写入实现配置。
+- [X] T004 [P] 文件：`hvigorfile.ts`、`entry/hvigorfile.ts`、`entry/src/test/`、`entry/src/ohosTest/`、`quickstart.md`；输入：本机 DevEco Studio 构建和测试能力；输出：可复现的构建、运行、本地测试和设备测试命令；验收：至少一条构建检查命令或 IDE 操作被实际执行并记录结果，失败必须写明原因。
+- [X] T005 [P] 文件：`AGENTS.md`、`.specify/memory/constitution.md`、`specs/001-itemtrace-core/{spec.md,plan.md,data-model.md}`；输入：治理与设计文档；输出：`research.md` 的已读文件和本地优先/SDK 核验约束摘要；验收：记录没有云同步、账号、后端和常驻后台任务的限制。
+- [X] T006 文件：`specs/001-itemtrace-core/research.md`；输入：T001–T005 的核验结果；输出：更新后的工程现状报告与 Phase 1 准入结论；验收：报告列出可立即实现的本地能力、必须隔离的系统能力和实际验证命令。
 
 **Phase 0 验收**：`entry` 可在已确认的本机方式下完成构建检查；没有未核验的系统 API、包名、权限名或配置项进入代码。
 
