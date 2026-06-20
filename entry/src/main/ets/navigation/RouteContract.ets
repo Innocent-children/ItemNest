@@ -13,10 +13,12 @@ export interface ItemFormRouteParams extends ItemRouteParams {
 export interface ItemOperationResult {
   operation: 'created' | 'updated' | 'deleted';
   itemId: string;
+  notice?: string;
 }
 
 export interface ItemListRouteParams {
   query?: ItemQuery;
+  notice?: string;
 }
 
 export function requireItemId(params: ItemRouteParams): Result<string> {
@@ -27,6 +29,6 @@ export function requireItemId(params: ItemRouteParams): Result<string> {
   return success(itemId);
 }
 
-export function createItemResult(operation: 'created' | 'updated' | 'deleted', itemId: string): ItemOperationResult {
-  return { operation: operation, itemId: itemId };
+export function createItemResult(operation: 'created' | 'updated' | 'deleted', itemId: string, notice?: string): ItemOperationResult {
+  return { operation: operation, itemId: itemId, notice: notice };
 }

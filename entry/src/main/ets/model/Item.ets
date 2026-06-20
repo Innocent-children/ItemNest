@@ -21,7 +21,8 @@ export const ITEM_UNIT_OPTIONS: ItemUnit[] = [
 ];
 
 export enum PhotoState {
-  NONE = 'NONE'
+  NONE = 'NONE',
+  LOCAL = 'LOCAL'
 }
 
 export interface Item {
@@ -62,6 +63,7 @@ export interface ItemSummary {
   expiryStatus: ExpiryStatus;
   stockStatus: StockStatus;
   createdAt: number;
+  updatedAt: number;
 }
 
 export function isItemUnit(value: string): boolean {

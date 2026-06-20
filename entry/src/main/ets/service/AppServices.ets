@@ -12,6 +12,20 @@ import { ItemDetailService } from './ItemDetailService';
 import { ItemListService } from './ItemListService';
 import { ItemSearchService } from './ItemSearchService';
 import { ItemUpdateService } from './ItemUpdateService';
+import { PreferenceRepository } from '../data/repository/PreferenceRepository';
+import { PreferenceService } from './PreferenceService';
+import { ReminderDao } from '../data/dao/ReminderDao';
+import { ReminderRepository } from '../data/repository/ReminderRepository';
+import { ReminderService } from './ReminderService';
+import { SystemReminderAdapter } from './adapter/ReminderAdapter';
+import { AssetDao } from '../data/dao/AssetDao';
+import { AssetRepository } from '../data/repository/AssetRepository';
+import { LocalAssetStorage } from './LocalAssetStorage';
+import { PhotoService } from './PhotoService';
+import { SystemImageSourceAdapter } from './adapter/ImageSourceAdapter';
+import { FormSnapshotProvider } from './FormSnapshotProvider';
+import { ScanService } from './ScanService';
+import { UnavailableScanAdapter } from './adapter/ScanAdapter';
 
 export class AppServices {
   private static instance?: AppServices;
@@ -25,6 +39,12 @@ export class AppServices {
   readonly deleteItem: ItemDeleteService;
   readonly searchItems: ItemSearchService;
   readonly homeSummary: HomeSummaryService;
+  readonly preferences: PreferenceService;
+  readonly reminders: ReminderService;
+  readonly photos: PhotoService;
+  readonly imageSource: SystemImageSourceAdapter;
+  readonly formSnapshot: FormSnapshotProvider;
+  readonly scan: ScanService;
 
   private constructor(context: Context) {
     const database = new RdbDatabase(context);
@@ -39,9 +59,19 @@ export class AppServices {
     this.listItems = listItems;
     this.detailItem = new ItemDetailService(repository);
     this.updateItem = new ItemUpdateService(repository, validator);
-    this.deleteItem = new ItemDeleteService(repository);
+    const preferenceService = new PreferenceService(new PreferenceRepository(context));
+    const reminderRepository = new ReminderRepository(new ReminderDao(database));
+    const reminderService = new ReminderService(reminderRepository, preferenceService, new SystemReminderAdapter(), repository);
+    const photoService = new PhotoService(new AssetRepository(new AssetDao(database)), repository, new LocalAssetStorage(context));
+    this.deleteItem = new ItemDeleteService(repository, reminderService, photoService);
     this.searchItems = new ItemSearchService(repository, listItems);
     this.homeSummary = new HomeSummaryService(repository, expiryService);
+    this.preferences = preferenceService;
+    this.reminders = reminderService;
+    this.photos = photoService;
+    this.imageSource = new SystemImageSourceAdapter();
+    this.formSnapshot = new FormSnapshotProvider(this.homeSummary, reminderRepository);
+    this.scan = new ScanService(new UnavailableScanAdapter());
   }
 
   static configure(context: Context): void {

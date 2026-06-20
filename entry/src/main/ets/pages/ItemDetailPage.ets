@@ -5,6 +5,7 @@ import { ExpiryStatusTag } from '../components/ExpiryStatusTag';
 import { LoadingState } from '../components/LoadingState';
 import { ExpiryStatus } from '../model/ExpiryStatus';
 import { Item } from '../model/Item';
+import { ReminderRecordStatus } from '../model/ReminderRecord';
 import { ItemFormRouteParams, createItemResult, requireItemId } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
@@ -17,6 +18,9 @@ struct ItemDetailPage {
   @State private errorMessage: string = '';
   @State private item: Item | undefined = undefined;
   @State private expiryStatus: ExpiryStatus = ExpiryStatus.NO_EXPIRY_DATE;
+  @State private reminderMessage: string = '';
+  @State private reminderRetrying: boolean = false;
+  @State private photoPath: string = '';
   @State private showDeleteConfirm: boolean = false;
   @State @Watch('handleDeleteRequest') private deleteRequested: boolean = false;
   private itemId: string = '';
@@ -138,7 +142,7 @@ struct ItemDetailPage {
         this.locationSection(item)
         this.expirySection(item)
         this.notesSection(item)
-        this.photoSection()
+        this.photoSection(item)
 
         if (this.deleting) {
           LoadingState({ text: '正在删除物品…' })
@@ -176,6 +180,20 @@ struct ItemDetailPage {
         .fontColor($r('app.color.text_primary'))
       this.detailRow('到期日期', item.expirationDate ?? '未设置')
       this.detailRow('提前提醒', item.reminderDays === undefined ? '默认提前 7 天' : `提前 ${item.reminderDays} 天`)
+      if (this.reminderMessage.length > 0) {
+        Text(this.reminderMessage)
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.text_secondary'))
+          .width('100%')
+      }
+      if (this.reminderMessage.includes('失败')) {
+        Button(this.reminderRetrying ? '正在重试…' : '重试创建提醒')
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent'))
+          .borderRadius($r('app.float.radius_control'))
+          .enabled(!this.reminderRetrying)
+          .onClick(() => this.retryReminder())
+      }
     }
     .width('100%')
     .padding($r('app.float.space_4'))
@@ -202,15 +220,23 @@ struct ItemDetailPage {
   }
 
   @Builder
-  private photoSection() {
+  private photoSection(item: Item) {
     Column({ space: $r('app.float.space_3') }) {
       Text('物品照片')
         .fontSize($r('app.float.font_section'))
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
-      Text('暂未添加照片，照片功能将在后续阶段提供。')
-        .fontSize($r('app.float.font_body'))
-        .fontColor($r('app.color.text_secondary'))
+      if (this.photoPath.length > 0) {
+        Image(this.photoPath)
+          .width('100%')
+          .height(180)
+          .objectFit(ImageFit.Cover)
+          .borderRadius($r('app.float.radius_control'))
+      } else {
+        Text(item.photoLocalId === undefined ? '暂未添加照片。' : '照片暂时无法读取，可在编辑页重新选择。')
+          .fontSize($r('app.float.font_body'))
+          .fontColor($r('app.color.text_secondary'))
+      }
     }
     .width('100%')
     .padding($r('app.float.space_4'))
@@ -244,6 +270,8 @@ struct ItemDetailPage {
       }
       this.item = result.getData();
       this.expiryStatus = AppServices.get().listItems.toSummary(result.getData()).expiryStatus;
+      await this.loadReminderState(result.getData());
+      await this.loadPhotoPath(result.getData());
     } catch (_) {
       this.errorMessage = '读取物品失败，请重试';
     } finally {
@@ -265,6 +293,55 @@ struct ItemDetailPage {
     }
     this.showDeleteConfirm = false;
     this.errorMessage = result.getError().message;
+  }
+
+  private async loadReminderState(item: Item): Promise<void> {
+    const result = await AppServices.get().reminders.getRecord(item.id);
+    if (!result.ok) {
+      this.reminderMessage = '提醒状态暂时无法读取';
+      return;
+    }
+    const record = result.getData();
+    if (record === undefined) {
+      this.reminderMessage = '尚未创建系统提醒';
+      return;
+    }
+    if (record.status === ReminderRecordStatus.SCHEDULED) {
+      this.reminderMessage = '系统提醒已安排';
+      return;
+    }
+    if (record.status === ReminderRecordStatus.FAILED) {
+      this.reminderMessage = `系统提醒创建失败：${record.errorSummary ?? '请检查通知授权后重试'}`;
+      return;
+    }
+    if (record.status === ReminderRecordStatus.NOT_REQUIRED) {
+      this.reminderMessage = '当前日期不需要创建系统提醒';
+      return;
+    }
+    this.reminderMessage = '系统提醒已取消';
+  }
+
+  private async retryReminder(): Promise<void> {
+    if (this.item === undefined) {
+      return;
+    }
+    this.reminderRetrying = true;
+    const result = await AppServices.get().reminders.reconcile(this.item);
+    if (!result.ok) {
+      this.reminderMessage = `系统提醒创建失败：${result.getError().message}`;
+    } else {
+      await this.loadReminderState(this.item);
+    }
+    this.reminderRetrying = false;
+  }
+
+  private async loadPhotoPath(item: Item): Promise<void> {
+    const result = await AppServices.get().photos.getLocalPath(item);
+    if (result.ok) {
+      this.photoPath = result.getData() ?? '';
+    } else {
+      this.photoPath = '';
+    }
   }
 
   private handleDeleteRequest(): void {

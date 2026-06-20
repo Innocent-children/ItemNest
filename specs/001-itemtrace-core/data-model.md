@@ -1,7 +1,7 @@
-# 数据模型：ItemTrace 本地物品追踪核心闭环
+﻿# 数据模型：ItemTrace 本地物品追踪核心闭环
 
-**版本**：Phase 1 Schema v1  
-**存储边界**：业务数据使用本地 RDB Store；轻量偏好使用 Preferences；用户图片不进入 v1。
+**版本**：Phase 2 Schema v3（兼容 Phase 1 v1）  
+**存储边界**：业务数据使用本地 RDB Store；轻量偏好使用 Preferences；图片文件仅存于应用私有目录，RDB 只保存其本地 Asset 标识与元数据。
 
 ## 领域模型
 
@@ -18,8 +18,8 @@
 | `expirationDate` | 本地日期 | 否 | 每条 Item 最多一个日期；不由生产日期推导。 |
 | `reminderDays` | 0–365 的整数 | 否 | 缺省时计算有效值为 7；Phase 1 不创建系统提醒。 |
 | `notes` | 最多 500 字符 | 否 | 仅本地显示。 |
-| `photoState` | `NONE` | 是 | v1 固定为无照片；保留 Phase 2 演进位。 |
-| `photoLocalId` | 文本 | 否 | v1 必为 `NULL`；Phase 2 仅关联应用管理的本地图片。 |
+| `photoState` | `NONE` / `LOCAL` | 是 | `LOCAL` 表示当前物品关联应用私有目录内的活动图片。 |
+| `photoLocalId` | Asset 标识 | 否 | v1 为 `NULL`；Phase 2 指向当前活动 `item_asset.id`，不保存相册外部 URI。 |
 | `createdAt` | 毫秒时间戳 | 是 | 用于最近添加排序。 |
 | `updatedAt` | 毫秒时间戳 | 是 | 每次成功更新后刷新。 |
 
@@ -41,20 +41,19 @@
 
 | 阶段 | 实体 | 关系与迁移要点 |
 |---|---|---|
-| 2 | Asset | 一对多关联 Item；保存本地图片标识、媒体类型、创建时间和清理状态。迁移后仍兼容 v1 的 `photoState=NONE`。 |
-| 2 | ReminderRecord | 一对一或一对多关联 Item；保存计划时间、外部任务标识、状态、错误摘要和最后协调时间。 |
+| 2 | Asset | 当前实现为每个 Item 一个活动 Asset；保存私有路径、来源和创建时间。替换后尽力清理旧文件与元数据，迁移后兼容 v1 的 `photoState=NONE`。 |
+| 2 | ReminderRecord | 当前实现为每个 Item 一条提醒协调记录；保存计划时间、外部任务标识、状态、错误摘要和最后协调时间。 |
 | 3 | Location | 树形位置；迁移 Item 的 `locationPath` 至可选 `locationId`，保留原文本以便回滚或匹配。 |
 | 3 | Category | 独立分类；迁移固定分类文本至 `categoryId`。 |
-| 3 | Batch | 一对多关联 Item，承载数量、到期日期和位置；启用后 Item 的单日期/数量语义需通过迁移明确。 |
+| 3 | Batch | 一对多关联 Item（T077），承载数量、到期日期和位置。v1 Item 的单日期/数量语义通过关联批次明确，详见下方批次迁移规则。 |
 | 3 | TraceEvent | 关联 Item，记录借出、归还、数量调整和导入导出操作。 |
 
 ## RDB 表结构设计
 
-### `item`（Schema v1）
+### `item`（Schema v1，保持语义不变）
 
-**实现同步（2026-06-20）**：当前 `RdbDatabase` 使用本地数据库 `itemtrace.db`，版本为 1；
-`ItemSchema` 只创建本表及本节列出的四个索引。页面仅通过 Service/Repository 访问该表，未引入
-独立位置、分类、批次、图片或提醒表。
+**实现同步（2026-06-20）**：当前 `RdbDatabase` 使用本地数据库 `itemtrace.db`，版本为 3；
+v1 创建本表及本节列出的四个索引。v2、v3 只追加提醒与图片表，不改变 Item 的字段语义。
 
 | 列 | 存储类型 | 约束 | 查询用途 |
 |---|---|---|---|
@@ -79,14 +78,38 @@
 **扫码边界**：Schema v1 与第二阶段均不新增物品编码列。扫码结果只是用户确认前的临时文本，
 可预填备注或搜索条件；如需持久化编码，必须先增加独立规格、字段迁移、唯一性规则和验收用例。
 
+### `reminder_record`（Schema v2）
+
+| 列 | 存储类型 | 约束/说明 |
+|---|---|---|
+| `item_id` | TEXT | 主键；每个 Item 当前最多一条协调记录。 |
+| `scheduled_at` | INTEGER | 可空；本地 09:00 的计划毫秒时间戳。 |
+| `system_reminder_id` | INTEGER | 可空；HarmonyOS Reminder Manager 返回的外部任务标识。 |
+| `status` | TEXT | `SCHEDULED`、`FAILED`、`CANCELLED`、`NOT_REQUIRED`。 |
+| `error_summary` | TEXT | 可空、面向用户的短错误说明；不记录原始系统堆栈。 |
+| `updated_at` | INTEGER | 最近协调时间戳。 |
+
+索引：`status`、`scheduled_at`。提醒系统不可用或被拒绝时 Item 仍然保存，记录写入 `FAILED`，详情页提供重试。
+
+### `item_asset`（Schema v3）
+
+| 列 | 存储类型 | 约束/说明 |
+|---|---|---|
+| `id` | TEXT | 主键；应用生成的 Asset 标识。 |
+| `item_id` | TEXT | 关联 Item；当前 UI 使用 `photo_local_id` 指向活动图片。 |
+| `local_path` | TEXT | 应用 `filesDir/itemtrace-assets/` 内路径；不保存系统相册 URI。 |
+| `source` | TEXT | `PHOTO_PICKER` 或 `SYSTEM_CAMERA`。 |
+| `created_at` | INTEGER | 写入私有目录后的创建时间。 |
+
+索引：`item_id`、`created_at`。图片二进制不进入 RDB；选择器取消、复制失败或相机入口不可用时，保留旧图片和表单草稿。
+
 ### 数据库初始化与迁移
 
-1. 数据库首次打开时创建 Schema v1、表和索引，随后写入当前数据库版本。
-2. 每次升级按版本顺序在事务中执行：检查当前版本 → 执行单个迁移 → 校验表/索引 → 提交版本。
+1. 数据库首次打开时在同一事务中按顺序创建 Schema v1（`item`）、v2（`reminder_record`）和 v3（`item_asset`），随后写入当前数据库版本。
+2. 已存在 v1 数据库仅执行 v2 与 v3 的追加建表/索引；已存在 v2 数据库仅执行 v3。每次升级按版本顺序在事务中执行：检查当前版本 → 执行单个迁移 → 校验表/索引 → 提交版本。
 3. 任一迁移失败时回滚该事务，保留旧版数据并返回“数据库初始化失败”；页面不得显示为初始化成功。
 4. 每个迁移必须提供：样本旧数据、升级验证、失败验证、回退策略和数据模型文档更新。
-5. 删除 Item 时在事务中删除 `item` 行；Phase 2 若关联 Asset/ReminderRecord，必须先取消任务并
-   清理本地图片，再完成数据删除或记录可恢复的清理失败状态。
+5. 删除 Item 前先取消已知系统提醒；删除 `item` 行后尽力清理关联图片文件和 Asset 元数据。清理失败不回滚已经成功的用户删除，后续版本应增加可恢复清理队列。
 
 ## Repository 与 DAO 边界
 
@@ -104,4 +127,15 @@
 - `id`、`createdAt` 创建后不可被编辑；更新仅改变允许字段和 `updatedAt`。
 - 删除只在 UI 明确确认后调用 Repository；v1 不提供回收站或恢复。
 - 本地数据不会被上传；日志和错误提示不得包含注意事项、位置完整路径、图片标识或全量物品内容。
-- Phase 2 图片与提醒任务不是 Item 保存成功的前置条件。系统能力失败时，Item 及其到期状态仍保留。
+- Phase 2 图片与提醒任务不是 Item 保存成功的前置条件。系统能力失败时，Item 及其到期状态仍保留，并以列表提示或详情状态提供重试。
+
+
+### Phase 3 批次迁移规则（T077）
+
+v1 的 Item 有一组单一的数量、到期日与位置。引入 Batch 后，每个 Item 可拥有零个、一个或多个 Batch：
+
+- 存量 v1 Item 自动创建一个等价 Batch（称为"默认批次"），其 quantity、expirationDate、locationPath 从对应 Item 字段复制。
+- 默认批次创建后，Item 的 quantity 变为所有非零数量批次的 SUM(batch.quantity)（若全部为零则为 0），Item 的 expirationDate 显示最早到期批次的日期，locationPath 保持原文本直至 T084 迁移为 locationId。
+- 迁移在单事务内完成：创建 batch 表 -> 为每个 v1 Item 插入一条默认批次 -> 更新数据模型版本 -> 提交。
+- 回滚规则：迁移失败回滚整个事务，v1 数据完全保留，Item 字段不改变。
+- 验收：v1 50 条 Item 样本迁移后每个 Item 有且仅有一个默认批次；迁移失败时 v1 数据库完整可用。

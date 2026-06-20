@@ -5,6 +5,7 @@ import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
+import { ItemSortMode } from '../model/UserPreferences';
 import { ItemListRouteParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
@@ -14,6 +15,7 @@ import { AppServices } from '../service/AppServices';
 struct ItemListPage {
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
+  @State private noticeMessage: string = '';
   @State private items: ItemSummary[] = [];
   private query: ItemQuery = new ItemQuery();
 
@@ -57,6 +59,16 @@ struct ItemListPage {
       .width('100%')
       .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
 
+      if (this.noticeMessage.length > 0) {
+        Text(this.noticeMessage)
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.status_warning'))
+          .backgroundColor($r('app.color.status_warning_soft'))
+          .padding($r('app.float.space_3'))
+          .margin({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
+          .borderRadius($r('app.float.radius_control'))
+      }
+
       if (this.loading) {
         LoadingState({ text: '正在加载物品…' })
       } else if (this.errorMessage.length > 0) {
@@ -97,6 +109,7 @@ struct ItemListPage {
   private readQuery(): void {
     const params = router.getParams() as ItemListRouteParams;
     this.query = params.query ?? new ItemQuery();
+    this.noticeMessage = params.notice ?? '';
   }
 
   private async loadItems(): Promise<void> {
@@ -106,14 +119,14 @@ struct ItemListPage {
       if (this.query.isEmpty()) {
         const result = await AppServices.get().listItems.listAll();
         if (result.ok) {
-          this.items = result.getData();
+          this.items = await this.applyDefaultSort(result.getData());
         } else {
           this.errorMessage = result.getError().message;
         }
       } else {
         const result = await AppServices.get().searchItems.search(this.query);
         if (result.ok) {
-          this.items = result.getData().items;
+          this.items = await this.applyDefaultSort(result.getData().items);
         } else {
           this.errorMessage = result.getError().message;
         }
@@ -132,6 +145,23 @@ struct ItemListPage {
     }
     this.query.clear();
     this.loadItems();
+  }
+
+  private async applyDefaultSort(items: ItemSummary[]): Promise<ItemSummary[]> {
+    const preferencesResult = await AppServices.get().preferences.get();
+    if (!preferencesResult.ok) {
+      return items;
+    }
+    const sortedItems = items.slice();
+    const sortMode = preferencesResult.getData().defaultSort;
+    if (sortMode === ItemSortMode.NAME_ASC) {
+      sortedItems.sort((left: ItemSummary, right: ItemSummary) => left.name.localeCompare(right.name));
+    } else if (sortMode === ItemSortMode.UPDATED_DESC) {
+      sortedItems.sort((left: ItemSummary, right: ItemSummary) => right.updatedAt - left.updatedAt);
+    } else {
+      sortedItems.sort((left: ItemSummary, right: ItemSummary) => right.createdAt - left.createdAt);
+    }
+    return sortedItems;
   }
 
 }

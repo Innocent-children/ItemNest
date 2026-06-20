@@ -3,5 +3,6 @@ export enum RouteName {
   ITEM_LIST = 'pages/ItemListPage',
   ITEM_DETAIL = 'pages/ItemDetailPage',
   ITEM_FORM = 'pages/ItemFormPage',
-  SEARCH = 'pages/SearchPage'
+  SEARCH = 'pages/SearchPage',
+  SETTINGS = 'pages/SettingsPage'
 }

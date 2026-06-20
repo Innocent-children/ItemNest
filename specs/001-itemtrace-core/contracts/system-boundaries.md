@@ -1,7 +1,7 @@
 # 数据与系统边界契约：ItemTrace 核心闭环
 
-本契约定义业务层对数据和系统能力的最小依赖。具体 HarmonyOS Kit、导入、权限名和配置项必须在
-Phase 0 的 SDK 6.1.1(24) 核验后实现；未通过核验的 Adapter 不得被页面直接调用。
+本契约定义业务层对数据和系统能力的最小依赖。HarmonyOS 6.1.1(24) 的实际 Kit、导入、权限名和
+配置项已在 Phase 2 实现前以本机 SDK 声明核验；未核验的扫码能力仍不得被页面直接调用。
 
 ## ItemRepository 契约
 
@@ -18,11 +18,12 @@ Phase 0 的 SDK 6.1.1(24) 核验后实现；未通过核验的 Adapter 不得被
 
 | Adapter | 业务输入 | 业务输出 | 失败/降级 |
 |---|---|---|---|
-| `ReminderAdapter` | 物品、提醒时间、用户已开启状态 | 外部任务标识或已取消结果 | 返回不可用/拒绝/创建失败；保留应用内临期状态。 |
-| `ImageSourceAdapter` | 用户主动选择“相册”或“相机” | 临时图片结果或用户取消 | 不保存外部结果；复制失败时保留原图片。 |
-| `ScanAdapter` | 用户主动扫描请求 | 可选文本结果，用于预填备注或搜索条件 | 返回取消/不可用；表单继续允许手工输入，第二阶段不持久化物品编码。 |
-| `FormSnapshotProvider` | 当前本地日期与首页偏好 | 临期数量、今日提醒数量、快速新增意图 | 卡片不可用不影响首页或物品数据。 |
-| `PreferenceRepository` | 偏好键和值 | 已持久化偏好 | 失败时使用内置默认值，不影响 Item 数据。 |
+| `ReminderAdapter` | 物品、计划时间 | HarmonyOS Reminder ID 或取消结果 | 使用 `reminderAgentManager`；创建失败写入 `FAILED`，保留应用内临期状态与重试。 |
+| `ImageSourceAdapter` | 用户主动选择“相册”或“拍摄照片” | 临时系统 Photo Picker URI 或用户取消 | URI 仅在保存时复制到 `filesDir`；不持久化外部引用，复制失败保留旧图片与草稿。 |
+| `LocalAssetStorage` | 临时 URI、Asset ID | 应用私有路径 | 使用 CoreFileKit 复制/清理；图片二进制不进入 RDB。 |
+| `ScanAdapter` | 用户主动扫描请求 | 可选文本结果 | 当前为不可用 Adapter：本机 `@ohos.scan` 是打印设备扫描，不申请打印权限；表单继续允许手工输入。 |
+| `FormSnapshotProvider` | 当前本地日期 | 临期总数、今日计划提醒总数 | Form 快照不返回物品名称、位置、备注、照片或全量 Item。 |
+| `PreferenceRepository` | 默认提醒天数、排序、首页分区、主题、提醒开关 | 已持久化偏好 | 失败返回领域错误；页面使用内置默认值且不影响 Item 数据。 |
 
 ## 数据流与隐私边界
 
@@ -30,5 +31,6 @@ Phase 0 的 SDK 6.1.1(24) 核验后实现；未通过核验的 Adapter 不得被
 2. 图片、提醒、扫码和卡片不得上传物品、位置、注意事项或照片。服务卡片只读取汇总计数。
 3. 系统 Adapter 返回的失败必须转换为可操作的领域状态，不能在 UI 中暴露未核验 API、权限名、
    文件路径或原始错误堆栈。
-4. Phase 1 只有 ItemRepository 是实际持久化边界；其他 Adapter 是接口与降级设计，具体实现属于
-   Phase 2/3 且依赖 SDK 核验。
+4. RDB 持久化边界包含 `ItemRepository`、`ReminderRepository` 和 `AssetRepository`；Preferences
+   仅持久化非敏感界面/提醒偏好。系统 Adapter 不能直接访问 ArkUI 页面状态。
+5. 卡片仅通过 Form Kit 接收计数绑定数据，并以 FormLink 打开主应用；卡片不可用或刷新失败不影响主应用。

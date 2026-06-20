@@ -1,4 +1,4 @@
----
+﻿---
 
 description: "ItemTrace 本地物品追踪核心闭环的可执行任务清单"
 
@@ -114,44 +114,44 @@ description: "ItemTrace 本地物品追踪核心闭环的可执行任务清单"
 
 ### Preferences
 
-- [ ] T051 文件：本机 DevEco Studio SDK 文档、`specs/001-itemtrace-core/research.md`；输入：Preferences 需求；输出：Preferences Kit、生命周期、键值限制和错误处理核验记录；验收：先查证 API，再实现抽象封装；未确认时不修改生产配置。
-- [ ] T052 文件：`entry/src/main/ets/data/repository/PreferenceRepository.ets`、`entry/src/main/ets/model/UserPreferences.ets`；输入：T051、计划的偏好键；输出：默认提醒天数、排序、首页分区、主题偏好读写封装；验收：不存 Item/图片/提醒业务数据，失败时返回内置默认值。
+- [X] T051 文件：本机 DevEco Studio SDK 文档、`specs/001-itemtrace-core/research.md`；输入：Preferences 需求；输出：Preferences Kit、生命周期、键值限制和错误处理核验记录；验收：先查证 API，再实现抽象封装；未确认时不修改生产配置。
+- [X] T052 文件：`entry/src/main/ets/data/repository/PreferenceRepository.ets`、`entry/src/main/ets/model/UserPreferences.ets`；输入：T051、计划的偏好键；输出：默认提醒天数、排序、首页分区、主题偏好读写封装；验收：不存 Item/图片/提醒业务数据，失败时返回内置默认值。
 - [ ] T053 文件：`entry/src/main/ets/pages/SettingsPage.ets`、`entry/src/test/PreferenceRepository.test.ets`；输入：T052；输出：偏好设置页与重启后偏好持久化测试；验收：修改排序/提醒默认值不改变既有 Item 数据。
 
 ### 到期提醒与通知
 
-- [ ] T054 文件：本机 DevEco Studio SDK 文档、`research.md`、`entry/src/main/module.json5`；输入：提醒/通知需求；输出：提醒/通知 Kit、精确权限、创建/更新/取消语义和模块配置核验记录；验收：先查证 API，再实现抽象封装；若能力不支持，记录应用内降级并停止具体接入。
-- [ ] T055 文件：`entry/src/main/ets/service/adapter/ReminderAdapter.ets`、`entry/src/main/ets/model/ReminderRecord.ets`；输入：T054、`contracts/system-boundaries.md`；输出：提醒 Adapter 接口、结果类型和本地任务状态模型；验收：页面不直接调用系统 Kit，接口可表达创建、更新、取消、拒绝和失败。
-- [ ] T056 文件：`entry/src/main/ets/data/rdb/ReminderSchema.ets`、`entry/src/main/ets/data/{dao,repository}/ReminderRecord*`；输入：T055、`data-model.md` Phase 2 迁移；输出：提醒执行记录的迁移、DAO 与 Repository；验收：迁移兼容 v1 Item，失败可回滚且不丢失 Item。
-- [ ] T057 文件：`entry/src/main/ets/service/ReminderService.ets`；输入：T052、T055、T056、Item 到期日；输出：保存后取消旧任务、计算当地 09:00、创建/重建新任务的调度用例；验收：默认 7 天、已过期不补发、编辑后不重复提醒。
-- [ ] T058 文件：`entry/src/main/ets/service/ReminderService.ets`、`entry/src/main/ets/pages/SettingsPage.ets`；输入：T057、用户授权结果；输出：删除/清空日期/关闭提醒时取消、拒绝/失败时应用内降级和重试入口；验收：不使用常驻后台任务，临期列表在授权拒绝后仍可见。
+- [X] T054 文件：本机 DevEco Studio SDK 文档、`research.md`、`entry/src/main/module.json5`；输入：提醒/通知需求；输出：提醒/通知 Kit、精确权限、创建/更新/取消语义和模块配置核验记录；验收：先查证 API，再实现抽象封装；若能力不支持，记录应用内降级并停止具体接入。
+- [X] T055 文件：`entry/src/main/ets/service/adapter/ReminderAdapter.ets`、`entry/src/main/ets/model/ReminderRecord.ets`；输入：T054、`contracts/system-boundaries.md`；输出：提醒 Adapter 接口、结果类型和本地任务状态模型；验收：页面不直接调用系统 Kit，接口可表达创建、更新、取消、拒绝和失败。
+- [X] T056 文件：`entry/src/main/ets/data/rdb/ReminderSchema.ets`、`entry/src/main/ets/data/{dao,repository}/ReminderRecord*`；输入：T055、`data-model.md` Phase 2 迁移；输出：提醒执行记录的迁移、DAO 与 Repository；验收：迁移兼容 v1 Item，失败可回滚且不丢失 Item。
+- [X] T057 文件：`entry/src/main/ets/service/ReminderService.ets`；输入：T052、T055、T056、Item 到期日；输出：保存后取消旧任务、计算当地 09:00、创建/重建新任务的调度用例；验收：默认 7 天、已过期不补发、编辑后不重复提醒。
+- [X] T058 文件：`entry/src/main/ets/service/ReminderService.ets`、`entry/src/main/ets/pages/SettingsPage.ets`；输入：T057、用户授权结果；输出：删除/清空日期/关闭提醒时取消、拒绝/失败时应用内降级和重试入口；验收：不使用常驻后台任务，临期列表在授权拒绝后仍可见。
 - [ ] T059 文件：`entry/src/test/ReminderService.test.ets`、`entry/src/ohosTest/ets/test/ReminderPermissionFlow.test.ets`；输入：T057、T058；输出：创建、更新、取消、拒绝、失败重试测试；验收：每种结果均有可验证状态，不在测试中暴露敏感内容。
 
 ### 本地图片
 
-- [ ] T060 文件：本机 DevEco Studio SDK 文档、`research.md`；输入：相册选择/相机需求；输出：图片入口、权限、媒体访问方式和本地复制策略核验记录；验收：先查证 API，再实现抽象封装；未确认时保留 Phase 1 照片占位。
-- [ ] T061 文件：`entry/src/main/ets/model/Asset.ets`、`entry/src/main/ets/data/rdb/AssetSchema.ets`、`entry/src/main/ets/data/{dao,repository}/Asset*`；输入：T060、`data-model.md` Phase 2 Asset 定义；输出：应用管理本地图片标识、元数据与清理状态的迁移和仓储；验收：不把二进制图片写入 RDB，不上传或共享图片。
-- [ ] T062 文件：`entry/src/main/ets/service/{ImageStorageService.ets,adapter/ImageSourceAdapter.ets}`；输入：T060、T061；输出：临时图片复制到应用管理范围、替换和删除清理抽象；验收：复制失败保留旧图片和表单草稿，外部可变引用不作为持久化依据。
-- [ ] T063 文件：`entry/src/main/ets/service/adapter/PhotoPickerAdapter.ets`、`entry/src/main/ets/pages/ItemFormPage.ets`；输入：T060、T062；输出：用户点击“选择照片”后的相册选择接入；验收：取消/拒绝后可继续编辑，只有显式点击时才请求所需授权。
-- [ ] T064 文件：`entry/src/main/ets/service/adapter/CameraAdapter.ets`、`entry/src/main/ets/pages/ItemFormPage.ets`；输入：T060、T062；输出：用户点击“拍摄照片”后的相机接入；验收：相机不可用/拒绝时回到表单并保留输入。
+- [X] T060 文件：本机 DevEco Studio SDK 文档、`research.md`；输入：相册选择/相机需求；输出：图片入口、权限、媒体访问方式和本地复制策略核验记录；验收：先查证 API，再实现抽象封装；未确认时保留 Phase 1 照片占位。
+- [X] T061 文件：`entry/src/main/ets/model/ItemAsset.ets`、`entry/src/main/ets/data/rdb/AssetSchema.ets`、`entry/src/main/ets/data/{dao,repository}/Asset*`；输入：T060、`data-model.md` Phase 2 Asset 定义；输出：应用管理本地图片标识、元数据与清理状态的迁移和仓储；验收：不把二进制图片写入 RDB，不上传或共享图片。
+- [X] T062 文件：`entry/src/main/ets/service/{LocalAssetStorage.ets,PhotoService.ets,adapter/ImageSourceAdapter.ets}`；输入：T060、T061；输出：临时图片复制到应用管理范围、替换和删除清理抽象；验收：复制失败保留旧图片和表单草稿，外部可变引用不作为持久化依据。
+- [X] T063 文件：`entry/src/main/ets/service/adapter/ImageSourceAdapter.ets`、`entry/src/main/ets/pages/ItemFormPage.ets`；输入：T060、T062；输出：用户点击“选择照片”后的相册选择接入；验收：取消/拒绝后可继续编辑，只有显式点击时才请求所需授权。
+- [X] T064 文件：`entry/src/main/ets/service/adapter/ImageSourceAdapter.ets`、`entry/src/main/ets/pages/ItemFormPage.ets`；输入：T060、T062；输出：用户点击“拍摄照片”后的相机接入；验收：使用已核验的 `PhotoViewPicker` 拍摄能力；相机不可用/拒绝时回到表单并保留输入。
 - [ ] T065 文件：`entry/src/main/ets/pages/ItemDetailPage.ets`、`entry/src/test/ImageStorageService.test.ets`、`entry/src/ohosTest/ets/test/ItemPhotoFlow.test.ets`；输入：T061–T064；输出：本地图片展示、替换、删除及取消/失败测试；验收：删除 Item 时图片清理有记录，主 Item 数据在图片失败时仍可用。
 
 ### 扫码
 
-- [ ] T066 文件：本机 DevEco Studio SDK 文档、`research.md`；输入：条码/二维码录入需求；输出：可用扫码能力、相机权限、结果格式与取消行为核验记录；验收：先查证 API，再实现抽象封装；未发现能力时明确仅手工输入。
-- [ ] T067 文件：`entry/src/main/ets/service/adapter/ScanAdapter.ets`、`entry/src/main/ets/service/ScanService.ets`；输入：T066、`contracts/system-boundaries.md`；输出：主动扫描、可选文本结果、取消/不可用领域封装；验收：Adapter 不直接泄漏 API 错误，结果未经用户确认不持久化。
+- [X] T066 文件：本机 DevEco Studio SDK 文档、`research.md`；输入：条码/二维码录入需求；输出：可用扫码能力、相机权限、结果格式与取消行为核验记录；验收：先查证 API，再实现抽象封装；未发现能力时明确仅手工输入。
+- [X] T067 文件：`entry/src/main/ets/service/adapter/ScanAdapter.ets`、`entry/src/main/ets/service/ScanService.ets`；输入：T066、`contracts/system-boundaries.md`；输出：主动扫描、可选文本结果、取消/不可用领域封装；验收：Adapter 不直接泄漏 API 错误，结果未经用户确认不持久化。
 - [ ] T068 文件：`entry/src/main/ets/pages/ItemFormPage.ets`、`entry/src/main/ets/pages/SearchPage.ets`、`entry/src/ohosTest/ets/test/ScanFillFlow.test.ets`；输入：T067；输出：扫描文本预填备注或搜索条件的 UI；验收：成功、取消、不可用和手工输入均可完成流程，第二阶段不创建或持久化物品编码字段。
 
 ### 服务卡片
 
-- [ ] T069 文件：本机 DevEco Studio SDK 文档、`research.md`、`entry/src/main/module.json5`；输入：Form Kit 需求；输出：Form Kit Extension、配置、更新时机、主应用跳转和权限核验记录；验收：先查证 API，再实现抽象封装；未核验时不添加 extensionAbilities 配置。
-- [ ] T070 文件：`entry/src/main/ets/service/{FormSnapshotProvider.ets,FormDataService.ets}`；输入：T069、HomeSummaryService；输出：仅含即将到期数量、今日提醒数量和快速新增意图的卡片快照；验收：不返回物品名称、位置、备注、照片或全量 Item。
-- [ ] T071 文件：`entry/src/main/ets/forms/ExpiryOverviewForm.ets`、`entry/src/main/resources/base/`、`entry/src/main/module.json5`；输入：T069、T070；输出：经核验配置的服务卡片与静态资源；验收：卡片不可用不影响首页，卡片展示内容符合最小化隐私规则。
+- [X] T069 文件：本机 DevEco Studio SDK 文档、`research.md`、`entry/src/main/module.json5`；输入：Form Kit 需求；输出：Form Kit Extension、配置、更新时机、主应用跳转和权限核验记录；验收：先查证 API，再实现抽象封装；未核验时不添加 extensionAbilities 配置。
+- [X] T070 文件：`entry/src/main/ets/service/FormSnapshotProvider.ets`；输入：T069、HomeSummaryService；输出：仅含即将到期数量、今日提醒数量和快速新增意图的卡片快照；验收：不返回物品名称、位置、备注、照片或全量 Item。
+- [X] T071 文件：`entry/src/main/ets/forms/{ItemTraceFormAbility.ets,pages/ItemTraceFormCard.ets}`、`entry/src/main/resources/base/profile/form_config.json`、`entry/src/main/module.json5`；输入：T069、T070；输出：经核验配置的服务卡片与静态资源；验收：卡片不可用不影响首页，卡片展示内容符合最小化隐私规则。
 - [ ] T072 文件：`entry/src/main/ets/forms/ExpiryOverviewForm.ets`、`entry/src/main/ets/pages/ItemFormPage.ets`、`entry/src/ohosTest/ets/test/FormQuickAddFlow.test.ets`；输入：T071；输出：卡片快速新增入口和数据变化刷新逻辑；验收：点击后进入新增表单，Item 改动后快照更新且无敏感详情泄露。
 
 ### 深浅色与窗口尺寸适配
 
-- [ ] T073 [P] 文件：`entry/src/main/resources/{base,dark}/element/`、`entry/src/main/ets/pages/`；输入：Phase 1 页面与主题偏好；输出：深浅色颜色、文字与状态标签资源适配；验收：状态不只依赖颜色，切换主题后文本和操作仍清晰。
+- [X] T073 [P] 文件：`entry/src/main/resources/{base,dark}/element/`、`entry/src/main/ets/pages/`；输入：Phase 1 页面与主题偏好；输出：深浅色颜色、文字与状态标签资源适配；验收：状态不只依赖颜色，切换主题后文本和操作仍清晰。
 - [ ] T074 [P] 文件：`entry/src/main/ets/{pages,components}/`；输入：phone/tablet 与可用折叠窗口尺寸；输出：首页、列表、详情、表单的宽窄布局规则；验收：长位置路径、空/错误状态和主要操作在目标窗口可读可达。
 - [ ] T075 文件：`entry/src/test/`、`entry/src/ohosTest/ets/test/`；输入：T051–T074 的系统能力与布局；输出：Phase 2 授权、拒绝、取消、失败、主题和窗口验证结果；验收：所有系统能力失败时 Phase 1 本地闭环仍能工作。
 - [ ] T076 文件：`entry/`、`specs/001-itemtrace-core/quickstart.md`；输入：Phase 2 实际构建命令与手工场景；输出：Phase 2 构建/设备验收记录和验证指南更新；验收：Preferences、提醒、图片、扫码、卡片和适配均按已核验能力通过，未支持能力有明确降级。
@@ -164,32 +164,32 @@ description: "ItemTrace 本地物品追踪核心闭环的可执行任务清单"
 
 ### 批次与低库存
 
-- [ ] T077 文件：`specs/001-itemtrace-core/{data-model.md,plan.md}`；输入：v1 Item、Phase 3 Batch 目标；输出：Batch/Item 关系、单日期/数量迁移、回滚和验收方案；验收：迁移不会静默改变现有 Item 的数量或到期语义。
-- [ ] T078 文件：`entry/src/main/ets/{model/Batch.ets,data/rdb/BatchSchema.ets,data/dao/BatchDao.ets,data/repository/BatchRepository.ets}`；输入：T077；输出：批次 Schema、模型、DAO 和 Repository；验收：一个 Item 可有多个批次，每个批次独立数量、到期日和位置。
-- [ ] T079 文件：`entry/src/main/ets/{service/BatchService.ets,pages/BatchListPage.ets,pages/BatchFormPage.ets}`；输入：T078；输出：批次创建、编辑、删除和 Item 详情聚合展示；验收：批次变更正确刷新 Item 总量/临期摘要且可独立测试。
-- [ ] T080 文件：`entry/src/main/ets/{model/StockThreshold.ets,data/rdb/StockThresholdSchema.ets,service/LowStockService.ets}`；输入：批次或 Item 数量、用户阈值；输出：可配置低库存阈值和待处理状态；验收：数量低于阈值才进入低库存，不影响“数量为零待补货”历史行为。
+- [X] T077 文件：`specs/001-itemtrace-core/{data-model.md,plan.md}`；输入：v1 Item、Phase 3 Batch 目标；输出：Batch/Item 关系、单日期/数量迁移、回滚和验收方案；验收：迁移不会静默改变现有 Item 的数量或到期语义。
+- [X] T078 文件：`entry/src/main/ets/{model/Batch.ets,data/rdb/BatchSchema.ets,data/dao/BatchDao.ets,data/repository/BatchRepository.ets}`；输入：T077；输出：批次 Schema、模型、DAO 和 Repository；验收：一个 Item 可有多个批次，每个批次独立数量、到期日和位置。
+- [X] T079 文件：`entry/src/main/ets/{service/BatchService.ets,pages/BatchListPage.ets,pages/BatchFormPage.ets}`；输入：T078；输出：批次创建、编辑、删除和 Item 详情聚合展示；验收：批次变更正确刷新 Item 总量/临期摘要且可独立测试。
+- [X] T080 文件：`entry/src/main/ets/{model/StockThreshold.ets,data/rdb/StockThresholdSchema.ets,service/LowStockService.ets}`；输入：批次或 Item 数量、用户阈值；输出：可配置低库存阈值和待处理状态；验收：数量低于阈值才进入低库存，不影响“数量为零待补货”历史行为。
 - [ ] T081 文件：本机 DevEco Studio SDK 文档、`entry/src/main/ets/{service/adapter/ReminderAdapter.ets,service/LowStockReminderService.ets}`；输入：T080 与提醒能力；输出：低库存系统提醒封装或应用内降级；验收：先查证 API，再实现抽象封装；拒绝/不可用时保留应用内低库存列表。
 
 ### 借出、归还、位置与分类管理
 
-- [ ] T082 文件：`entry/src/main/ets/{model/TraceEvent.ets,data/rdb/TraceEventSchema.ets,data/repository/TraceEventRepository.ets}`；输入：借出/归还需求；输出：不可篡改的借还事件模型和迁移；验收：事件关联 Item/Batch、记录时间和数量，不记录未批准的用户账号资料。
-- [ ] T083 文件：`entry/src/main/ets/{service/LendingService.ets,pages/LendingPage.ets}`；输入：T082、Item/Batch；输出：借出、归还和当前借出状态用例/UI；验收：归还不能超过借出数量，异常操作有中文反馈。
-- [ ] T084 文件：`entry/src/main/ets/{model/Location.ets,data/rdb/LocationSchema.ets,data/repository/LocationRepository.ets}`；输入：v1 `locationPath` 与 T077 迁移规则；输出：独立树形位置模型、迁移与 Repository；验收：旧位置文本保留可追溯性，迁移失败可回滚。
-- [ ] T085 文件：`entry/src/main/ets/{service/LocationService.ets,pages/LocationManagementPage.ets,components/LocationSelector.ets}`；输入：T084；输出：房间/柜子/抽屉/收纳箱管理和选择组件；验收：不能创建循环层级，删除被引用位置时必须给出迁移或阻止策略。
-- [ ] T086 文件：`entry/src/main/ets/{model/Category.ets,data/rdb/CategorySchema.ets,data/repository/CategoryRepository.ets}`；输入：v1 固定分类；输出：独立分类模型与迁移；验收：现有固定分类正确映射，未知分类保留为“其他”并可审查。
-- [ ] T087 文件：`entry/src/main/ets/{service/CategoryService.ets,pages/CategoryManagementPage.ets}`；输入：T086；输出：分类创建、编辑、停用/删除管理；验收：停用分类不丢失既有 Item 的显示和筛选能力。
+- [X] T082 文件：`entry/src/main/ets/{model/TraceEvent.ets,data/rdb/TraceEventSchema.ets,data/repository/TraceEventRepository.ets}`；输入：借出/归还需求；输出：不可篡改的借还事件模型和迁移；验收：事件关联 Item/Batch、记录时间和数量，不记录未批准的用户账号资料。
+- [X] T083 文件：`entry/src/main/ets/{service/LendingService.ets,pages/LendingPage.ets}`；输入：T082、Item/Batch；输出：借出、归还和当前借出状态用例/UI；验收：归还不能超过借出数量，异常操作有中文反馈。
+- [X] T084 文件：`entry/src/main/ets/{model/Location.ets,data/rdb/LocationSchema.ets,data/repository/LocationRepository.ets}`；输入：v1 `locationPath` 与 T077 迁移规则；输出：独立树形位置模型、迁移与 Repository；验收：旧位置文本保留可追溯性，迁移失败可回滚。
+- [X] T085 文件：`entry/src/main/ets/{service/LocationService.ets,pages/LocationManagementPage.ets,components/LocationSelector.ets}`；输入：T084；输出：房间/柜子/抽屉/收纳箱管理和选择组件；验收：不能创建循环层级，删除被引用位置时必须给出迁移或阻止策略。
+- [X] T086 文件：`entry/src/main/ets/{model/Category.ets,data/rdb/CategorySchema.ets,data/repository/CategoryRepository.ets}`；输入：v1 固定分类；输出：独立分类模型与迁移；验收：现有固定分类正确映射，未知分类保留为“其他”并可审查。
+- [X] T087 文件：`entry/src/main/ets/{service/CategoryService.ets,pages/CategoryManagementPage.ets}`；输入：T086；输出：分类创建、编辑、停用/删除管理；验收：停用分类不丢失既有 Item 的显示和筛选能力。
 
 ### 导入导出与本地备份恢复
 
-- [ ] T088 文件：`specs/001-itemtrace-core/contracts/import-export.md`；输入：Item、Batch、Location、Category、TraceEvent 数据模型；输出：版本化本地导入导出格式、字段映射、冲突和隐私契约；验收：不包含云端地址、账号或敏感日志字段。
-- [ ] T089 文件：`entry/src/main/ets/service/{ExportService.ets,ImportService.ets}`、`entry/src/main/ets/common/ImportValidation.ets`；输入：T088；输出：本地导出、预检、确认导入和失败报告；验收：无效文件不写入，导入需用户确认，结果可复现。
+- [X] T088 文件：`specs/001-itemtrace-core/contracts/import-export.md`；输入：Item、Batch、Location、Category、TraceEvent 数据模型；输出：版本化本地导入导出格式、字段映射、冲突和隐私契约；验收：不包含云端地址、账号或敏感日志字段。
+- [X] T089 文件：`entry/src/main/ets/service/{ExportService.ets,ImportService.ets}`、`entry/src/main/ets/common/ImportValidation.ets`；输入：T088；输出：本地导出、预检、确认导入和失败报告；验收：无效文件不写入，导入需用户确认，结果可复现。
 - [ ] T090 文件：本机 DevEco Studio SDK 文档、`entry/src/main/ets/service/{BackupService.ets,RestoreService.ets}`；输入：本地备份恢复需求与现有备份 Extension；输出：备份/恢复能力核验及应用层抽象；验收：先查证 API，再实现抽象封装；未核验时不声明备份可用。
 - [ ] T091 文件：`entry/src/main/ets/entrybackupability/EntryBackupAbility.ets`、`entry/src/main/ets/service/{BackupService.ets,RestoreService.ets}`；输入：T090、T088；输出：经核验的本地备份、恢复、完整性校验与失败回退；验收：恢复失败不覆盖现有数据，成功恢复后核心 Item/Batch/位置/分类一致。
 
 ### 搜索增强与最终验收
 
-- [ ] T092 文件：`entry/src/main/ets/{model/SearchHistory.ets,data/rdb/SearchHistorySchema.ets,data/repository/SearchHistoryRepository.ets}`；输入：搜索增强需求与本地隐私边界；输出：可清除的最近查看/搜索历史模型与本地迁移；验收：历史默认仅本地保存，用户可一键清除。
-- [ ] T093 文件：`entry/src/main/ets/{service/SearchSuggestionService.ets,pages/SearchPage.ets}`；输入：T092、Item/Location/Category Repository；输出：本地搜索建议、最近查看与清除入口；验收：建议不请求网络，不改变搜索确认前的查询结果。
+- [X] T092 文件：`entry/src/main/ets/{model/SearchHistory.ets,data/rdb/SearchHistorySchema.ets,data/repository/SearchHistoryRepository.ets}`；输入：搜索增强需求与本地隐私边界；输出：可清除的最近查看/搜索历史模型与本地迁移；验收：历史默认仅本地保存，用户可一键清除。
+- [X] T093 文件：`entry/src/main/ets/{service/SearchSuggestionService.ets,pages/SearchPage.ets}`；输入：T092、Item/Location/Category Repository；输出：本地搜索建议、最近查看与清除入口；验收：建议不请求网络，不改变搜索确认前的查询结果。
 - [ ] T094 文件：`entry/src/test/`、`entry/src/ohosTest/ets/test/`；输入：T077–T093；输出：迁移、批次、阈值、借还、管理、导入导出、备份恢复和搜索增强测试；验收：v1 升级样本、失败回滚和隐私边界均通过。
 - [ ] T095 文件：`entry/`、`specs/001-itemtrace-core/{data-model.md,quickstart.md}`；输入：Phase 3 全部功能和实际验证命令；输出：最终构建/设备验收记录与文档同步；验收：所有阶段可构建，Phase 3 功能不引入后端、账号、云同步或未批准权限。
 
@@ -232,3 +232,5 @@ Phase 0：T001–T006
 - 全部 95 项任务均使用 `- [ ] Tnnn [P] [USn]` 所要求的检查清单格式；非用户故事任务不带 `US` 标签。
 - 每个任务均标明文件或目录、输入、输出和验收方式；没有任务依赖外部服务。
 - 系统能力任务 T003、T051、T054、T060、T066、T069、T081、T090 均明确要求“先查证 API，再实现抽象封装”。
+
+

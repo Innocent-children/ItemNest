@@ -10,18 +10,36 @@ import { AppServices } from '../service/AppServices';
 @Entry
 @Component
 struct Index {
+  @StorageLink('itemtrace.quickAddRequest') @Watch('onQuickAddRequested') private quickAddRequest: string = '';
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private recentItems: ItemSummary[] = [];
   @State private dueSoonItems: ItemSummary[] = [];
   @State private outOfStockItems: ItemSummary[] = [];
+  @State private showRecentSection: boolean = true;
+  @State private showExpirySection: boolean = true;
+  @State private showStockSection: boolean = true;
 
   aboutToAppear(): void {
     this.loadSummary();
+    this.openQuickAddIfRequested();
   }
 
   onPageShow(): void {
     this.loadSummary();
+    this.openQuickAddIfRequested();
+  }
+
+  private onQuickAddRequested(): void {
+    this.openQuickAddIfRequested();
+  }
+
+  private openQuickAddIfRequested(): void {
+    if (this.quickAddRequest.length === 0) {
+      return;
+    }
+    AppStorage.setOrCreate('itemtrace.quickAddRequest', '');
+    router.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } });
   }
 
   build() {
@@ -42,9 +60,15 @@ struct Index {
           Column({ space: $r('app.float.space_6') }) {
             this.hero()
             this.overview()
-            this.summarySection('最近添加', '刚记录的物品', this.recentItems, '暂无物品', RouteName.ITEM_FORM)
-            this.summarySection('即将到期', '优先处理，避免浪费', this.dueSoonItems, '暂无即将到期物品', RouteName.ITEM_LIST)
-            this.summarySection('待补货', '数量为 0 的物品', this.outOfStockItems, '暂无待补货物品', RouteName.ITEM_LIST)
+            if (this.showRecentSection) {
+              this.summarySection('最近添加', '刚记录的物品', this.recentItems, '暂无物品', RouteName.ITEM_FORM)
+            }
+            if (this.showExpirySection) {
+              this.summarySection('即将到期', '优先处理，避免浪费', this.dueSoonItems, '暂无即将到期物品', RouteName.ITEM_LIST)
+            }
+            if (this.showStockSection) {
+              this.summarySection('待补货', '数量为 0 的物品', this.outOfStockItems, '暂无待补货物品', RouteName.ITEM_LIST)
+            }
           }
           .width('100%')
           .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
@@ -94,6 +118,12 @@ struct Index {
           .border({ width: 1, color: $r('app.color.border_subtle') })
           .borderRadius($r('app.float.radius_control'))
           .onClick(() => router.pushUrl({ url: RouteName.SEARCH }))
+        Button('设置')
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_card'))
+          .border({ width: 1, color: $r('app.color.border_subtle') })
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => router.pushUrl({ url: RouteName.SETTINGS }))
       }
       .width('100%')
     }
@@ -169,6 +199,12 @@ struct Index {
     this.loading = true;
     this.errorMessage = '';
     try {
+      const preferencesResult = await AppServices.get().preferences.get();
+      if (preferencesResult.ok) {
+        this.showRecentSection = preferencesResult.getData().showRecentSection;
+        this.showExpirySection = preferencesResult.getData().showExpirySection;
+        this.showStockSection = preferencesResult.getData().showStockSection;
+      }
       const result = await AppServices.get().homeSummary.getSummary();
       if (!result.ok) {
         this.errorMessage = result.getError().message;

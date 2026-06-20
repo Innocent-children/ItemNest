@@ -31,7 +31,8 @@ export class ItemListService {
       expirationDate: item.expirationDate,
       expiryStatus: this.expiryService.getExpiryStatus(item, now),
       stockStatus: this.expiryService.getStockStatus(item),
-      createdAt: item.createdAt
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt
     };
   }
 

@@ -3,8 +3,11 @@ import { relationalStore } from '@kit.ArkData';
 import { AppError, AppErrorCode, toAppError } from '../../common/AppError';
 import { failure, Result, success } from '../../common/Result';
 import { createItemSchema, DATABASE_NAME, DATABASE_VERSION } from './ItemSchema';
+import { createReminderSchema } from './ReminderSchema';
+import { createAssetSchema } from './AssetSchema';
+import { createBatchSchema } from './BatchSchema';
 
-export async function migrateToV1(store: relationalStore.RdbStore): Promise<void> {
+export async function migrateToLatest(store: relationalStore.RdbStore): Promise<void> {
   const currentVersion = store.version;
   if (currentVersion > DATABASE_VERSION) {
     throw new AppError(AppErrorCode.DATABASE_INIT, '数据库版本不受当前应用支持');
@@ -17,7 +20,18 @@ export async function migrateToV1(store: relationalStore.RdbStore): Promise<void
   try {
     store.beginTransaction();
     started = true;
-    await createItemSchema(store);
+    if (currentVersion < 1) {
+      await createItemSchema(store);
+    }
+    if (currentVersion < 2) {
+      await createReminderSchema(store);
+    }
+    if (currentVersion < 3) {
+      await createAssetSchema(store);
+    }
+    if (currentVersion < 4) {
+      await createBatchSchema(store);
+    }
     store.version = DATABASE_VERSION;
     store.commit();
   } catch (error) {
@@ -95,7 +109,7 @@ export class RdbDatabase {
         securityLevel: relationalStore.SecurityLevel.S3
       };
       const store = await relationalStore.getRdbStore(this.context, config);
-      await migrateToV1(store);
+      await migrateToLatest(store);
       this.store = store;
       return success(store);
     } catch (error) {

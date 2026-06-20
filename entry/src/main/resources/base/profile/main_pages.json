@@ -4,6 +4,7 @@
     "pages/ItemListPage",
     "pages/ItemDetailPage",
     "pages/ItemFormPage",
-    "pages/SearchPage"
+    "pages/SearchPage",
+    "pages/SettingsPage"
   ]
 }

@@ -145,3 +145,51 @@ SDK 声明存在，不等同于已经配置权限或可以直接写入业务代�
   后续任务中引入。
 - **Phase 1 准入：通过。** 可开始 Item 模型、字段校验、RDB Schema/DAO/Repository 和页面路由。
   Phase 2 的提醒、图片、Form Kit 和扫码必须继续经过各自 API/权限核验；扫码保持可替换 Adapter。
+
+## Phase 2 API 核验与实现记录（2026-06-20）
+
+### Preferences（T051）
+
+- 本机 `@ohos.data.preferences.d.ts` 和 `@kit.ArkData.d.ts` 确认：`preferences.getPreferences(context, name)`、
+  `Preferences.getSync`、`put`、`flush` 均可用。Preferences 的值类型覆盖 number、string、boolean 等轻量值。
+- 实现使用文件 `itemtrace_user_preferences`，只保存默认提醒天数、默认排序、首页分区、主题和提醒开关；
+  不保存 Item、Asset、ReminderRecord 或外部 URI。
+- 写入失败转换为 `PREFERENCE_WRITE`，读取失败转换为 `PREFERENCE_READ`；页面保留默认值和本地 Item 闭环。
+
+### Reminder / Notification（T054）
+
+- 本机 `@ohos.reminderAgentManager.d.ts` 与 `@kit.BackgroundTasksKit.d.ts` 确认：
+  `publishReminder`、`cancelReminder`、`getAllValidReminders` 及 `ReminderRequestCalendar` 可用。
+- `publishReminder` 的 SDK 声明要求 `ohos.permission.PUBLISH_AGENT_REMINDER`，因此该精确权限已写入
+  `entry/src/main/module.json5`；没有引入常驻后台任务、网络或账号。
+- 调度使用日历提醒，当地日期 09:00；保存/编辑先取消旧任务，再创建新任务；未开启提醒、无到期日、
+  提醒时刻已过或物品已过期时只记录 `NOT_REQUIRED`。系统拒绝或创建失败写入 `FAILED` 并由详情页提供重试。
+- 仍需在真机确认：权限是否弹窗、通知开关关闭时的实际错误码、提醒投递时刻与取消后的系统展示。
+
+### 图片与相机入口（T060）
+
+- 本机 `@ohos.file.photoAccessHelper.d.ts` 与 `@kit.MediaLibraryKit.d.ts` 确认：
+  `PhotoViewPicker`、`PhotoSelectOptions`、`PhotoSelectResult.photoUris`、`isPhotoTakingSupported` 可用。
+- 本机 `@kit.CoreFileKit.d.ts` 确认：`fileIo.mkdir`、`copyFile`、`unlink` 可用于应用私有目录；
+  `Context.filesDir` 是应用文件目录。
+- `@ohos.multimedia.cameraPicker` 的 `pick` 声明要求来自 UIExtensionAbility 的 Context，当前工程主流程是
+  UIAbility 页面，不能把该 API 直接当作普通页面相机入口。当前“拍摄照片”使用系统 Photo Picker 的
+  `isPhotoTakingSupported=true` 入口；如设备不提供拍摄入口，会返回表单并保留草稿。
+- 选择器 URI 仅在用户保存时复制到 `filesDir/itemtrace-assets/`；RDB 仅保存 `item_asset` 元数据和
+  `item.photo_local_id`，不保存二进制或外部 URI。真机必须验证系统 Photo Picker 的临时授权 URI 能否直接复制。
+
+### 扫码（T066）
+
+- 本机 `@ohos.scan.d.ets` 的 SystemCapability 为 `PrintFramework`，权限为 `ohos.permission.PRINT`，
+  表示打印设备扫描，不是应用条码/二维码相机扫描能力。
+- 结论：当前不接入该 API、不申请打印权限；`ScanAdapter` 明确返回不可用，表单仍支持手工输入扫描文本并在用户点击“添加到备注”后持久化为备注内容。
+- 若后续获得可用 Scan Kit 或系统相机扫码 API，必须重新核验权限、取消语义、返回格式与隐私影响后替换 Adapter。
+
+### Form Kit（T069）
+
+- 本机 `@kit.FormKit.d.ts`、`FormExtensionAbility.d.ts`、`formBindingData.d.ts` 确认：
+  `FormExtensionAbility`、`formBindingData.createFormBindingData`、`formProvider.updateForm` 可用。
+- 已读取本机 DevEco 自动生成的 Form 模板，确认 `extensionAbilities.type = "form"`、metadata 名称
+  `ohos.extension.form` 及 `form_config.json` 的 `forms`、`src`、`uiSyntax`、尺寸、刷新字段格式。
+- 服务卡片仅绑定 `dueSoonCount` 与 `todayReminderCount`，并使用 FormLink 打开主应用；不输出 Item 名称、位置、备注或照片。
+- 仍需在目标桌面确认：绑定计数的首帧/刷新显示、桌面添加流程、FormLink 是否可直接抵达新增表单，以及不同卡片尺寸的视觉效果。
