@@ -26,54 +26,134 @@ struct Index {
 
   build() {
     Column() {
-      Row() {
-        Text('ItemTrace')
-          .fontSize(26)
-          .fontWeight(FontWeight.Bold)
-          .layoutWeight(1)
-        Button('搜索')
-          .onClick(() => router.pushUrl({ url: RouteName.SEARCH }))
-        Button('新增')
-          .margin({ left: 8 })
-          .onClick(() => router.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } }))
-      }
-      .width('100%')
-      .padding({ left: 16, right: 16, top: 16, bottom: 8 })
-
       if (this.loading) {
-        LoadingState({ text: '正在加载首页摘要…' })
+        LoadingState({ text: '正在整理你的物品清单…' })
       } else if (this.errorMessage.length > 0) {
-        ErrorState({ message: this.errorMessage })
-        Button('重试')
-          .onClick(() => this.loadSummary())
+        Column({ space: $r('app.float.space_3') }) {
+          ErrorState({ message: this.errorMessage })
+          Button('重新加载')
+            .fontColor($r('app.color.brand_on_primary'))
+            .backgroundColor($r('app.color.brand_primary'))
+            .onClick(() => this.loadSummary())
+        }
+        .padding($r('app.float.space_4'))
       } else {
         Scroll() {
-          Column({ space: 20 }) {
-            this.summarySection('最近添加', this.recentItems, '暂无物品', RouteName.ITEM_FORM);
-            this.summarySection('即将到期', this.dueSoonItems, '暂无即将到期物品', RouteName.ITEM_LIST);
-            this.summarySection('待补货', this.outOfStockItems, '暂无待补货物品', RouteName.ITEM_LIST);
+          Column({ space: $r('app.float.space_6') }) {
+            this.hero()
+            this.overview()
+            this.summarySection('最近添加', '刚记录的物品', this.recentItems, '暂无物品', RouteName.ITEM_FORM)
+            this.summarySection('即将到期', '优先处理，避免浪费', this.dueSoonItems, '暂无即将到期物品', RouteName.ITEM_LIST)
+            this.summarySection('待补货', '数量为 0 的物品', this.outOfStockItems, '暂无待补货物品', RouteName.ITEM_LIST)
           }
           .width('100%')
-          .padding({ left: 16, right: 16, bottom: 24 })
+          .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
         }
         .layoutWeight(1)
       }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#F8FAFC')
+    .backgroundColor($r('app.color.surface_app'))
   }
 
   @Builder
-  private summarySection(title: string, items: ItemSummary[], emptyText: string, actionRoute: string) {
-    Column({ space: 10 }) {
-      Text(title)
-        .fontSize(20)
+  private hero() {
+    Column({ space: $r('app.float.space_4') }) {
+      Row({ space: $r('app.float.space_2') }) {
+        Text('IT')
+          .fontSize($r('app.float.font_caption'))
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent'))
+          .borderRadius(16)
+          .padding({ left: $r('app.float.space_2'), right: $r('app.float.space_2'), top: $r('app.float.space_1'), bottom: $r('app.float.space_1') })
+        Text('ITEMTRACE')
+          .fontSize($r('app.float.font_caption'))
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.brand_primary'))
+      }
+      Text('物品，有迹可循')
+        .fontSize($r('app.float.font_display'))
         .fontWeight(FontWeight.Bold)
+        .fontColor($r('app.color.text_primary'))
+      Text('把位置、数量和到期日记下来；需要时，随时找到。')
+        .fontSize($r('app.float.font_body'))
+        .fontColor($r('app.color.text_secondary'))
+        .maxLines(2)
+      Row({ space: $r('app.float.space_2') }) {
+        Button('+ 记录物品')
+          .layoutWeight(1)
+          .fontColor($r('app.color.brand_on_primary'))
+          .backgroundColor($r('app.color.brand_primary'))
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => router.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } }))
+        Button('搜索')
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_card'))
+          .border({ width: 1, color: $r('app.color.border_subtle') })
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => router.pushUrl({ url: RouteName.SEARCH }))
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .padding($r('app.float.space_6'))
+    .borderRadius($r('app.float.radius_card'))
+    .backgroundColor($r('app.color.surface_card'))
+    .border({ width: 1, color: $r('app.color.border_subtle') })
+  }
+
+  @Builder
+  private overview() {
+    Row({ space: $r('app.float.space_2') }) {
+      this.metricCard('最近添加', this.recentItems.length, $r('app.color.surface_accent'), $r('app.color.brand_primary'))
+      this.metricCard('即将到期', this.dueSoonItems.length, $r('app.color.status_warning_soft'), $r('app.color.status_warning'))
+      this.metricCard('待补货', this.outOfStockItems.length, $r('app.color.status_danger_soft'), $r('app.color.status_danger'))
+    }
+    .width('100%')
+  }
+
+  @Builder
+  private metricCard(label: string, count: number, background: ResourceColor, textColor: ResourceColor) {
+    Column({ space: $r('app.float.space_1') }) {
+      Text(count.toString())
+        .fontSize($r('app.float.font_title'))
+        .fontWeight(FontWeight.Bold)
+        .fontColor(textColor)
+      Text(label)
+        .fontSize($r('app.float.font_caption'))
+        .fontColor(textColor)
+    }
+    .layoutWeight(1)
+    .padding($r('app.float.space_3'))
+    .borderRadius($r('app.float.radius_control'))
+    .backgroundColor(background)
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private summarySection(title: string, subtitle: string, items: ItemSummary[], emptyText: string, actionRoute: string) {
+    Column({ space: $r('app.float.space_3') }) {
+      Row() {
+        Column({ space: $r('app.float.space_1') }) {
+          Text(title)
+            .fontSize($r('app.float.font_section'))
+            .fontWeight(FontWeight.Bold)
+            .fontColor($r('app.color.text_primary'))
+          Text(subtitle)
+            .fontSize($r('app.float.font_caption'))
+            .fontColor($r('app.color.text_secondary'))
+        }
+        .layoutWeight(1)
+        Text(`${items.length} 项`)
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.text_secondary'))
+      }
       if (items.length === 0) {
         EmptyState({
           title: emptyText,
-          actionText: title === '最近添加' ? '新增物品' : '查看全部物品',
+          actionText: title === '最近添加' ? '新增物品' : '查看全部',
           actionRoute: actionRoute
         })
       } else {
@@ -103,5 +183,4 @@ struct Index {
       this.loading = false;
     }
   }
-
 }

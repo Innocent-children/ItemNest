@@ -2,7 +2,71 @@
   "color": [
     {
       "name": "start_window_background",
+      "value": "#F6F8F6"
+    },
+    {
+      "name": "surface_app",
+      "value": "#F6F8F6"
+    },
+    {
+      "name": "surface_card",
       "value": "#FFFFFF"
+    },
+    {
+      "name": "surface_accent",
+      "value": "#DDF4EB"
+    },
+    {
+      "name": "brand_primary",
+      "value": "#176B52"
+    },
+    {
+      "name": "brand_on_primary",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "text_primary",
+      "value": "#18211E"
+    },
+    {
+      "name": "text_secondary",
+      "value": "#5E6A65"
+    },
+    {
+      "name": "border_subtle",
+      "value": "#DFE6E1"
+    },
+    {
+      "name": "status_danger",
+      "value": "#B42318"
+    },
+    {
+      "name": "status_danger_soft",
+      "value": "#FDECEA"
+    },
+    {
+      "name": "status_warning",
+      "value": "#9A6700"
+    },
+    {
+      "name": "status_warning_soft",
+      "value": "#FFF0C2"
+    },
+    {
+      "name": "status_success",
+      "value": "#147A4B"
+    },
+    {
+      "name": "status_success_soft",
+      "value": "#DDF4E7"
+    },
+    {
+      "name": "status_neutral",
+      "value": "#52605A"
+    },
+    {
+      "name": "status_neutral_soft",
+      "value": "#EAF0EC"
     }
   ]
 }

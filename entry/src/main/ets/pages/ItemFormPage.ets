@@ -33,77 +33,144 @@ struct ItemFormPage {
 
   build() {
     Column() {
-      Text(this.editMode ? '编辑物品' : '新增物品')
-        .fontSize(24)
-        .fontWeight(FontWeight.Bold)
-        .width('100%')
-        .padding(16)
+      Column({ space: $r('app.float.space_1') }) {
+        Text(this.editMode ? '编辑物品' : '记录新物品')
+          .fontSize($r('app.float.font_title'))
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.text_primary'))
+        Text(this.editMode ? '更新后，所有列表和摘要会同步刷新。' : '先记录最重要的信息，其他内容随时补充。')
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.text_secondary'))
+      }
+      .width('100%')
+      .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
+
       if (this.loading) {
         LoadingState({ text: '正在读取物品…' })
       } else {
         Scroll() {
-          Column({ space: 18 }) {
-            this.fieldTitle('物品名称（必填）')
-            TextInput({ text: this.name, placeholder: '例如：感冒药' })
-              .maxLength(80)
-              .onChange((value: string) => this.name = value)
-
-            QuantityInput({ quantityText: $quantityText, unit: $unit, errorMessage: $quantityError })
-            LocationInput({ locationPath: $locationPath })
-
-            this.fieldTitle('分类（可选）')
-            Flex({ wrap: FlexWrap.Wrap }) {
-              ForEach(CATEGORY_OPTIONS, (category: Category) => {
-                Button(category)
-                  .type(this.categoryValue === category ? ButtonType.Capsule : ButtonType.Normal)
-                  .fontSize(13)
-                  .margin({ right: 8, bottom: 8 })
-                  .onClick(() => this.categoryValue = this.categoryValue === category ? '' : category)
-              }, (category: Category) => category)
+          Column({ space: $r('app.float.space_4') }) {
+            Column({ space: $r('app.float.space_4') }) {
+              this.fieldTitle('基础信息', '名称必填；数量和单位默认即可保存。')
+              TextInput({ text: this.name, placeholder: '例如：感冒药' })
+                .maxLength(80)
+                .backgroundColor($r('app.color.surface_app'))
+                .border({ width: 1, color: $r('app.color.border_subtle') })
+                .borderRadius($r('app.float.radius_control'))
+                .onChange((value: string) => this.name = value)
+              QuantityInput({ quantityText: $quantityText, unit: $unit, errorMessage: $quantityError })
             }
+            .padding($r('app.float.space_4'))
+            .borderRadius($r('app.float.radius_card'))
+            .backgroundColor($r('app.color.surface_card'))
 
-            this.fieldTitle('到期日期（可选）')
-            TextInput({ text: this.expirationDate, placeholder: 'YYYY-MM-DD' })
-              .onChange((value: string) => this.expirationDate = value)
-            this.fieldTitle('提前提醒天数（可选）')
-            TextInput({ text: this.reminderDaysText, placeholder: '未填写时按 7 天计算状态' })
-              .type(InputType.Number)
-              .onChange((value: string) => this.reminderDaysText = value)
-            this.fieldTitle('注意事项（可选）')
-            TextArea({ text: this.notes, placeholder: '例如：饭后服用' })
-              .maxLength(500)
-              .onChange((value: string) => this.notes = value)
+            Column({ space: $r('app.float.space_4') }) {
+              this.fieldTitle('放在哪里', '位置会优先显示在列表中。')
+              LocationInput({ locationPath: $locationPath })
+              Text('分类（可选）')
+                .fontSize($r('app.float.font_body'))
+                .fontWeight(FontWeight.Medium)
+                .fontColor($r('app.color.text_primary'))
+              Flex({ wrap: FlexWrap.Wrap }) {
+                ForEach(CATEGORY_OPTIONS, (category: Category) => {
+                  Button(category)
+                    .type(ButtonType.Capsule)
+                    .fontColor(this.categoryValue === category ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
+                    .backgroundColor(this.categoryValue === category ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
+                    .fontSize($r('app.float.font_caption'))
+                    .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+                    .onClick(() => this.categoryValue = this.categoryValue === category ? '' : category)
+                }, (category: Category) => category)
+              }
+            }
+            .padding($r('app.float.space_4'))
+            .borderRadius($r('app.float.radius_card'))
+            .backgroundColor($r('app.color.surface_card'))
 
-            this.fieldTitle('物品照片')
-            EmptyState({ title: '暂未添加照片', description: '照片功能将在后续阶段提供。' })
+            Column({ space: $r('app.float.space_3') }) {
+              this.fieldTitle('到期与提醒', '暂不创建系统提醒，仅用于计算临期状态。')
+              Text('到期日期（可选）')
+                .fontSize($r('app.float.font_body'))
+                .fontWeight(FontWeight.Medium)
+                .fontColor($r('app.color.text_primary'))
+              TextInput({ text: this.expirationDate, placeholder: 'YYYY-MM-DD' })
+                .backgroundColor($r('app.color.surface_app'))
+                .border({ width: 1, color: $r('app.color.border_subtle') })
+                .borderRadius($r('app.float.radius_control'))
+                .onChange((value: string) => this.expirationDate = value)
+              Text('提前提醒天数（可选）')
+                .fontSize($r('app.float.font_body'))
+                .fontWeight(FontWeight.Medium)
+                .fontColor($r('app.color.text_primary'))
+              TextInput({ text: this.reminderDaysText, placeholder: '未填写时按 7 天计算状态' })
+                .type(InputType.Number)
+                .backgroundColor($r('app.color.surface_app'))
+                .border({ width: 1, color: $r('app.color.border_subtle') })
+                .borderRadius($r('app.float.radius_control'))
+                .onChange((value: string) => this.reminderDaysText = value)
+            }
+            .padding($r('app.float.space_4'))
+            .borderRadius($r('app.float.radius_card'))
+            .backgroundColor($r('app.color.surface_card'))
+
+            Column({ space: $r('app.float.space_3') }) {
+              this.fieldTitle('注意事项', '例如服用方式、使用限制或收纳提醒。')
+              TextArea({ text: this.notes, placeholder: '写下重要说明' })
+                .maxLength(500)
+                .backgroundColor($r('app.color.surface_app'))
+                .border({ width: 1, color: $r('app.color.border_subtle') })
+                .borderRadius($r('app.float.radius_control'))
+                .onChange((value: string) => this.notes = value)
+            }
+            .padding($r('app.float.space_4'))
+            .borderRadius($r('app.float.radius_card'))
+            .backgroundColor($r('app.color.surface_card'))
+
+            Column() {
+              EmptyState({ title: '暂未添加照片', description: '照片功能将在后续阶段提供。' })
+            }
+            .borderRadius($r('app.float.radius_card'))
+            .backgroundColor($r('app.color.surface_card'))
 
             if (this.errorMessage.length > 0) {
               Text(this.errorMessage)
-                .fontSize(14)
-                .fontColor('#B42318')
+                .fontSize($r('app.float.font_caption'))
+                .fontColor($r('app.color.status_danger'))
+                .padding($r('app.float.space_3'))
+                .borderRadius($r('app.float.radius_control'))
+                .backgroundColor($r('app.color.status_danger_soft'))
             }
             Button(this.saving ? '正在保存…' : '保存物品')
               .width('100%')
+              .fontColor($r('app.color.brand_on_primary'))
+              .backgroundColor($r('app.color.brand_primary'))
+              .borderRadius($r('app.float.radius_control'))
               .enabled(!this.saving)
               .onClick(() => this.save())
           }
           .width('100%')
-          .padding({ left: 16, right: 16, bottom: 24 })
+          .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
         }
         .layoutWeight(1)
       }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#F8FAFC')
+    .backgroundColor($r('app.color.surface_app'))
   }
 
   @Builder
-  private fieldTitle(value: string) {
-    Text(value)
-      .fontSize(16)
-      .fontWeight(FontWeight.Medium)
-      .width('100%')
+  private fieldTitle(title: string, description: string) {
+    Column({ space: $r('app.float.space_1') }) {
+      Text(title)
+        .fontSize($r('app.float.font_section'))
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('app.color.text_primary'))
+      Text(description)
+        .fontSize($r('app.float.font_caption'))
+        .fontColor($r('app.color.text_secondary'))
+    }
+    .width('100%')
   }
 
   private readRoute(): void {

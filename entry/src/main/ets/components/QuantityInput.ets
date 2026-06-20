@@ -7,12 +7,16 @@ export struct QuantityInput {
   @Link errorMessage: string;
 
   build() {
-    Column({ space: 8 }) {
+    Column({ space: $r('app.float.space_2') }) {
       Text('数量与单位')
-        .fontSize(16)
+        .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.text_primary'))
       TextInput({ text: this.quantityText, placeholder: '默认 1' })
         .type(InputType.Number)
+        .backgroundColor($r('app.color.surface_app'))
+        .border({ width: 1, color: $r('app.color.border_subtle') })
+        .borderRadius($r('app.float.radius_control'))
         .onChange((value: string) => {
           this.quantityText = value;
           this.errorMessage = this.validateQuantity(value);
@@ -20,16 +24,18 @@ export struct QuantityInput {
       Flex({ wrap: FlexWrap.Wrap }) {
         ForEach(ITEM_UNIT_OPTIONS, (option: ItemUnit) => {
           Button(option)
-            .type(this.unit === option ? ButtonType.Capsule : ButtonType.Normal)
-            .fontSize(14)
-            .margin({ right: 8, bottom: 8 })
+            .type(ButtonType.Capsule)
+            .fontColor(this.unit === option ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
+            .backgroundColor(this.unit === option ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
+            .fontSize($r('app.float.font_caption'))
+            .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
             .onClick(() => this.unit = option)
         }, (option: ItemUnit) => option)
       }
       if (this.errorMessage.length > 0) {
         Text(this.errorMessage)
-          .fontSize(13)
-          .fontColor('#B42318')
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.status_danger'))
       }
     }
     .alignItems(HorizontalAlign.Start)

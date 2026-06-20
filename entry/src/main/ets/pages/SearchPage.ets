@@ -31,49 +31,93 @@ struct SearchPage {
   build() {
     Column() {
       Row() {
-        Text('搜索与筛选')
-          .fontSize(24)
-          .fontWeight(FontWeight.Bold)
-          .layoutWeight(1)
+        Column({ space: $r('app.float.space_1') }) {
+          Text('搜索与筛选')
+            .fontSize($r('app.float.font_title'))
+            .fontWeight(FontWeight.Bold)
+            .fontColor($r('app.color.text_primary'))
+          Text('按名称、位置和分类快速缩小范围')
+            .fontSize($r('app.float.font_caption'))
+            .fontColor($r('app.color.text_secondary'))
+        }
+        .layoutWeight(1)
         Button('清除')
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_card'))
+          .border({ width: 1, color: $r('app.color.border_subtle') })
+          .borderRadius($r('app.float.radius_control'))
           .onClick(() => this.clearQuery())
       }
       .width('100%')
-      .padding(16)
+      .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
 
       Scroll() {
-        Column({ space: 16 }) {
-          TextInput({ text: this.name, placeholder: '按物品名称搜索' })
-            .onChange((value: string) => this.name = value)
-
-          Text('位置筛选（仅显示已记录的位置）')
-            .fontSize(16)
-            .fontWeight(FontWeight.Medium)
-          Flex({ wrap: FlexWrap.Wrap }) {
-            ForEach(this.locationPaths, (location: string) => {
-              Button(location)
-                .type(this.selectedLocation === location ? ButtonType.Capsule : ButtonType.Normal)
-                .fontSize(13)
-                .margin({ right: 8, bottom: 8 })
-                .onClick(() => this.selectedLocation = this.selectedLocation === location ? '' : location)
-            }, (location: string) => location)
+        Column({ space: $r('app.float.space_4') }) {
+          Column({ space: $r('app.float.space_3') }) {
+            Text('查找物品')
+              .fontSize($r('app.float.font_section'))
+              .fontWeight(FontWeight.Bold)
+              .fontColor($r('app.color.text_primary'))
+            TextInput({ text: this.name, placeholder: '输入物品名称，例如：感冒药' })
+              .backgroundColor($r('app.color.surface_app'))
+              .border({ width: 1, color: $r('app.color.border_subtle') })
+              .borderRadius($r('app.float.radius_control'))
+              .onChange((value: string) => this.name = value)
           }
+          .padding($r('app.float.space_4'))
+          .borderRadius($r('app.float.radius_card'))
+          .backgroundColor($r('app.color.surface_card'))
 
-          Text('分类筛选')
-            .fontSize(16)
-            .fontWeight(FontWeight.Medium)
-          Flex({ wrap: FlexWrap.Wrap }) {
-            ForEach(this.categories, (category: Category) => {
-              Button(category)
-                .type(this.selectedCategory === category ? ButtonType.Capsule : ButtonType.Normal)
-                .fontSize(13)
-                .margin({ right: 8, bottom: 8 })
-                .onClick(() => this.selectedCategory = this.selectedCategory === category ? '' : category)
-            }, (category: Category) => category)
+          Column({ space: $r('app.float.space_3') }) {
+            Text('位置筛选')
+              .fontSize($r('app.float.font_section'))
+              .fontWeight(FontWeight.Bold)
+              .fontColor($r('app.color.text_primary'))
+            Text('仅显示已记录的位置')
+              .fontSize($r('app.float.font_caption'))
+              .fontColor($r('app.color.text_secondary'))
+            Flex({ wrap: FlexWrap.Wrap }) {
+              ForEach(this.locationPaths, (location: string) => {
+                Button(location)
+                  .type(ButtonType.Capsule)
+                  .fontColor(this.selectedLocation === location ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
+                  .backgroundColor(this.selectedLocation === location ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
+                  .fontSize($r('app.float.font_caption'))
+                  .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+                  .onClick(() => this.selectedLocation = this.selectedLocation === location ? '' : location)
+              }, (location: string) => location)
+            }
           }
+          .padding($r('app.float.space_4'))
+          .borderRadius($r('app.float.radius_card'))
+          .backgroundColor($r('app.color.surface_card'))
+
+          Column({ space: $r('app.float.space_3') }) {
+            Text('分类筛选')
+              .fontSize($r('app.float.font_section'))
+              .fontWeight(FontWeight.Bold)
+              .fontColor($r('app.color.text_primary'))
+            Flex({ wrap: FlexWrap.Wrap }) {
+              ForEach(this.categories, (category: Category) => {
+                Button(category)
+                  .type(ButtonType.Capsule)
+                  .fontColor(this.selectedCategory === category ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
+                  .backgroundColor(this.selectedCategory === category ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
+                  .fontSize($r('app.float.font_caption'))
+                  .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+                  .onClick(() => this.selectedCategory = this.selectedCategory === category ? '' : category)
+              }, (category: Category) => category)
+            }
+          }
+          .padding($r('app.float.space_4'))
+          .borderRadius($r('app.float.radius_card'))
+          .backgroundColor($r('app.color.surface_card'))
 
           Button('应用搜索与筛选')
             .width('100%')
+            .fontColor($r('app.color.brand_on_primary'))
+            .backgroundColor($r('app.color.brand_primary'))
+            .borderRadius($r('app.float.radius_control'))
             .onClick(() => this.search())
 
           if (this.loading) {
@@ -81,15 +125,21 @@ struct SearchPage {
           } else if (this.errorMessage.length > 0) {
             ErrorState({ message: this.errorMessage })
             Button('重试')
+              .fontColor($r('app.color.brand_on_primary'))
+              .backgroundColor($r('app.color.brand_primary'))
               .onClick(() => this.search())
           } else if (this.searched && this.items.length === 0) {
             EmptyState({ title: '暂无搜索结果', description: '请修改或清除筛选条件后重试。' })
           } else if (this.searched) {
             Text(`找到 ${this.items.length} 个物品`)
-              .fontSize(16)
+              .fontSize($r('app.float.font_section'))
               .fontWeight(FontWeight.Medium)
+              .fontColor($r('app.color.text_primary'))
             Button('在列表中查看结果')
               .width('100%')
+              .fontColor($r('app.color.brand_primary'))
+              .backgroundColor($r('app.color.surface_accent'))
+              .borderRadius($r('app.float.radius_control'))
               .onClick(() => router.pushUrl({ url: RouteName.ITEM_LIST, params: { query: this.currentQuery() } }))
             ForEach(this.items, (item: ItemSummary) => {
               ItemCard({ item: item })
@@ -97,13 +147,13 @@ struct SearchPage {
           }
         }
         .width('100%')
-        .padding({ left: 16, right: 16, bottom: 24 })
+        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
       }
       .layoutWeight(1)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#F8FAFC')
+    .backgroundColor($r('app.color.surface_app'))
   }
 
   private readInitialQuery(): void {

@@ -8,45 +8,57 @@ export struct ItemCard {
   @Prop item: ItemSummary;
 
   build() {
-    Column({ space: 8 }) {
-      Row({ space: 12 }) {
-        Column({ space: 4 }) {
+    Row({ space: $r('app.float.space_3') }) {
+      Text(this.item.name.substring(0, 1))
+        .fontSize($r('app.float.font_section'))
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('app.color.brand_primary'))
+        .backgroundColor($r('app.color.surface_accent'))
+        .width(44)
+        .height(44)
+        .borderRadius(22)
+        .textAlign(TextAlign.Center)
+        .padding({ top: 10 })
+      Column({ space: $r('app.float.space_1') }) {
+        Row({ space: $r('app.float.space_2') }) {
           Text(this.item.name)
-            .fontSize(18)
+            .fontSize($r('app.float.font_body'))
             .fontWeight(FontWeight.Medium)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-          if (this.item.locationPath !== undefined) {
-            Text(this.item.locationPath)
-              .fontSize(14)
-              .fontColor('#475467')
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .layoutWeight(1)
+          ExpiryStatusTag({ status: this.item.expiryStatus })
+        }
+        if (this.item.locationPath !== undefined) {
+          Text(this.item.locationPath)
+            .fontSize($r('app.float.font_caption'))
+            .fontColor($r('app.color.text_secondary'))
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        Row({ space: $r('app.float.space_2') }) {
+          Text(`${this.item.quantity}${this.item.unit}`)
+            .fontSize($r('app.float.font_caption'))
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.brand_primary'))
+          if (this.item.category !== undefined) {
+            Text('·')
+              .fontColor($r('app.color.text_secondary'))
           }
           if (this.item.category !== undefined) {
             Text(this.item.category)
-              .fontSize(13)
-              .fontColor('#667085')
+              .fontSize($r('app.float.font_caption'))
+              .fontColor($r('app.color.text_secondary'))
           }
         }
-        .layoutWeight(1)
-        ExpiryStatusTag({ status: this.item.expiryStatus })
       }
-      Row({ space: 8 }) {
-        Text(`${this.item.quantity}${this.item.unit}`)
-          .fontSize(15)
-          .fontWeight(FontWeight.Medium)
-        if (this.item.expirationDate !== undefined) {
-          Text(`到期：${this.item.expirationDate}`)
-            .fontSize(13)
-            .fontColor('#667085')
-        }
-      }
+      .layoutWeight(1)
     }
     .width('100%')
-    .padding(16)
-    .borderRadius(12)
-    .backgroundColor('#FFFFFF')
+    .padding($r('app.float.space_4'))
+    .borderRadius($r('app.float.radius_card'))
+    .backgroundColor($r('app.color.surface_card'))
+    .border({ width: 1, color: $r('app.color.border_subtle') })
     .onClick(() => router.pushUrl({ url: RouteName.ITEM_DETAIL, params: { itemId: this.item.id } }))
   }
 }

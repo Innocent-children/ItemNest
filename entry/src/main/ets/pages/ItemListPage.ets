@@ -28,25 +28,42 @@ struct ItemListPage {
 
   build() {
     Column() {
-      Row() {
-        Text('全部物品')
-          .fontSize(24)
-          .fontWeight(FontWeight.Bold)
+      Column({ space: $r('app.float.space_3') }) {
+        Row() {
+          Column({ space: $r('app.float.space_1') }) {
+            Text('全部物品')
+              .fontSize($r('app.float.font_title'))
+              .fontWeight(FontWeight.Bold)
+              .fontColor($r('app.color.text_primary'))
+            Text(this.query.isEmpty() ? '按最近添加排序' : '正在显示已筛选的物品')
+              .fontSize($r('app.float.font_caption'))
+              .fontColor($r('app.color.text_secondary'))
+          }
           .layoutWeight(1)
-        Button('筛选')
-          .onClick(() => router.pushUrl({ url: RouteName.SEARCH, params: { query: this.query } }))
-        Button('新增')
-          .margin({ left: 8 })
+          Button('筛选')
+            .fontColor($r('app.color.brand_primary'))
+            .backgroundColor($r('app.color.surface_card'))
+            .border({ width: 1, color: $r('app.color.border_subtle') })
+            .borderRadius($r('app.float.radius_control'))
+            .onClick(() => router.pushUrl({ url: RouteName.SEARCH, params: { query: this.query } }))
+        }
+        Button('+ 新增物品')
+          .width('100%')
+          .fontColor($r('app.color.brand_on_primary'))
+          .backgroundColor($r('app.color.brand_primary'))
+          .borderRadius($r('app.float.radius_control'))
           .onClick(() => router.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } }))
       }
       .width('100%')
-      .padding(16)
+      .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
 
       if (this.loading) {
         LoadingState({ text: '正在加载物品…' })
       } else if (this.errorMessage.length > 0) {
         ErrorState({ message: this.errorMessage })
         Button('重试')
+          .fontColor($r('app.color.brand_on_primary'))
+          .backgroundColor($r('app.color.brand_primary'))
           .onClick(() => this.loadItems())
       } else if (this.items.length === 0) {
         EmptyState({
@@ -57,6 +74,7 @@ struct ItemListPage {
         })
         if (!this.query.isEmpty()) {
           Button('清除条件')
+            .fontColor($r('app.color.brand_primary'))
             .onClick(() => this.handleEmptyAction())
         }
       } else {
@@ -68,12 +86,12 @@ struct ItemListPage {
           }, (item: ItemSummary) => item.id)
         }
         .layoutWeight(1)
-        .padding({ left: 16, right: 16, bottom: 16 })
+        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
       }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#F8FAFC')
+    .backgroundColor($r('app.color.surface_app'))
   }
 
   private readQuery(): void {

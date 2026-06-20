@@ -6,38 +6,38 @@ export struct ExpiryStatusTag {
 
   build() {
     Text(expiryStatusLabel(this.status))
-      .fontSize(12)
+      .fontSize($r('app.float.font_caption'))
       .fontColor(this.textColor())
       .backgroundColor(this.tagBackgroundColor())
-      .borderRadius(12)
-      .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+      .borderRadius($r('app.float.radius_control'))
+      .padding({ left: $r('app.float.space_2'), right: $r('app.float.space_2'), top: $r('app.float.space_1'), bottom: $r('app.float.space_1') })
   }
 
-  private textColor(): string {
+  private textColor(): ResourceColor {
     switch (this.status) {
       case ExpiryStatus.EXPIRED:
-        return '#B42318';
+        return $r('app.color.status_danger');
       case ExpiryStatus.DUE_SOON:
-        return '#B54708';
+        return $r('app.color.status_warning');
       case ExpiryStatus.NORMAL:
-        return '#027A48';
+        return $r('app.color.status_success');
       case ExpiryStatus.NO_EXPIRY_DATE:
       default:
-        return '#475467';
+        return $r('app.color.status_neutral');
     }
   }
 
-  private tagBackgroundColor(): string {
+  private tagBackgroundColor(): ResourceColor {
     switch (this.status) {
       case ExpiryStatus.EXPIRED:
-        return '#FEE4E2';
+        return $r('app.color.status_danger_soft');
       case ExpiryStatus.DUE_SOON:
-        return '#FEF0C7';
+        return $r('app.color.status_warning_soft');
       case ExpiryStatus.NORMAL:
-        return '#D1FADF';
+        return $r('app.color.status_success_soft');
       case ExpiryStatus.NO_EXPIRY_DATE:
       default:
-        return '#EAECF0';
+        return $r('app.color.status_neutral_soft');
     }
   }
 }
