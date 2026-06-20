@@ -108,6 +108,11 @@ struct ItemListPage {
 
   private readQuery(): void {
     const params = router.getParams() as ItemListRouteParams;
+    if (!params) {
+      this.query = new ItemQuery();
+      this.noticeMessage = '';
+      return;
+    }
     this.query = params.query ?? new ItemQuery();
     this.noticeMessage = params.notice ?? '';
   }

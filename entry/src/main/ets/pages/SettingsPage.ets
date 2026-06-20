@@ -41,6 +41,7 @@ struct SettingsPage {
           .backgroundColor($r('app.color.surface_accent'))
           .borderRadius($r('app.float.radius_control'))
           .onClick(() => router.back())
+          // TODO: 迁移到 Navigation 组件
       }
       .width('100%')
       .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })

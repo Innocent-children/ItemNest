@@ -231,6 +231,11 @@ struct ItemFormPage {
 
   private readRoute(): void {
     const params = router.getParams() as ItemFormRouteParams;
+    if (!params) {
+      this.errorMessage = '页面参数错误';
+      this.loading = false;
+      return;
+    }
     this.editMode = params.mode === 'edit';
     if (!this.editMode) {
       return;

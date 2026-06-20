@@ -11,7 +11,7 @@ export class LendingService {
     if (!batchResult.ok || !batchResult.getData()) {
       return Result.failure(AppError.of('BATCH_NOT_FOUND', '批次不存在'));
     }
-    const batch = batchResult.getData()!;
+    const batch = batchResult.getData();
     if (batch.quantity < count) {
       return Result.failure(AppError.of('INSUFFICIENT_QUANTITY', 库存不足，当前仅有 \));
     }
@@ -28,7 +28,7 @@ export class LendingService {
     if (!batchResult.ok || !batchResult.getData()) {
       return Result.failure(AppError.of('BATCH_NOT_FOUND', '批次不存在'));
     }
-    const batch = batchResult.getData()!;
+    const batch = batchResult.getData();
     const beforeQty = batch.quantity;
     batch.quantity += count;
     const draft = { itemId, quantity: batch.quantity, unit: batch.unit };
@@ -42,3 +42,4 @@ export class LendingService {
     // TraceEvent 持久化在 T082 的 TraceEventRepository 完成后接入
   }
 }
+

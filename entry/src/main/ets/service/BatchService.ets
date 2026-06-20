@@ -55,7 +55,7 @@ export class BatchService {
       return Result.failure(batchesResult.error!);
     }
     const itemResult = this.itemRepo.getById(itemId);
-    const itemName = (itemResult.ok && itemResult.getData()) ? itemResult.getData()!.name : '';
+    const itemName = (itemResult.ok && itemResult.getData()) ? itemResult.getData().name : '';
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
 
@@ -96,3 +96,4 @@ export class BatchService {
     return d.toISOString().split('T')[0];
   }
 }
+
