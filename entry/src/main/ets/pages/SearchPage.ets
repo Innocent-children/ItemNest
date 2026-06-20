@@ -158,6 +158,9 @@ struct SearchPage {
 
   private readInitialQuery(): void {
     const params = router.getParams() as ItemListRouteParams;
+    if (!params) {
+      return;
+    }
     const query = params.query;
     if (query !== undefined) {
       this.name = query.name;

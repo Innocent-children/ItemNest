@@ -27,6 +27,11 @@ struct ItemDetailPage {
 
   aboutToAppear(): void {
     const params = router.getParams() as ItemFormRouteParams;
+    if (!params) {
+      this.loading = false;
+      this.errorMessage = '缺少物品标识，无法打开页面';
+      return;
+    }
     const itemIdResult = requireItemId(params);
     if (!itemIdResult.ok) {
       this.loading = false;
