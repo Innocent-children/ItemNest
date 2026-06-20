@@ -38,6 +38,17 @@ hvigorw.bat assembleApp --no-daemon
 
 ## Phase 1：本地闭环验收
 
+### 当前执行记录（2026-06-20）
+
+- 已实现并通过 `hvigorw.bat assembleApp --no-daemon`：Item 模型与字段校验、RDB Schema v1、DAO/
+  Repository、创建/编辑/删除、名称搜索、位置/分类筛选、到期状态、首页摘要以及首页、列表、详情、
+  新增/编辑和搜索页面。
+- 本机构建任务未暴露单元测试或 `ohosTest` 的命令行入口。因此，`entry/src/test/` 中的服务与校验
+  测试、以及下列场景仍需在 DevEco Studio 选择 `ohosTest` 目标后实际执行；在结果产生前不得标记为
+  已通过。
+- 本次构建仍有既有签名、混淆与 Router 旧接口弃用警告。它们不阻塞编译；真机安装需要单独配置签名，
+  Router 接口迁移需在后续有经核验替代 API 时处理。
+
 ### 场景 A：快速新增与持久化
 
 1. 清空测试数据或使用全新应用数据。

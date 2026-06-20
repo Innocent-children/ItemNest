@@ -36,18 +36,18 @@ description: "ItemTrace 本地物品追踪核心闭环的可执行任务清单"
 
 ### Phase 1A：共享模型、RDB 与基础边界（阻塞所有用户故事）
 
-- [ ] T007 文件：`entry/src/main/ets/{common,model,data/rdb,data/dao,data/repository,service,navigation,components}/`；输入：`plan.md` 的目录决策；输出：按计划建立最小目录与职责说明文件；验收：没有空的业务实现，目录命名与计划一致，现有 `EntryAbility.ets` 不被破坏。
-- [ ] T008 文件：`entry/src/main/ets/model/Item.ets`；输入：`data-model.md` 的 Item 字段和验证规则；输出：Item、ItemDraft、ItemSummary 与稳定 `id` 的 ArkTS 模型；验收：字段覆盖名称、数量、单位、位置、分类、单到期日、提醒天数、备注、照片状态和时间戳。
-- [ ] T009 [P] 文件：`entry/src/main/ets/model/ExpiryStatus.ets`、`entry/src/main/ets/model/StockStatus.ets`；输入：`data-model.md` 的派生状态表；输出：四种到期状态与两种库存状态的受限模型；验收：不存在持久化到期状态字段或额外低库存阈值。
-- [ ] T010 [P] 文件：`entry/src/main/ets/model/Category.ets`、`entry/src/main/ets/model/LocationPath.ets`；输入：规格的固定分类和文本位置路径规则；输出：Phase 1 简化分类集合与位置路径值对象；验收：位置为单一文本路径、分类为固定集合，未创建独立 RDB 表。
-- [ ] T011 [P] 文件：`entry/src/main/ets/common/{AppError.ets,Result.ets,ItemValidator.ets}`；输入：规格 FR-001 至 FR-006、FR-017；输出：统一错误类型、结果类型和字段校验器；验收：名称、数量、单位、日期、提醒天数和备注长度均有可测试的失败结果。
-- [ ] T012 文件：`entry/src/main/ets/data/rdb/RdbDatabase.ets`；输入：T003 的 RDB API 核验记录、`data-model.md` 迁移规则；输出：数据库打开、初始化、版本和事务边界；验收：先查证 RDB API，再实现抽象封装；初始化失败返回 `DATABASE_INIT`，不让页面继续读写。
-- [ ] T013 文件：`entry/src/main/ets/data/rdb/ItemSchema.ets`；输入：`data-model.md` 的 `item` 列、索引和 Schema v1；输出：v1 建表、索引和迁移定义；验收：仅创建 `item` 表及规定索引，失败时事务回滚且不静默改变版本。
-- [ ] T014 文件：`entry/src/main/ets/data/dao/ItemDao.ets`；输入：T012、T013 和 `data-model.md`；输出：参数化创建、按 ID 读取、更新、删除和条件查询 DAO；验收：DAO 不计算到期状态、不产生 UI 文案，所有写入可报告失败。
-- [ ] T015 文件：`entry/src/main/ets/data/repository/ItemRepository.ets`；输入：T008、T014 与 `contracts/system-boundaries.md`；输出：创建、详情、更新、确认删除、列表和首页摘要的 Repository 契约实现；验收：数据库行不泄漏到页面，失败与“不存在”可区分。
+- [X] T007 文件：`entry/src/main/ets/{common,model,data/rdb,data/dao,data/repository,service,navigation,components}/`；输入：`plan.md` 的目录决策；输出：按计划建立最小目录与职责说明文件；验收：没有空的业务实现，目录命名与计划一致，现有 `EntryAbility.ets` 不被破坏。
+- [X] T008 文件：`entry/src/main/ets/model/Item.ets`；输入：`data-model.md` 的 Item 字段和验证规则；输出：Item、ItemDraft、ItemSummary 与稳定 `id` 的 ArkTS 模型；验收：字段覆盖名称、数量、单位、位置、分类、单到期日、提醒天数、备注、照片状态和时间戳。
+- [X] T009 [P] 文件：`entry/src/main/ets/model/ExpiryStatus.ets`、`entry/src/main/ets/model/StockStatus.ets`；输入：`data-model.md` 的派生状态表；输出：四种到期状态与两种库存状态的受限模型；验收：不存在持久化到期状态字段或额外低库存阈值。
+- [X] T010 [P] 文件：`entry/src/main/ets/model/Category.ets`、`entry/src/main/ets/model/LocationPath.ets`；输入：规格的固定分类和文本位置路径规则；输出：Phase 1 简化分类集合与位置路径值对象；验收：位置为单一文本路径、分类为固定集合，未创建独立 RDB 表。
+- [X] T011 [P] 文件：`entry/src/main/ets/common/{AppError.ets,Result.ets,ItemValidator.ets}`；输入：规格 FR-001 至 FR-006、FR-017；输出：统一错误类型、结果类型和字段校验器；验收：名称、数量、单位、日期、提醒天数和备注长度均有可测试的失败结果。
+- [X] T012 文件：`entry/src/main/ets/data/rdb/RdbDatabase.ets`；输入：T003 的 RDB API 核验记录、`data-model.md` 迁移规则；输出：数据库打开、初始化、版本和事务边界；验收：先查证 RDB API，再实现抽象封装；初始化失败返回 `DATABASE_INIT`，不让页面继续读写。
+- [X] T013 文件：`entry/src/main/ets/data/rdb/ItemSchema.ets`；输入：`data-model.md` 的 `item` 列、索引和 Schema v1；输出：v1 建表、索引和迁移定义；验收：仅创建 `item` 表及规定索引，失败时事务回滚且不静默改变版本。
+- [X] T014 文件：`entry/src/main/ets/data/dao/ItemDao.ets`；输入：T012、T013 和 `data-model.md`；输出：参数化创建、按 ID 读取、更新、删除和条件查询 DAO；验收：DAO 不计算到期状态、不产生 UI 文案，所有写入可报告失败。
+- [X] T015 文件：`entry/src/main/ets/data/repository/ItemRepository.ets`；输入：T008、T014 与 `contracts/system-boundaries.md`；输出：创建、详情、更新、确认删除、列表和首页摘要的 Repository 契约实现；验收：数据库行不泄漏到页面，失败与“不存在”可区分。
 - [ ] T016 [P] 文件：`entry/src/test/{ItemValidator.test.ets,ItemSchema.test.ets}`；输入：T008–T013 的规则与迁移定义；输出：字段校验和 Schema v1 初始化/失败回滚测试；验收：非法名称、负数、非法提醒天数和迁移失败均能复现预期错误。
-- [ ] T017 [P] 文件：`entry/src/main/ets/navigation/{RouteName.ets,RouteContract.ets}`、`entry/src/main/resources/base/profile/main_pages.json`；输入：`contracts/ui-navigation.md`；输出：首页、列表、详情、表单、搜索页面的路由常量、参数/返回结果约定和页面清单；验收：只传 `itemId` 与显式操作结果，不传可变完整 Item。
-- [ ] T018 [P] 文件：`entry/src/main/ets/components/{EmptyState.ets,ErrorState.ets,LoadingState.ets}`；输入：规格 FR-016、FR-017；输出：可复用中文空、错误、加载状态组件；验收：组件不含数据库逻辑，可显示“暂无物品”“暂无搜索结果”“数据库初始化失败”等可操作提示。
+- [X] T017 [P] 文件：`entry/src/main/ets/navigation/{RouteName.ets,RouteContract.ets}`、`entry/src/main/resources/base/profile/main_pages.json`；输入：`contracts/ui-navigation.md`；输出：首页、列表、详情、表单、搜索页面的路由常量、参数/返回结果约定和页面清单；验收：只传 `itemId` 与显式操作结果，不传可变完整 Item。
+- [X] T018 [P] 文件：`entry/src/main/ets/components/{EmptyState.ets,ErrorState.ets,LoadingState.ets}`；输入：规格 FR-016、FR-017；输出：可复用中文空、错误、加载状态组件；验收：组件不含数据库逻辑，可显示“暂无物品”“暂无搜索结果”“数据库初始化失败”等可操作提示。
 
 **Phase 1A 验收**：完成 T012–T015 的最小初始化测试后，项目可构建；RDB 失败、字段失败和路由参数失败均有明确错误路径。
 
@@ -55,11 +55,11 @@ description: "ItemTrace 本地物品追踪核心闭环的可执行任务清单"
 
 **独立验收**：新设备上可在 60 秒内新增仅含名称的物品；新增完整物品后重启应用，列表仍显示正确位置、数量和状态。
 
-- [ ] T019 [US1] 文件：`entry/src/main/ets/service/ItemCreateService.ets`；输入：ItemDraft、ItemValidator、ItemRepository；输出：创建用例，默认数量为 1、单位为“个”；验收：只填合法名称可创建，校验/写入失败不产生半成品记录。
-- [ ] T020 [P] [US1] 文件：`entry/src/main/ets/service/ItemListService.ets`；输入：ItemRepository、ExpiryStatus 模型和当前本地日期；输出：最近添加顺序的 ItemSummary 列表用例；验收：列表摘要包含名称、位置、数量、单位、分类和文字状态。
-- [ ] T021 [P] [US1] 文件：`entry/src/main/ets/components/{QuantityInput.ets,LocationInput.ets}`；输入：T010、T011；输出：数量/单位与文本位置路径输入组件；验收：数量最多两位小数、位置只去除首尾空白，错误能回传给表单。
-- [ ] T022 [US1] 文件：`entry/src/main/ets/pages/ItemFormPage.ets`；输入：T019、T021、路由契约；输出：新增模式的名称、数量、单位、位置、分类、日期、提醒天数、备注和照片占位入口；验收：必填/可选字段清晰，保存失败保留草稿，未调用相册或相机。
-- [ ] T023 [US1] 文件：`entry/src/main/ets/components/ItemCard.ets`、`entry/src/main/ets/pages/ItemListPage.ets`；输入：T020、路由契约；输出：按最近添加展示的物品列表与详情/新增入口；验收：位置路径优先于分类，长文本不遮挡数量和状态。
+- [X] T019 [US1] 文件：`entry/src/main/ets/service/ItemCreateService.ets`；输入：ItemDraft、ItemValidator、ItemRepository；输出：创建用例，默认数量为 1、单位为“个”；验收：只填合法名称可创建，校验/写入失败不产生半成品记录。
+- [X] T020 [P] [US1] 文件：`entry/src/main/ets/service/ItemListService.ets`；输入：ItemRepository、ExpiryStatus 模型和当前本地日期；输出：最近添加顺序的 ItemSummary 列表用例；验收：列表摘要包含名称、位置、数量、单位、分类和文字状态。
+- [X] T021 [P] [US1] 文件：`entry/src/main/ets/components/{QuantityInput.ets,LocationInput.ets}`；输入：T010、T011；输出：数量/单位与文本位置路径输入组件；验收：数量最多两位小数、位置只去除首尾空白，错误能回传给表单。
+- [X] T022 [US1] 文件：`entry/src/main/ets/pages/ItemFormPage.ets`；输入：T019、T021、路由契约；输出：新增模式的名称、数量、单位、位置、分类、日期、提醒天数、备注和照片占位入口；验收：必填/可选字段清晰，保存失败保留草稿，未调用相册或相机。
+- [X] T023 [US1] 文件：`entry/src/main/ets/components/ItemCard.ets`、`entry/src/main/ets/pages/ItemListPage.ets`；输入：T020、路由契约；输出：按最近添加展示的物品列表与详情/新增入口；验收：位置路径优先于分类，长文本不遮挡数量和状态。
 - [ ] T024 [P] [US1] 文件：`entry/src/test/{ItemCreateService.test.ets,ItemListService.test.ets}`；输入：T019、T020；输出：默认值、成功持久化、失败不写入和重启后查询的自动化测试；验收：覆盖仅名称创建和完整创建两条路径。
 - [ ] T025 [US1] 文件：`entry/src/ohosTest/ets/test/ItemCreateFlow.test.ets`；输入：T022、T023；输出：新增后在列表可见的设备测试；验收：按 quickstart 场景 A 在目标设备/模拟器通过。
 
@@ -67,12 +67,12 @@ description: "ItemTrace 本地物品追踪核心闭环的可执行任务清单"
 
 **独立验收**：可打开详情、编辑数量与位置、取消删除以及确认删除；成功结果在列表和首页一致刷新。
 
-- [ ] T026 [US2] 文件：`entry/src/main/ets/service/ItemDetailService.ets`；输入：ItemRepository、`itemId` 路由参数；输出：详情读取与“不存在/读取失败”领域结果；验收：读失败不伪装为不存在。
-- [ ] T027 [US2] 文件：`entry/src/main/ets/pages/ItemDetailPage.ets`；输入：T026、`ItemCard`、路由契约；输出：完整字段、照片占位、编辑和删除入口；验收：到期状态有文字，注意事项完整可见，不存在时可返回列表。
-- [ ] T028 [US2] 文件：`entry/src/main/ets/service/ItemUpdateService.ets`；输入：ItemDraft、ItemValidator、ItemRepository；输出：仅更新允许字段和 `updatedAt` 的编辑用例；验收：`id`/`createdAt` 不可编辑，保存后返回更新 Item。
-- [ ] T029 [US2] 文件：`entry/src/main/ets/pages/ItemFormPage.ets`；输入：T028、已有 `itemId`；输出：编辑模式复用表单草稿和 `updated(itemId)` 返回结果；验收：编辑失败保留输入，成功后来源页面重新查询。
-- [ ] T030 [US2] 文件：`entry/src/main/ets/service/ItemDeleteService.ets`；输入：已确认 `itemId`、ItemRepository；输出：删除用例与可区分的成功/失败结果；验收：未确认不调用删除，失败时原记录仍可查询。
-- [ ] T031 [US2] 文件：`entry/src/main/ets/pages/ItemDetailPage.ets`、`entry/src/main/ets/components/DeleteConfirmDialog.ets`；输入：T030；输出：说明“第一阶段不可恢复”的删除确认交互；验收：取消不改变任何展示，确认后列表、搜索和首页移除记录。
+- [X] T026 [US2] 文件：`entry/src/main/ets/service/ItemDetailService.ets`；输入：ItemRepository、`itemId` 路由参数；输出：详情读取与“不存在/读取失败”领域结果；验收：读失败不伪装为不存在。
+- [X] T027 [US2] 文件：`entry/src/main/ets/pages/ItemDetailPage.ets`；输入：T026、`ItemCard`、路由契约；输出：完整字段、照片占位、编辑和删除入口；验收：到期状态有文字，注意事项完整可见，不存在时可返回列表。
+- [X] T028 [US2] 文件：`entry/src/main/ets/service/ItemUpdateService.ets`；输入：ItemDraft、ItemValidator、ItemRepository；输出：仅更新允许字段和 `updatedAt` 的编辑用例；验收：`id`/`createdAt` 不可编辑，保存后返回更新 Item。
+- [X] T029 [US2] 文件：`entry/src/main/ets/pages/ItemFormPage.ets`；输入：T028、已有 `itemId`；输出：编辑模式复用表单草稿和 `updated(itemId)` 返回结果；验收：编辑失败保留输入，成功后来源页面重新查询。
+- [X] T030 [US2] 文件：`entry/src/main/ets/service/ItemDeleteService.ets`；输入：已确认 `itemId`、ItemRepository；输出：删除用例与可区分的成功/失败结果；验收：未确认不调用删除，失败时原记录仍可查询。
+- [X] T031 [US2] 文件：`entry/src/main/ets/pages/ItemDetailPage.ets`、`entry/src/main/ets/components/DeleteConfirmDialog.ets`；输入：T030；输出：说明“第一阶段不可恢复”的删除确认交互；验收：取消不改变任何展示，确认后列表、搜索和首页移除记录。
 - [ ] T032 [P] [US2] 文件：`entry/src/test/{ItemDetailService.test.ets,ItemUpdateService.test.ets,ItemDeleteService.test.ets}`；输入：T026、T028、T030；输出：详情、更新、取消/确认删除与失败路径测试；验收：成功/失败/不存在均有预期结果。
 - [ ] T033 [US2] 文件：`entry/src/ohosTest/ets/test/ItemMaintenanceFlow.test.ets`；输入：T027、T029、T031；输出：详情编辑删除设备测试；验收：按 quickstart 场景 C 通过。
 
@@ -80,11 +80,11 @@ description: "ItemTrace 本地物品追踪核心闭环的可执行任务清单"
 
 **独立验收**：对 50 条测试记录可按名称、位置、分类及位置/分类交集定位目标；清除条件恢复完整列表。
 
-- [ ] T034 [US3] 文件：`entry/src/main/ets/model/ItemQuery.ets`；输入：`contracts/ui-navigation.md`；输出：名称部分匹配、一个位置路径、一个分类和清除状态的查询模型；验收：查询模型不包含备注、照片或服务端字段。
-- [ ] T035 [US3] 文件：`entry/src/main/ets/data/dao/ItemDao.ets`、`entry/src/main/ets/data/repository/ItemRepository.ets`；输入：T034、`data-model.md` 索引；输出：名称、位置、分类和交集的参数化查询；验收：名称不匹配备注，两个筛选条件取交集，清除后返回完整列表。
-- [ ] T036 [US3] 文件：`entry/src/main/ets/service/ItemSearchService.ets`；输入：T034、T035；输出：搜索/筛选用例与“无结果”领域状态；验收：空关键字不报错，查询失败可重试。
-- [ ] T037 [US3] 文件：`entry/src/main/ets/pages/SearchPage.ets`；输入：T036、LocationPath、Category；输出：名称输入、位置/分类筛选、清除条件与结果入口；验收：无结果显示“暂无搜索结果”，不保存搜索历史。
-- [ ] T038 [US3] 文件：`entry/src/main/ets/pages/ItemListPage.ets`；输入：T036、T037；输出：列表承接并展示已确认的 `ItemQuery`；验收：搜索返回后筛选状态与结果一致。
+- [X] T034 [US3] 文件：`entry/src/main/ets/model/ItemQuery.ets`；输入：`contracts/ui-navigation.md`；输出：名称部分匹配、一个位置路径、一个分类和清除状态的查询模型；验收：查询模型不包含备注、照片或服务端字段。
+- [X] T035 [US3] 文件：`entry/src/main/ets/data/dao/ItemDao.ets`、`entry/src/main/ets/data/repository/ItemRepository.ets`；输入：T034、`data-model.md` 索引；输出：名称、位置、分类和交集的参数化查询；验收：名称不匹配备注，两个筛选条件取交集，清除后返回完整列表。
+- [X] T036 [US3] 文件：`entry/src/main/ets/service/ItemSearchService.ets`；输入：T034、T035；输出：搜索/筛选用例与“无结果”领域状态；验收：空关键字不报错，查询失败可重试。
+- [X] T037 [US3] 文件：`entry/src/main/ets/pages/SearchPage.ets`；输入：T036、LocationPath、Category；输出：名称输入、位置/分类筛选、清除条件与结果入口；验收：无结果显示“暂无搜索结果”，不保存搜索历史。
+- [X] T038 [US3] 文件：`entry/src/main/ets/pages/ItemListPage.ets`；输入：T036、T037；输出：列表承接并展示已确认的 `ItemQuery`；验收：搜索返回后筛选状态与结果一致。
 - [ ] T039 [P] [US3] 文件：`entry/src/test/ItemSearchService.test.ets`；输入：T034–T036；输出：名称部分匹配、位置、分类、交集和清除测试；验收：使用至少 50 条内存/测试数据验证规则。
 - [ ] T040 [US3] 文件：`entry/src/ohosTest/ets/test/ItemSearchFlow.test.ets`；输入：T037、T038；输出：搜索筛选设备测试；验收：按 quickstart 场景 D 在 10 秒内定位目标。
 
@@ -92,10 +92,10 @@ description: "ItemTrace 本地物品追踪核心闭环的可执行任务清单"
 
 **独立验收**：四种到期状态正确，数量为零仅出现在待补货区；首页三个摘要为空时均有清晰反馈。
 
-- [ ] T041 [US4] 文件：`entry/src/main/ets/service/ExpiryService.ets`；输入：Item、当前本地日期、有效提醒天数；输出：`NO_EXPIRY_DATE`、`NORMAL`、`DUE_SOON`、`EXPIRED` 与库存状态计算；验收：不持久化状态，未填提醒天数时使用 7 天，已过期不进入临期。
-- [ ] T042 [US4] 文件：`entry/src/main/ets/service/HomeSummaryService.ets`；输入：ItemRepository、ExpiryService；输出：最多 10 条最近添加、临期和数量为零待补货摘要；验收：三个分区使用同一状态算法，读取失败可单独反馈。
-- [ ] T043 [P] [US4] 文件：`entry/src/main/ets/components/ExpiryStatusTag.ets`；输入：ExpiryStatus；输出：同时含中文文字和颜色的状态标签；验收：不依赖颜色表达，四种状态均可读。
-- [ ] T044 [US4] 文件：`entry/src/main/ets/pages/Index.ets`；输入：T042、T043、EmptyState/ErrorState、路由契约；输出：首页摘要、快速搜索/新增入口及各分区空状态；验收：点击摘要项进入相同 `itemId` 详情，未泄露照片或备注。
+- [X] T041 [US4] 文件：`entry/src/main/ets/service/ExpiryService.ets`；输入：Item、当前本地日期、有效提醒天数；输出：`NO_EXPIRY_DATE`、`NORMAL`、`DUE_SOON`、`EXPIRED` 与库存状态计算；验收：不持久化状态，未填提醒天数时使用 7 天，已过期不进入临期。
+- [X] T042 [US4] 文件：`entry/src/main/ets/service/HomeSummaryService.ets`；输入：ItemRepository、ExpiryService；输出：最多 10 条最近添加、临期和数量为零待补货摘要；验收：三个分区使用同一状态算法，读取失败可单独反馈。
+- [X] T043 [P] [US4] 文件：`entry/src/main/ets/components/ExpiryStatusTag.ets`；输入：ExpiryStatus；输出：同时含中文文字和颜色的状态标签；验收：不依赖颜色表达，四种状态均可读。
+- [X] T044 [US4] 文件：`entry/src/main/ets/pages/Index.ets`；输入：T042、T043、EmptyState/ErrorState、路由契约；输出：首页摘要、快速搜索/新增入口及各分区空状态；验收：点击摘要项进入相同 `itemId` 详情，未泄露照片或备注。
 - [ ] T045 [P] [US4] 文件：`entry/src/test/{ExpiryService.test.ets,HomeSummaryService.test.ets}`；输入：T041、T042；输出：无日期、远期、临期、过期、当天、默认 7 天和数量为零测试；验收：覆盖 quickstart 场景 B 的全部断言。
 - [ ] T046 [US4] 文件：`entry/src/ohosTest/ets/test/HomeSummaryFlow.test.ets`；输入：T044；输出：首页状态、摘要上限与空状态设备测试；验收：手机与平板各通过一次关键布局检查。
 
@@ -103,7 +103,7 @@ description: "ItemTrace 本地物品追踪核心闭环的可执行任务清单"
 
 - [ ] T047 文件：`entry/src/main/ets/pages/{ItemFormPage.ets,ItemListPage.ets,ItemDetailPage.ets,SearchPage.ets,Index.ets}`；输入：US1–US4 的页面结果；输出：统一加载、空、错误、返回刷新和长文本处理；验收：所有规格规定的空/错误状态均有中文文字和重试/返回动作。
 - [ ] T048 [P] 文件：`entry/src/test/`、`entry/src/ohosTest/ets/test/Phase1ResponsiveLayoutFlow.test.ets`；输入：Phase 1 全部页面与目标 phone/tablet；输出：测试汇总结果、首页/列表/详情/新增编辑页的双设备布局验证和失败修复记录；验收：运行 T004 记录的相关测试命令，四个页面的主要信息、长位置路径、空/错误状态和操作在手机与平板均可读可达，所有失败已修复或明确阻塞。
-- [ ] T049 文件：`specs/001-itemtrace-core/{data-model.md,quickstart.md}`；输入：实际 v1 模型、路由和验证命令；输出：与实现一致的数据模型和手工验收指南更新；验收：不保留与实现矛盾的字段、路由或命令。
+- [X] T049 文件：`specs/001-itemtrace-core/{data-model.md,quickstart.md}`；输入：实际 v1 模型、路由和验证命令；输出：与实现一致的数据模型和手工验收指南更新；验收：不保留与实现矛盾的字段、路由或命令。
 - [ ] T050 文件：`entry/`、`specs/001-itemtrace-core/quickstart.md`；输入：Phase 1 构建与场景 A–D、T048 双设备结果；输出：本地闭环构建/设备验收记录；验收：项目可构建，CRUD、重启持久化、搜索筛选、到期状态和首页摘要全部通过，首页/列表/详情/新增编辑页在手机与平板满足 SC-005。
 
 ---
