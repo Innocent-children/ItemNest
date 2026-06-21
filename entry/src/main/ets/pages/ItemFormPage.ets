@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+import { NavigationHelper } from '../navigation/NavigationHelper';
 import { LocationInput } from '../components/LocationInput';
 import { LoadingState } from '../components/LoadingState';
 import { QuantityInput } from '../components/QuantityInput';
@@ -230,7 +230,7 @@ struct ItemFormPage {
   }
 
   private readRoute(): void {
-    const params = router.getParams() as ItemFormRouteParams;
+    const params = NavigationHelper.getParams() as ItemFormRouteParams;
     if (!params) {
       this.errorMessage = '页面参数错误';
       this.loading = false;
@@ -284,7 +284,7 @@ struct ItemFormPage {
         const result = await AppServices.get().updateItem.update(this.itemId, draft);
         if (result.ok) {
           const notice = await this.synchronizeAfterSave(result.getData());
-          router.back({ url: RouteName.ITEM_LIST, params: createItemResult('updated', result.getData().id, notice) });
+          NavigationHelper.back({ url: RouteName.ITEM_LIST, params: createItemResult('updated', result.getData().id, notice) });
           return;
         }
         this.errorMessage = result.getError().message;
@@ -292,7 +292,7 @@ struct ItemFormPage {
         const result = await AppServices.get().createItem.create(draft);
         if (result.ok) {
           const notice = await this.synchronizeAfterSave(result.getData());
-          router.back({ url: RouteName.ITEM_LIST, params: createItemResult('created', result.getData().id, notice) });
+          NavigationHelper.back({ url: RouteName.ITEM_LIST, params: createItemResult('created', result.getData().id, notice) });
           return;
         }
         this.errorMessage = result.getError().message;

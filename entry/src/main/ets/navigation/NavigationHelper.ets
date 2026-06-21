@@ -1,17 +1,23 @@
-﻿
-import { router } from '@kit.ArkUI';
+﻿import { router } from '@kit.ArkUI';
 
+/**
+ * 统一封装页面路由调用，集中处理已弃用的 @ohos.router API（pushUrl/getParams/back）。
+ * 当前仍基于 router 实现，行为与之前一致；后续若整体迁移到 Navigation/NavPathStack，只需修改本文件。
+ */
 export class NavigationHelper {
-  static push(url: string, params?: object): Promise<void> {
-    return router.pushUrl({ url, params: params ?? {} });
+  static pushUrl(options: router.RouterOptions): Promise<void> {
+    return router.pushUrl(options);
   }
 
-  static goBack(): void {
-    router.back({ url: '', params: {} as Record<string, Object> });
+  static getParams(): Object {
+    return router.getParams();
   }
 
-  static goBackTo(url: string, params?: object): void {
-    router.back({ url, params: params ?? {} as Record<string, Object> });
+  static back(options?: router.RouterOptions): void {
+    if (options === undefined) {
+      router.back();
+    } else {
+      router.back(options);
+    }
   }
 }
-

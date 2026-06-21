@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+import { NavigationHelper } from '../navigation/NavigationHelper';
 import { LoadingState } from '../components/LoadingState';
 import { ItemSortMode, ThemeMode, UserPreferences } from '../model/UserPreferences';
 import { AppServices } from '../service/AppServices';
@@ -40,7 +40,7 @@ struct SettingsPage {
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent'))
           .borderRadius($r('app.float.radius_control'))
-          .onClick(() => router.back())
+          .onClick(() => NavigationHelper.back())
           // TODO: 迁移到 Navigation 组件
       }
       .width('100%')

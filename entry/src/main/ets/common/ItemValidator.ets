@@ -88,7 +88,9 @@ export class ItemValidator {
 
   validateQuantity(value?: number): Result<number> {
     const quantity = value ?? 1;
-    if (!Number.isFinite(quantity) || quantity < 0 || Math.round(quantity * 100) !== quantity * 100) {
+    const scaled = quantity * 100;
+    const hasAtMostTwoDecimals = Math.abs(Math.round(scaled) - scaled) < 1e-9;
+    if (!Number.isFinite(quantity) || quantity < 0 || !hasAtMostTwoDecimals) {
       return failure<number>(new AppError(AppErrorCode.VALIDATION, '数量必须是最多两位小数的非负数'));
     }
     return success(quantity);
@@ -149,12 +151,13 @@ export class ItemValidator {
   }
 
   validateNotes(value?: string): Result<string | undefined> {
-    if (value === undefined || value.length === 0) {
+    const normalized = value?.trim() ?? '';
+    if (normalized.length === 0) {
       return success(undefined);
     }
-    if (value.length > NOTES_MAX_LENGTH) {
+    if (normalized.length > NOTES_MAX_LENGTH) {
       return failure<string | undefined>(new AppError(AppErrorCode.VALIDATION, '注意事项不能超过 500 个字符'));
     }
-    return success(value);
+    return success(normalized);
   }
 }

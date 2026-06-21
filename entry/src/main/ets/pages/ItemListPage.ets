@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+import { NavigationHelper } from '../navigation/NavigationHelper';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
@@ -47,14 +47,14 @@ struct ItemListPage {
             .backgroundColor($r('app.color.surface_card'))
             .border({ width: 1, color: $r('app.color.border_subtle') })
             .borderRadius($r('app.float.radius_control'))
-            .onClick(() => router.pushUrl({ url: RouteName.SEARCH, params: { query: this.query } }))
+            .onClick(() => NavigationHelper.pushUrl({ url: RouteName.SEARCH, params: { query: this.query } }))
         }
         Button('+ 新增物品')
           .width('100%')
           .fontColor($r('app.color.brand_on_primary'))
           .backgroundColor($r('app.color.brand_primary'))
           .borderRadius($r('app.float.radius_control'))
-          .onClick(() => router.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } }))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } }))
       }
       .width('100%')
       .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
@@ -107,7 +107,7 @@ struct ItemListPage {
   }
 
   private readQuery(): void {
-    const params = router.getParams() as ItemListRouteParams;
+    const params = NavigationHelper.getParams() as ItemListRouteParams;
     if (!params) {
       this.query = new ItemQuery();
       this.noticeMessage = '';
@@ -145,7 +145,7 @@ struct ItemListPage {
 
   private handleEmptyAction(): void {
     if (this.query.isEmpty()) {
-      router.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } });
+      NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } });
       return;
     }
     this.query.clear();

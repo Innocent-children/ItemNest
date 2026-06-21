@@ -62,7 +62,12 @@ export class RdbDatabase {
     if (this.initializing === undefined) {
       this.initializing = this.openAndInitialize();
     }
-    return this.initializing;
+    const result = await this.initializing;
+    if (!result.ok) {
+      // 初始化失败后清除缓存，允许“重新加载”再次尝试打开数据库。
+      this.initializing = undefined;
+    }
+    return result;
   }
 
   async requireStore(): Promise<relationalStore.RdbStore> {

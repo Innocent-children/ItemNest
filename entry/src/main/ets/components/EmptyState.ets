@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+import { NavigationHelper } from '../navigation/NavigationHelper';
 
 @Component
 export struct EmptyState {
@@ -23,7 +23,7 @@ export struct EmptyState {
         Button(this.actionText)
           .fontColor($r('app.color.brand_on_primary'))
           .backgroundColor($r('app.color.brand_primary'))
-          .onClick(() => router.pushUrl({ url: this.actionRoute }))
+          .onClick(() => NavigationHelper.pushUrl({ url: this.actionRoute }))
       }
     }
     .width('100%')

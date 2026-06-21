@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+import { NavigationHelper } from '../navigation/NavigationHelper';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
@@ -140,7 +140,7 @@ struct SearchPage {
               .fontColor($r('app.color.brand_primary'))
               .backgroundColor($r('app.color.surface_accent'))
               .borderRadius($r('app.float.radius_control'))
-              .onClick(() => router.pushUrl({ url: RouteName.ITEM_LIST, params: { query: this.currentQuery() } }))
+              .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST, params: { query: this.currentQuery() } }))
             ForEach(this.items, (item: ItemSummary) => {
               ItemCard({ item: item })
             }, (item: ItemSummary) => item.id)
@@ -157,7 +157,7 @@ struct SearchPage {
   }
 
   private readInitialQuery(): void {
-    const params = router.getParams() as ItemListRouteParams;
+    const params = NavigationHelper.getParams() as ItemListRouteParams;
     if (!params) {
       return;
     }

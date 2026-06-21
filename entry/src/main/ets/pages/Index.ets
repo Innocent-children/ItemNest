@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+import { NavigationHelper } from '../navigation/NavigationHelper';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
@@ -39,7 +39,7 @@ struct Index {
       return;
     }
     AppStorage.setOrCreate('itemtrace.quickAddRequest', '');
-    router.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } });
+    NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } });
   }
 
   build() {
@@ -111,19 +111,19 @@ struct Index {
           .fontColor($r('app.color.brand_on_primary'))
           .backgroundColor($r('app.color.brand_primary'))
           .borderRadius($r('app.float.radius_control'))
-          .onClick(() => router.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } }))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } }))
         Button('搜索')
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_card'))
           .border({ width: 1, color: $r('app.color.border_subtle') })
           .borderRadius($r('app.float.radius_control'))
-          .onClick(() => router.pushUrl({ url: RouteName.SEARCH }))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.SEARCH }))
         Button('设置')
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_card'))
           .border({ width: 1, color: $r('app.color.border_subtle') })
           .borderRadius($r('app.float.radius_control'))
-          .onClick(() => router.pushUrl({ url: RouteName.SETTINGS }))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.SETTINGS }))
       }
       .width('100%')
     }

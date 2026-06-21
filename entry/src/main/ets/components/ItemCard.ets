@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+import { NavigationHelper } from '../navigation/NavigationHelper';
 import { ItemSummary } from '../model/Item';
 import { RouteName } from '../navigation/RouteName';
 import { ExpiryStatusTag } from './ExpiryStatusTag';
@@ -59,6 +59,6 @@ export struct ItemCard {
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
     .border({ width: 1, color: $r('app.color.border_subtle') })
-    .onClick(() => router.pushUrl({ url: RouteName.ITEM_DETAIL, params: { itemId: this.item.id } }))
+    .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_DETAIL, params: { itemId: this.item.id } }))
   }
 }

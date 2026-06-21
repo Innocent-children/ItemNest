@@ -1,4 +1,4 @@
-import { router } from '@kit.ArkUI';
+import { NavigationHelper } from '../navigation/NavigationHelper';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { ErrorState } from '../components/ErrorState';
 import { ExpiryStatusTag } from '../components/ExpiryStatusTag';
@@ -26,7 +26,7 @@ struct ItemDetailPage {
   private itemId: string = '';
 
   aboutToAppear(): void {
-    const params = router.getParams() as ItemFormRouteParams;
+    const params = NavigationHelper.getParams() as ItemFormRouteParams;
     if (!params) {
       this.loading = false;
       this.errorMessage = '缺少物品标识，无法打开页面';
@@ -88,7 +88,7 @@ struct ItemDetailPage {
             Button('返回列表')
               .fontColor($r('app.color.brand_on_primary'))
               .backgroundColor($r('app.color.brand_primary'))
-              .onClick(() => router.back())
+              .onClick(() => NavigationHelper.back())
           }
           .padding($r('app.float.space_4'))
         } else if (this.item !== undefined) {
@@ -285,7 +285,7 @@ struct ItemDetailPage {
   }
 
   private openEdit(): void {
-    router.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'edit', itemId: this.itemId } });
+    NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'edit', itemId: this.itemId } });
   }
 
   private async deleteItem(): Promise<void> {
@@ -293,7 +293,7 @@ struct ItemDetailPage {
     const result = await AppServices.get().deleteItem.delete(this.itemId, true);
     this.deleting = false;
     if (result.ok) {
-      router.back({ url: RouteName.ITEM_LIST, params: createItemResult('deleted', this.itemId) });
+      NavigationHelper.back({ url: RouteName.ITEM_LIST, params: createItemResult('deleted', this.itemId) });
       return;
     }
     this.showDeleteConfirm = false;
