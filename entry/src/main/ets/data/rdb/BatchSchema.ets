@@ -7,12 +7,29 @@ const CREATE_BATCH_TABLE: string = `
     id TEXT PRIMARY KEY NOT NULL,
     item_id TEXT NOT NULL,
     quantity REAL NOT NULL DEFAULT 1,
-    unit TEXT NOT NULL DEFAULT '''个''',
+    unit TEXT NOT NULL DEFAULT '个',
     expiration_date TEXT,
     location_path TEXT,
     notes TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
+  )
+`;
+
+const MIGRATE_ITEM_TO_DEFAULT_BATCH: string = `
+  INSERT INTO batch (id, item_id, quantity, unit, expiration_date, location_path, notes, created_at, updated_at)
+  SELECT 'batch-' || item.id,
+         item.id,
+         item.quantity,
+         item.unit,
+         item.expiration_date,
+         item.location_path,
+         '默认批次',
+         item.created_at,
+         item.updated_at
+  FROM item
+  WHERE NOT EXISTS (
+    SELECT 1 FROM batch WHERE batch.item_id = item.id
   )
 `;
 
@@ -26,4 +43,5 @@ export async function createBatchSchema(store: relationalStore.RdbStore): Promis
   for (let index = 0; index < BATCH_INDEXES.length; index++) {
     await store.executeSql(BATCH_INDEXES[index]);
   }
+  await store.executeSql(MIGRATE_ITEM_TO_DEFAULT_BATCH);
 }

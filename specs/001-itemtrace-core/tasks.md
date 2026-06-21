@@ -167,33 +167,33 @@ description: "ItemTrace 本地物品追踪核心闭环的可执行任务清单"
 ### 批次与低库存
 
 - [X] T077 文件：`specs/001-itemtrace-core/{data-model.md,plan.md}`；输入：v1 Item、Phase 3 Batch 目标；输出：Batch/Item 关系、单日期/数量迁移、回滚和验收方案；验收：迁移不会静默改变现有 Item 的数量或到期语义。
-- [ ] T078 文件：`entry/src/main/ets/{model/Batch.ets,data/rdb/BatchSchema.ets,data/dao/BatchDao.ets,data/repository/BatchRepository.ets}`；输入：T077；输出：批次 Schema、模型、DAO 和 Repository；验收：一个 Item 可有多个批次，每个批次独立数量、到期日和位置。
-- [ ] T079 文件：`entry/src/main/ets/{service/BatchService.ets,pages/BatchListPage.ets,pages/BatchFormPage.ets}`；输入：T078；输出：批次创建、编辑、删除和 Item 详情聚合展示；验收：批次变更正确刷新 Item 总量/临期摘要且可独立测试。
-- [ ] T080 文件：`entry/src/main/ets/{model/StockThreshold.ets,data/rdb/StockThresholdSchema.ets,service/LowStockService.ets}`；输入：批次或 Item 数量、用户阈值；输出：可配置低库存阈值和待处理状态；验收：数量低于阈值才进入低库存，不影响“数量为零待补货”历史行为。
-- [ ] T081 文件：本机 DevEco Studio SDK 文档、`entry/src/main/ets/{service/adapter/ReminderAdapter.ets,service/LowStockReminderService.ets}`；输入：T080 与提醒能力；输出：低库存系统提醒封装或应用内降级；验收：先查证 API，再实现抽象封装；拒绝/不可用时保留应用内低库存列表。
+- [X] T078 文件：`entry/src/main/ets/{model/Batch.ets,data/rdb/BatchSchema.ets,data/dao/BatchDao.ets,data/repository/BatchRepository.ets}`；输入：T077；输出：批次 Schema、模型、DAO 和 Repository；验收：一个 Item 可有多个批次，每个批次独立数量、到期日和位置。
+- [X] T079 文件：`entry/src/main/ets/{service/BatchService.ets,pages/BatchListPage.ets,pages/BatchFormPage.ets}`；输入：T078；输出：批次创建、编辑、删除和 Item 详情聚合展示；验收：批次变更正确刷新 Item 总量/临期摘要且可独立测试。
+- [X] T080 文件：`entry/src/main/ets/{model/StockThreshold.ets,data/rdb/StockThresholdSchema.ets,service/LowStockService.ets}`；输入：批次或 Item 数量、用户阈值；输出：可配置低库存阈值和待处理状态；验收：数量低于阈值才进入低库存，不影响“数量为零待补货”历史行为。
+- [X] T081 文件：本机 DevEco Studio SDK 文档、`entry/src/main/ets/{service/adapter/ReminderAdapter.ets,service/LowStockReminderService.ets}`；输入：T080 与提醒能力；输出：低库存系统提醒封装或应用内降级；验收：先查证 API，再实现抽象封装；拒绝/不可用时保留应用内低库存列表。
 
 ### 借出、归还、位置与分类管理
 
-- [ ] T082 文件：`entry/src/main/ets/{model/TraceEvent.ets,data/rdb/TraceEventSchema.ets,data/repository/TraceEventRepository.ets}`；输入：借出/归还需求；输出：不可篡改的借还事件模型和迁移；验收：事件关联 Item/Batch、记录时间和数量，不记录未批准的用户账号资料。
-- [ ] T083 文件：`entry/src/main/ets/{service/LendingService.ets,pages/LendingPage.ets}`；输入：T082、Item/Batch；输出：借出、归还和当前借出状态用例/UI；验收：归还不能超过借出数量，异常操作有中文反馈。
-- [ ] T084 文件：`entry/src/main/ets/{model/Location.ets,data/rdb/LocationSchema.ets,data/repository/LocationRepository.ets}`；输入：v1 `locationPath` 与 T077 迁移规则；输出：独立树形位置模型、迁移与 Repository；验收：旧位置文本保留可追溯性，迁移失败可回滚。
-- [ ] T085 文件：`entry/src/main/ets/{service/LocationService.ets,pages/LocationManagementPage.ets,components/LocationSelector.ets}`；输入：T084；输出：房间/柜子/抽屉/收纳箱管理和选择组件；验收：不能创建循环层级，删除被引用位置时必须给出迁移或阻止策略。
-- [ ] T086 文件：`entry/src/main/ets/{model/Category.ets,data/rdb/CategorySchema.ets,data/repository/CategoryRepository.ets}`；输入：v1 固定分类；输出：独立分类模型与迁移；验收：现有固定分类正确映射，未知分类保留为“其他”并可审查。
-- [ ] T087 文件：`entry/src/main/ets/{service/CategoryService.ets,pages/CategoryManagementPage.ets}`；输入：T086；输出：分类创建、编辑、停用/删除管理；验收：停用分类不丢失既有 Item 的显示和筛选能力。
+- [X] T082 文件：`entry/src/main/ets/{model/TraceEvent.ets,data/rdb/TraceEventSchema.ets,data/repository/TraceEventRepository.ets}`；输入：借出/归还需求；输出：不可篡改的借还事件模型和迁移；验收：事件关联 Item/Batch、记录时间和数量，不记录未批准的用户账号资料。
+- [X] T083 文件：`entry/src/main/ets/{service/LendingService.ets,pages/LendingPage.ets}`；输入：T082、Item/Batch；输出：借出、归还和当前借出状态用例/UI；验收：归还不能超过借出数量，异常操作有中文反馈。
+- [X] T084 文件：`entry/src/main/ets/{model/Location.ets,data/rdb/LocationSchema.ets,data/repository/LocationRepository.ets}`；输入：v1 `locationPath` 与 T077 迁移规则；输出：独立树形位置模型、迁移与 Repository；验收：旧位置文本保留可追溯性，迁移失败可回滚。
+- [X] T085 文件：`entry/src/main/ets/{service/LocationService.ets,pages/LocationManagementPage.ets,components/LocationSelector.ets}`；输入：T084；输出：房间/柜子/抽屉/收纳箱管理和选择组件；验收：不能创建循环层级，删除被引用位置时必须给出迁移或阻止策略。
+- [X] T086 文件：`entry/src/main/ets/{model/Category.ets,data/rdb/CategorySchema.ets,data/repository/CategoryRepository.ets}`；输入：v1 固定分类；输出：独立分类模型与迁移；验收：现有固定分类正确映射，未知分类保留为“其他”并可审查。
+- [X] T087 文件：`entry/src/main/ets/{service/CategoryService.ets,pages/CategoryManagementPage.ets}`；输入：T086；输出：分类创建、编辑、停用/删除管理；验收：停用分类不丢失既有 Item 的显示和筛选能力。
 
 ### 导入导出与本地备份恢复
 
-- [ ] T088 文件：`specs/001-itemtrace-core/contracts/import-export.md`；输入：Item、Batch、Location、Category、TraceEvent 数据模型；输出：版本化本地导入导出格式、字段映射、冲突和隐私契约；验收：不包含云端地址、账号或敏感日志字段。
-- [ ] T089 文件：`entry/src/main/ets/service/{ExportService.ets,ImportService.ets}`、`entry/src/main/ets/common/ImportValidation.ets`；输入：T088；输出：本地导出、预检、确认导入和失败报告；验收：无效文件不写入，导入需用户确认，结果可复现。
-- [ ] T090 文件：本机 DevEco Studio SDK 文档、`entry/src/main/ets/service/{BackupService.ets,RestoreService.ets}`；输入：本地备份恢复需求与现有备份 Extension；输出：备份/恢复能力核验及应用层抽象；验收：先查证 API，再实现抽象封装；未核验时不声明备份可用。
-- [ ] T091 文件：`entry/src/main/ets/entrybackupability/EntryBackupAbility.ets`、`entry/src/main/ets/service/{BackupService.ets,RestoreService.ets}`；输入：T090、T088；输出：经核验的本地备份、恢复、完整性校验与失败回退；验收：恢复失败不覆盖现有数据，成功恢复后核心 Item/Batch/位置/分类一致。
+- [X] T088 文件：`specs/001-itemtrace-core/contracts/import-export.md`；输入：Item、Batch、Location、Category、TraceEvent 数据模型；输出：版本化本地导入导出格式、字段映射、冲突和隐私契约；验收：不包含云端地址、账号或敏感日志字段。
+- [X] T089 文件：`entry/src/main/ets/service/{ExportService.ets,ImportService.ets}`、`entry/src/main/ets/common/ImportValidation.ets`；输入：T088；输出：本地导出、预检、确认导入和失败报告；验收：无效文件不写入，导入需用户确认，结果可复现。
+- [X] T090 文件：本机 DevEco Studio SDK 文档、`entry/src/main/ets/service/{BackupService.ets,RestoreService.ets}`；输入：本地备份恢复需求与现有备份 Extension；输出：备份/恢复能力核验及应用层抽象；验收：先查证 API，再实现抽象封装；未核验时不声明备份可用。
+- [X] T091 文件：`entry/src/main/ets/entrybackupability/EntryBackupAbility.ets`、`entry/src/main/ets/service/{BackupService.ets,RestoreService.ets}`；输入：T090、T088；输出：经核验的本地备份、恢复、完整性校验与失败回退；验收：恢复失败不覆盖现有数据，成功恢复后核心 Item/Batch/位置/分类一致。
 
 ### 搜索增强与最终验收
 
-- [ ] T092 文件：`entry/src/main/ets/{model/SearchHistory.ets,data/rdb/SearchHistorySchema.ets,data/repository/SearchHistoryRepository.ets}`；输入：搜索增强需求与本地隐私边界；输出：可清除的最近查看/搜索历史模型与本地迁移；验收：历史默认仅本地保存，用户可一键清除。
-- [ ] T093 文件：`entry/src/main/ets/{service/SearchSuggestionService.ets,pages/SearchPage.ets}`；输入：T092、Item/Location/Category Repository；输出：本地搜索建议、最近查看与清除入口；验收：建议不请求网络，不改变搜索确认前的查询结果。
+- [X] T092 文件：`entry/src/main/ets/{model/SearchHistory.ets,data/rdb/SearchHistorySchema.ets,data/repository/SearchHistoryRepository.ets}`；输入：搜索增强需求与本地隐私边界；输出：可清除的最近查看/搜索历史模型与本地迁移；验收：历史默认仅本地保存，用户可一键清除。
+- [X] T093 文件：`entry/src/main/ets/{service/SearchSuggestionService.ets,pages/SearchPage.ets}`；输入：T092、Item/Location/Category Repository；输出：本地搜索建议、最近查看与清除入口；验收：建议不请求网络，不改变搜索确认前的查询结果。
 - [ ] T094 文件：`entry/src/test/`、`entry/src/ohosTest/ets/test/`；输入：T077–T093；输出：迁移、批次、阈值、借还、管理、导入导出、备份恢复和搜索增强测试；验收：v1 升级样本、失败回滚和隐私边界均通过。
-- [ ] T095 文件：`entry/`、`specs/001-itemtrace-core/{data-model.md,quickstart.md}`；输入：Phase 3 全部功能和实际验证命令；输出：最终构建/设备验收记录与文档同步；验收：所有阶段可构建，Phase 3 功能不引入后端、账号、云同步或未批准权限。
+- [X] T095 文件：`entry/`、`specs/001-itemtrace-core/{data-model.md,quickstart.md}`；输入：Phase 3 全部功能和实际验证命令；输出：最终构建/设备验收记录与文档同步；验收：所有阶段可构建，Phase 3 功能不引入后端、账号、云同步或未批准权限。
 
 ---
 
@@ -234,5 +234,4 @@ Phase 0：T001–T006
 - 全部 95 项任务均使用 `- [ ] Tnnn [P] [USn]` 所要求的检查清单格式；非用户故事任务不带 `US` 标签。
 - 每个任务均标明文件或目录、输入、输出和验收方式；没有任务依赖外部服务。
 - 系统能力任务 T003、T051、T054、T060、T066、T069、T081、T090 均明确要求“先查证 API，再实现抽象封装”。
-
 

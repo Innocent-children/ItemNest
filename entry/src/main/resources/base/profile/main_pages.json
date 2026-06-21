@@ -5,6 +5,11 @@
     "pages/ItemDetailPage",
     "pages/ItemFormPage",
     "pages/SearchPage",
-    "pages/SettingsPage"
+    "pages/SettingsPage",
+    "pages/BatchListPage",
+    "pages/BatchFormPage",
+    "pages/LendingPage",
+    "pages/LocationManagementPage",
+    "pages/CategoryManagementPage"
   ]
 }

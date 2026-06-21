@@ -21,6 +21,7 @@ struct ItemDetailPage {
   @State private reminderMessage: string = '';
   @State private reminderRetrying: boolean = false;
   @State private photoPath: string = '';
+  @State private removingPhoto: boolean = false;
   @State private showDeleteConfirm: boolean = false;
   @State @Watch('handleDeleteRequest') private deleteRequested: boolean = false;
   private itemId: string = '';
@@ -148,6 +149,7 @@ struct ItemDetailPage {
         this.expirySection(item)
         this.notesSection(item)
         this.photoSection(item)
+        this.managementSection(item)
 
         if (this.deleting) {
           LoadingState({ text: '正在删除物品…' })
@@ -237,6 +239,12 @@ struct ItemDetailPage {
           .height(180)
           .objectFit(ImageFit.Cover)
           .borderRadius($r('app.float.radius_control'))
+        Button(this.removingPhoto ? '正在移除照片…' : '移除照片')
+          .fontColor($r('app.color.status_danger'))
+          .backgroundColor($r('app.color.status_danger_soft'))
+          .borderRadius($r('app.float.radius_control'))
+          .enabled(!this.removingPhoto)
+          .onClick(() => this.removePhoto())
       } else {
         Text(item.photoLocalId === undefined ? '暂未添加照片。' : '照片暂时无法读取，可在编辑页重新选择。')
           .fontSize($r('app.float.font_body'))
@@ -347,6 +355,50 @@ struct ItemDetailPage {
     } else {
       this.photoPath = '';
     }
+  }
+
+  @Builder
+  private managementSection(item: Item) {
+    Column({ space: $r('app.float.space_3') }) {
+      Text('增强管理')
+        .fontSize($r('app.float.font_section'))
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('app.color.text_primary'))
+      Row({ space: $r('app.float.space_2') }) {
+        Button('批次')
+          .layoutWeight(1)
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent'))
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.BATCH_LIST, params: { itemId: item.id } }))
+        Button('借还')
+          .layoutWeight(1)
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent'))
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.LENDING, params: { itemId: item.id } }))
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .padding($r('app.float.space_4'))
+    .borderRadius($r('app.float.radius_card'))
+    .backgroundColor($r('app.color.surface_card'))
+  }
+
+  private async removePhoto(): Promise<void> {
+    if (this.item === undefined) {
+      return;
+    }
+    this.removingPhoto = true;
+    const result = await AppServices.get().photos.remove(this.item);
+    if (result.ok) {
+      this.item = result.getData();
+      this.photoPath = '';
+    } else {
+      this.errorMessage = result.getError().message;
+    }
+    this.removingPhoto = false;
   }
 
   private handleDeleteRequest(): void {

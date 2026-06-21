@@ -73,6 +73,34 @@ export class PhotoService {
     return success<string | undefined>(assetResult.getData()?.localPath);
   }
 
+  async remove(item: Item): Promise<Result<Item>> {
+    if (item.photoLocalId === undefined || item.photoState !== PhotoState.LOCAL) {
+      return success<Item>(item);
+    }
+    const assetResult = await this.assets.getById(item.photoLocalId);
+    if (!assetResult.ok) {
+      return failure<Item>(assetResult.getError());
+    }
+    const updatedItem: Item = {
+      id: item.id, name: item.name, quantity: item.quantity, unit: item.unit,
+      locationPath: item.locationPath, category: item.category, expirationDate: item.expirationDate,
+      reminderDays: item.reminderDays, notes: item.notes, photoState: PhotoState.NONE,
+      photoLocalId: undefined, createdAt: item.createdAt, updatedAt: this.clock()
+    };
+    const updateResult = await this.items.update(updatedItem);
+    if (!updateResult.ok) {
+      return failure<Item>(updateResult.getError());
+    }
+    const asset = assetResult.getData();
+    if (asset !== undefined) {
+      const removedResult = await this.storage.remove(asset.localPath);
+      if (removedResult.ok) {
+        await this.assets.deleteById(asset.id);
+      }
+    }
+    return success<Item>(updatedItem);
+  }
+
   async cleanupAfterItemDeleted(item: Item): Promise<Result<void>> {
     if (item.photoLocalId === undefined) {
       return success<void>(undefined);

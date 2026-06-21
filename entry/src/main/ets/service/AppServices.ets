@@ -1,7 +1,14 @@
 import { Context } from '@kit.AbilityKit';
 import { ItemValidator } from '../common/ItemValidator';
 import { ItemDao } from '../data/dao/ItemDao';
+import { BatchDao } from '../data/dao/BatchDao';
 import { ItemRepository } from '../data/repository/ItemRepository';
+import { BatchRepository } from '../data/repository/BatchRepository';
+import { CategoryRepository } from '../data/repository/CategoryRepository';
+import { LocationRepository } from '../data/repository/LocationRepository';
+import { SearchHistoryRepository } from '../data/repository/SearchHistoryRepository';
+import { StockThresholdRepository } from '../data/repository/StockThresholdRepository';
+import { TraceEventRepository } from '../data/repository/TraceEventRepository';
 import { RdbDatabase } from '../data/rdb/RdbDatabase';
 import { AppError, AppErrorCode } from '../common/AppError';
 import { ExpiryService } from './ExpiryService';
@@ -26,6 +33,17 @@ import { SystemImageSourceAdapter } from './adapter/ImageSourceAdapter';
 import { FormSnapshotProvider } from './FormSnapshotProvider';
 import { ScanService } from './ScanService';
 import { UnavailableScanAdapter } from './adapter/ScanAdapter';
+import { BatchService } from './BatchService';
+import { BackupService } from './BackupService';
+import { CategoryService } from './CategoryService';
+import { ExportService } from './ExportService';
+import { ImportService } from './ImportService';
+import { LendingService } from './LendingService';
+import { LocationService } from './LocationService';
+import { LowStockReminderService } from './LowStockReminderService';
+import { LowStockService } from './LowStockService';
+import { RestoreService } from './RestoreService';
+import { SearchSuggestionService } from './SearchSuggestionService';
 
 export class AppServices {
   private static instance?: AppServices;
@@ -45,10 +63,25 @@ export class AppServices {
   readonly imageSource: SystemImageSourceAdapter;
   readonly formSnapshot: FormSnapshotProvider;
   readonly scan: ScanService;
+  readonly batches: BatchService;
+  readonly lowStock: LowStockService;
+  readonly lowStockReminder: LowStockReminderService;
+  readonly lending: LendingService;
+  readonly locations: LocationService;
+  readonly categories: CategoryService;
+  readonly exportData: ExportService;
+  readonly importData: ImportService;
+  readonly backup: BackupService;
+  readonly restore: RestoreService;
+  readonly searchSuggestions: SearchSuggestionService;
 
   private constructor(context: Context) {
     const database = new RdbDatabase(context);
     const repository = new ItemRepository(new ItemDao(database));
+    const batchRepository = new BatchRepository(new BatchDao(database));
+    const locationRepository = new LocationRepository(database);
+    const categoryRepository = new CategoryRepository(database);
+    const traceRepository = new TraceEventRepository(database);
     const validator = new ItemValidator();
     const expiryService = new ExpiryService();
     const listItems = new ItemListService(repository, expiryService);
@@ -72,6 +105,17 @@ export class AppServices {
     this.imageSource = new SystemImageSourceAdapter();
     this.formSnapshot = new FormSnapshotProvider(this.homeSummary, reminderRepository);
     this.scan = new ScanService(new UnavailableScanAdapter());
+    this.batches = new BatchService(batchRepository, repository);
+    this.lowStock = new LowStockService(new StockThresholdRepository(database), repository);
+    this.lowStockReminder = new LowStockReminderService();
+    this.lending = new LendingService(traceRepository, repository);
+    this.locations = new LocationService(locationRepository, repository);
+    this.categories = new CategoryService(categoryRepository);
+    this.exportData = new ExportService(repository, batchRepository, locationRepository, categoryRepository, traceRepository);
+    this.importData = new ImportService();
+    this.backup = new BackupService(this.exportData);
+    this.restore = new RestoreService(this.importData);
+    this.searchSuggestions = new SearchSuggestionService(new SearchHistoryRepository(database), repository);
   }
 
   static configure(context: Context): void {

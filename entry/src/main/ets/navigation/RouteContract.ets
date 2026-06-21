@@ -10,6 +10,11 @@ export interface ItemFormRouteParams extends ItemRouteParams {
   mode?: 'create' | 'edit';
 }
 
+export interface BatchRouteParams extends ItemRouteParams {
+  batchId?: string;
+  mode?: 'create' | 'edit';
+}
+
 export interface ItemOperationResult {
   operation: 'created' | 'updated' | 'deleted';
   itemId: string;
@@ -31,4 +36,12 @@ export function requireItemId(params: ItemRouteParams): Result<string> {
 
 export function createItemResult(operation: 'created' | 'updated' | 'deleted', itemId: string, notice?: string): ItemOperationResult {
   return { operation: operation, itemId: itemId, notice: notice };
+}
+
+export function requireBatchId(params: BatchRouteParams): Result<string> {
+  const batchId = params.batchId?.trim() ?? '';
+  if (batchId.length === 0) {
+    return failure<string>(new AppError(AppErrorCode.ROUTE_INVALID, '缺少批次标识，无法打开页面'));
+  }
+  return success(batchId);
 }

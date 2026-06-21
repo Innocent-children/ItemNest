@@ -6,6 +6,11 @@ import { createItemSchema, DATABASE_NAME, DATABASE_VERSION } from './ItemSchema'
 import { createReminderSchema } from './ReminderSchema';
 import { createAssetSchema } from './AssetSchema';
 import { createBatchSchema } from './BatchSchema';
+import { createStockThresholdSchema } from './StockThresholdSchema';
+import { createTraceEventSchema } from './TraceEventSchema';
+import { createLocationSchema } from './LocationSchema';
+import { createCategorySchema } from './CategorySchema';
+import { createSearchHistorySchema } from './SearchHistorySchema';
 
 export async function migrateToLatest(store: relationalStore.RdbStore): Promise<void> {
   const currentVersion = store.version;
@@ -31,6 +36,21 @@ export async function migrateToLatest(store: relationalStore.RdbStore): Promise<
     }
     if (currentVersion < 4) {
       await createBatchSchema(store);
+    }
+    if (currentVersion < 5) {
+      await createStockThresholdSchema(store);
+    }
+    if (currentVersion < 6) {
+      await createTraceEventSchema(store);
+    }
+    if (currentVersion < 7) {
+      await createLocationSchema(store);
+    }
+    if (currentVersion < 8) {
+      await createCategorySchema(store);
+    }
+    if (currentVersion < 9) {
+      await createSearchHistorySchema(store);
     }
     store.version = DATABASE_VERSION;
     store.commit();

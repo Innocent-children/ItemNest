@@ -60,6 +60,7 @@ struct Index {
           Column({ space: $r('app.float.space_6') }) {
             this.hero()
             this.overview()
+            this.managementEntrances()
             if (this.showRecentSection) {
               this.summarySection('最近添加', '刚记录的物品', this.recentItems, '暂无物品', RouteName.ITEM_FORM)
             }
@@ -140,6 +141,32 @@ struct Index {
       this.metricCard('最近添加', this.recentItems.length, $r('app.color.surface_accent'), $r('app.color.brand_primary'))
       this.metricCard('即将到期', this.dueSoonItems.length, $r('app.color.status_warning_soft'), $r('app.color.status_warning'))
       this.metricCard('待补货', this.outOfStockItems.length, $r('app.color.status_danger_soft'), $r('app.color.status_danger'))
+    }
+    .width('100%')
+  }
+
+  @Builder
+  private managementEntrances() {
+    Column({ space: $r('app.float.space_3') }) {
+      Text('管理')
+        .fontSize($r('app.float.font_section'))
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('app.color.text_primary'))
+      Row({ space: $r('app.float.space_2') }) {
+        Button('位置')
+          .layoutWeight(1)
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent'))
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.LOCATION_MANAGEMENT }))
+        Button('分类')
+          .layoutWeight(1)
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent'))
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.CATEGORY_MANAGEMENT }))
+      }
+      .width('100%')
     }
     .width('100%')
   }

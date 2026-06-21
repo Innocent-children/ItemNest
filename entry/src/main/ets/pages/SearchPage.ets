@@ -6,6 +6,7 @@ import { LoadingState } from '../components/LoadingState';
 import { Category } from '../model/Category';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
+import { SearchHistory } from '../model/SearchHistory';
 import { ItemListRouteParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
@@ -19,6 +20,8 @@ struct SearchPage {
   @State private locationPaths: string[] = [];
   @State private categories: Category[] = [];
   @State private items: ItemSummary[] = [];
+  @State private suggestions: string[] = [];
+  @State private history: SearchHistory[] = [];
   @State private loading: boolean = true;
   @State private searched: boolean = false;
   @State private errorMessage: string = '';
@@ -26,6 +29,7 @@ struct SearchPage {
   aboutToAppear(): void {
     this.readInitialQuery();
     this.loadFilterOptions();
+    this.loadSuggestions();
   }
 
   build() {
@@ -62,7 +66,13 @@ struct SearchPage {
               .backgroundColor($r('app.color.surface_app'))
               .border({ width: 1, color: $r('app.color.border_subtle') })
               .borderRadius($r('app.float.radius_control'))
-              .onChange((value: string) => this.name = value)
+              .onChange((value: string) => {
+                this.name = value;
+                this.loadSuggestions();
+              })
+            if (this.suggestions.length > 0 || this.history.length > 0) {
+              this.suggestionPanel()
+            }
           }
           .padding($r('app.float.space_4'))
           .borderRadius($r('app.float.radius_card'))
@@ -156,6 +166,50 @@ struct SearchPage {
     .backgroundColor($r('app.color.surface_app'))
   }
 
+  @Builder
+  private suggestionPanel() {
+    Column({ space: $r('app.float.space_2') }) {
+      if (this.suggestions.length > 0) {
+        Text('建议')
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.text_secondary'))
+        Flex({ wrap: FlexWrap.Wrap }) {
+          ForEach(this.suggestions, (suggestion: string) => {
+            Button(suggestion)
+              .type(ButtonType.Capsule)
+              .fontColor($r('app.color.brand_primary'))
+              .backgroundColor($r('app.color.surface_accent'))
+              .fontSize($r('app.float.font_caption'))
+              .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+              .onClick(() => this.name = suggestion)
+          }, (suggestion: string) => suggestion)
+        }
+      }
+      if (this.history.length > 0) {
+        Row() {
+          Text('最近搜索')
+            .fontSize($r('app.float.font_caption'))
+            .fontColor($r('app.color.text_secondary'))
+            .layoutWeight(1)
+          Button('清除')
+            .fontColor($r('app.color.brand_primary'))
+            .backgroundColor($r('app.color.surface_app'))
+            .onClick(() => this.clearHistory())
+        }
+        ForEach(this.history, (record: SearchHistory) => {
+          Button(record.queryText ?? record.locationPath ?? record.category ?? '最近查看')
+            .type(ButtonType.Capsule)
+            .fontColor($r('app.color.brand_primary'))
+            .backgroundColor($r('app.color.surface_accent'))
+            .fontSize($r('app.float.font_caption'))
+            .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+            .onClick(() => this.applyHistory(record))
+        }, (record: SearchHistory) => record.id)
+      }
+    }
+    .width('100%')
+  }
+
   private readInitialQuery(): void {
     const params = NavigationHelper.getParams() as ItemListRouteParams;
     if (!params) {
@@ -191,6 +245,8 @@ struct SearchPage {
       if (result.ok) {
         this.items = result.getData().items;
         this.searched = true;
+        await AppServices.get().searchSuggestions.recordSearch(query);
+        await this.loadSuggestions();
       } else {
         this.errorMessage = result.getError().message;
       }
@@ -215,6 +271,29 @@ struct SearchPage {
       this.selectedLocation.length === 0 ? undefined : this.selectedLocation,
       this.selectedCategory.length === 0 ? undefined : this.selectedCategory as Category
     );
+  }
+
+  private async loadSuggestions(): Promise<void> {
+    const result = await AppServices.get().searchSuggestions.getSuggestions(this.name);
+    if (result.ok) {
+      this.suggestions = result.getData().suggestions;
+      this.history = result.getData().history;
+    }
+  }
+
+  private async clearHistory(): Promise<void> {
+    const result = await AppServices.get().searchSuggestions.clearHistory();
+    if (result.ok) {
+      this.history = [];
+    } else {
+      this.errorMessage = result.getError().message;
+    }
+  }
+
+  private applyHistory(record: SearchHistory): void {
+    this.name = record.queryText ?? '';
+    this.selectedLocation = record.locationPath ?? '';
+    this.selectedCategory = record.category ?? '';
   }
 
 }

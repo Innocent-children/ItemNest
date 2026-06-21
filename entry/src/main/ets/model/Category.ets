@@ -25,3 +25,20 @@ export const CATEGORY_OPTIONS: Category[] = [
 export function isCategory(value: string): boolean {
   return CATEGORY_OPTIONS.indexOf(value as Category) >= 0;
 }
+
+export interface CategoryRecord {
+  id: string;
+  name: string;
+  active: boolean;
+  systemPreset: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CategoryDraft {
+  name?: string;
+}
+
+export function createCategoryId(clock: () => number = () => Date.now()): string {
+  return `category-${clock()}-${Math.floor(Math.random() * 1000000)}`;
+}

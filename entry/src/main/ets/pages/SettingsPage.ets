@@ -138,9 +138,9 @@ struct SettingsPage {
     Column({ space: $r('app.float.space_3') }) {
       this.cardTitle('列表排序', '默认排序不影响当前的搜索与筛选条件。')
       Flex({ wrap: FlexWrap.Wrap }) {
-        this.choiceButton('最近更新', this.defaultSort === ItemSortMode.UPDATED_DESC, () => this.defaultSort = ItemSortMode.UPDATED_DESC)
-        this.choiceButton('最近添加', this.defaultSort === ItemSortMode.CREATED_DESC, () => this.defaultSort = ItemSortMode.CREATED_DESC)
-        this.choiceButton('名称 A-Z', this.defaultSort === ItemSortMode.NAME_ASC, () => this.defaultSort = ItemSortMode.NAME_ASC)
+        this.sortChoiceButton('最近更新', ItemSortMode.UPDATED_DESC)
+        this.sortChoiceButton('最近添加', ItemSortMode.CREATED_DESC)
+        this.sortChoiceButton('名称 A-Z', ItemSortMode.NAME_ASC)
       }
       .width('100%')
     }
@@ -169,9 +169,9 @@ struct SettingsPage {
     Column({ space: $r('app.float.space_3') }) {
       this.cardTitle('外观', '主题偏好已保存；系统颜色模式会在后续适配中应用。')
       Flex({ wrap: FlexWrap.Wrap }) {
-        this.choiceButton('跟随系统', this.themeMode === ThemeMode.SYSTEM, () => this.themeMode = ThemeMode.SYSTEM)
-        this.choiceButton('浅色', this.themeMode === ThemeMode.LIGHT, () => this.themeMode = ThemeMode.LIGHT)
-        this.choiceButton('深色', this.themeMode === ThemeMode.DARK, () => this.themeMode = ThemeMode.DARK)
+        this.themeChoiceButton('跟随系统', ThemeMode.SYSTEM)
+        this.themeChoiceButton('浅色', ThemeMode.LIGHT)
+        this.themeChoiceButton('深色', ThemeMode.DARK)
       }
       .width('100%')
     }
@@ -182,14 +182,25 @@ struct SettingsPage {
   }
 
   @Builder
-  private choiceButton(label: string, selected: boolean, action: () => void) {
+  private sortChoiceButton(label: string, mode: ItemSortMode) {
     Button(label)
       .type(ButtonType.Capsule)
       .fontSize($r('app.float.font_caption'))
-      .fontColor(selected ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
-      .backgroundColor(selected ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
+      .fontColor(this.defaultSort === mode ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
+      .backgroundColor(this.defaultSort === mode ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
       .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-      .onClick(action)
+      .onClick(() => this.defaultSort = mode)
+  }
+
+  @Builder
+  private themeChoiceButton(label: string, mode: ThemeMode) {
+    Button(label)
+      .type(ButtonType.Capsule)
+      .fontSize($r('app.float.font_caption'))
+      .fontColor(this.themeMode === mode ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
+      .backgroundColor(this.themeMode === mode ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
+      .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+      .onClick(() => this.themeMode = mode)
   }
 
   @Builder

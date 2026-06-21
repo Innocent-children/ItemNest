@@ -2,7 +2,9 @@
 /oh_modules
 /local.properties
 /.idea
+/.vscode
 **/build
+dist/
 /.hvigor
 .cxx
 /.clangd
@@ -10,3 +12,9 @@
 /.clang-tidy
 **/.test
 /.appanalyzer
+*.log
+.env*
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
