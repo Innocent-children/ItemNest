@@ -5,8 +5,9 @@ import { QuantityInput } from '../components/QuantityInput';
 import { CATEGORY_OPTIONS, Category } from '../model/Category';
 import { Item, ItemDraft, ItemUnit } from '../model/Item';
 import { AssetSource } from '../model/ItemAsset';
-import { ItemFormRouteParams, createItemResult, requireItemId } from '../navigation/RouteContract';
+import { ItemFormRouteParams, requireItemId } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
+import { AppEventBus } from '../common/AppEventBus';
 import { AppServices } from '../service/AppServices';
 
 @Entry
@@ -284,7 +285,8 @@ struct ItemFormPage {
         const result = await AppServices.get().updateItem.update(this.itemId, draft);
         if (result.ok) {
           const notice = await this.synchronizeAfterSave(result.getData());
-          NavigationHelper.back({ url: RouteName.ITEM_LIST, params: createItemResult('updated', result.getData().id, notice) });
+          AppEventBus.notifyDataChanged();
+          this.openItemList(notice);
           return;
         }
         this.errorMessage = result.getError().message;
@@ -292,7 +294,8 @@ struct ItemFormPage {
         const result = await AppServices.get().createItem.create(draft);
         if (result.ok) {
           const notice = await this.synchronizeAfterSave(result.getData());
-          NavigationHelper.back({ url: RouteName.ITEM_LIST, params: createItemResult('created', result.getData().id, notice) });
+          AppEventBus.notifyDataChanged();
+          this.openItemList(notice);
           return;
         }
         this.errorMessage = result.getError().message;
@@ -302,6 +305,12 @@ struct ItemFormPage {
     } finally {
       this.saving = false;
     }
+  }
+
+  private openItemList(notice?: string): void {
+    NavigationHelper.replaceUrl({ url: RouteName.ITEM_LIST, params: { notice: notice } }).catch(() => {
+      NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST, params: { notice: notice } });
+    });
   }
 
   private createDraft(): ItemDraft {

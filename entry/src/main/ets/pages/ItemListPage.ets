@@ -13,6 +13,8 @@ import { AppServices } from '../service/AppServices';
 @Entry
 @Component
 struct ItemListPage {
+  @StorageLink('itemtrace.dataRevision') @Watch('onRevisionChanged') private dataRevision: number = 0;
+  @StorageLink('itemtrace.preferenceRevision') @Watch('onRevisionChanged') private preferenceRevision: number = 0;
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private noticeMessage: string = '';
@@ -25,6 +27,10 @@ struct ItemListPage {
   }
 
   onPageShow(): void {
+    this.loadItems();
+  }
+
+  private onRevisionChanged(): void {
     this.loadItems();
   }
 

@@ -1,5 +1,7 @@
+import { ConfigurationConstant } from '@kit.AbilityKit';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { LoadingState } from '../components/LoadingState';
+import { AppEventBus } from '../common/AppEventBus';
 import { ItemSortMode, ThemeMode, UserPreferences } from '../model/UserPreferences';
 import { AppServices } from '../service/AppServices';
 
@@ -264,10 +266,25 @@ struct SettingsPage {
         }
       }
       this.applyPreferences(result.getData());
+      this.applyColorMode(result.getData().themeMode);
+      AppEventBus.notifyPreferencesChanged();
       this.savedMessage = '设置已保存';
     } else {
       this.errorMessage = result.getError().message;
     }
     this.saving = false;
+  }
+
+  private applyColorMode(themeMode: ThemeMode): void {
+    const colorMode = themeMode === ThemeMode.DARK
+      ? ConfigurationConstant.ColorMode.COLOR_MODE_DARK
+      : themeMode === ThemeMode.LIGHT
+        ? ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT
+        : ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET;
+    try {
+      const hostContext = this.getUIContext().getHostContext();
+      hostContext?.getApplicationContext().setColorMode(colorMode);
+    } catch (_) {
+    }
   }
 }

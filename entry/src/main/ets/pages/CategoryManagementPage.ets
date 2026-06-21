@@ -1,17 +1,23 @@
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
+import { AppEventBus } from '../common/AppEventBus';
 import { CategoryRecord } from '../model/Category';
 import { AppServices } from '../service/AppServices';
 
 @Entry
 @Component
 struct CategoryManagementPage {
+  @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private name: string = '';
   @State private categories: CategoryRecord[] = [];
 
   aboutToAppear(): void {
+    this.loadCategories();
+  }
+
+  private onDataRevisionChanged(): void {
     this.loadCategories();
   }
 
@@ -95,6 +101,7 @@ struct CategoryManagementPage {
     if (result.ok) {
       this.name = '';
       await this.loadCategories();
+      AppEventBus.notifyDataChanged();
     } else {
       this.errorMessage = result.getError().message;
     }
@@ -104,6 +111,7 @@ struct CategoryManagementPage {
     const result = await AppServices.get().categories.setActive(category.id, !category.active);
     if (result.ok) {
       await this.loadCategories();
+      AppEventBus.notifyDataChanged();
     } else {
       this.errorMessage = result.getError().message;
     }

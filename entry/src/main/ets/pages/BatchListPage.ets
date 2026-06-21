@@ -2,6 +2,7 @@ import { NavigationHelper } from '../navigation/NavigationHelper';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
+import { AppEventBus } from '../common/AppEventBus';
 import { Batch } from '../model/Batch';
 import { BatchRouteParams, requireItemId } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
@@ -10,6 +11,7 @@ import { AppServices } from '../service/AppServices';
 @Entry
 @Component
 struct BatchListPage {
+  @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @State private loading: boolean = true;
   @State private deleting: boolean = false;
   @State private errorMessage: string = '';
@@ -29,6 +31,12 @@ struct BatchListPage {
   }
 
   onPageShow(): void {
+    if (this.itemId.length > 0) {
+      this.loadBatches();
+    }
+  }
+
+  private onDataRevisionChanged(): void {
     if (this.itemId.length > 0) {
       this.loadBatches();
     }
@@ -129,6 +137,7 @@ struct BatchListPage {
     const result = await AppServices.get().batches.delete(batchId);
     if (result.ok) {
       await this.loadBatches();
+      AppEventBus.notifyDataChanged();
     } else {
       this.errorMessage = result.getError().message;
     }

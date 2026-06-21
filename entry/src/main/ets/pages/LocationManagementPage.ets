@@ -1,11 +1,13 @@
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
+import { AppEventBus } from '../common/AppEventBus';
 import { LocationRecord } from '../model/Location';
 import { AppServices } from '../service/AppServices';
 
 @Entry
 @Component
 struct LocationManagementPage {
+  @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private name: string = '';
@@ -13,6 +15,10 @@ struct LocationManagementPage {
   @State private locations: LocationRecord[] = [];
 
   aboutToAppear(): void {
+    this.loadLocations();
+  }
+
+  private onDataRevisionChanged(): void {
     this.loadLocations();
   }
 
@@ -118,6 +124,7 @@ struct LocationManagementPage {
     if (result.ok) {
       this.name = '';
       await this.loadLocations();
+      AppEventBus.notifyDataChanged();
     } else {
       this.errorMessage = result.getError().message;
     }
@@ -127,6 +134,7 @@ struct LocationManagementPage {
     const result = location.active ? await AppServices.get().locations.deactivate(location.id) : await AppServices.get().locations.activate(location.id);
     if (result.ok) {
       await this.loadLocations();
+      AppEventBus.notifyDataChanged();
     } else {
       this.errorMessage = result.getError().message;
     }

@@ -1,5 +1,6 @@
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { LoadingState } from '../components/LoadingState';
+import { AppEventBus } from '../common/AppEventBus';
 import { Batch, BatchDraft } from '../model/Batch';
 import { ITEM_UNIT_OPTIONS, ItemUnit } from '../model/Item';
 import { BatchRouteParams, requireBatchId, requireItemId } from '../navigation/RouteContract';
@@ -141,7 +142,8 @@ struct BatchFormPage {
     const draft = this.createDraft();
     const result = this.editMode ? await AppServices.get().batches.update(this.batchId, draft) : await AppServices.get().batches.create(draft);
     if (result.ok) {
-      NavigationHelper.back({ url: RouteName.BATCH_LIST, params: { itemId: this.itemId } });
+      AppEventBus.notifyDataChanged();
+      this.openBatchList();
     } else {
       this.errorMessage = result.getError().message;
     }
@@ -157,6 +159,12 @@ struct BatchFormPage {
       locationPath: this.locationPath,
       notes: this.notes
     };
+  }
+
+  private openBatchList(): void {
+    NavigationHelper.replaceUrl({ url: RouteName.BATCH_LIST, params: { itemId: this.itemId } }).catch(() => {
+      NavigationHelper.pushUrl({ url: RouteName.BATCH_LIST, params: { itemId: this.itemId } });
+    });
   }
 
   private findBatch(batches: Batch[], batchId: string): Batch | undefined {

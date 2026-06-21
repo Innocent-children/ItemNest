@@ -14,6 +14,7 @@ import { AppServices } from '../service/AppServices';
 @Entry
 @Component
 struct SearchPage {
+  @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @State private name: string = '';
   @State private selectedLocation: string = '';
   @State private selectedCategory: string = '';
@@ -30,6 +31,14 @@ struct SearchPage {
     this.readInitialQuery();
     this.loadFilterOptions();
     this.loadSuggestions();
+  }
+
+  private onDataRevisionChanged(): void {
+    this.loadFilterOptions();
+    this.loadSuggestions();
+    if (this.searched) {
+      this.refreshResults();
+    }
   }
 
   build() {
@@ -252,6 +261,23 @@ struct SearchPage {
       }
     } catch (_) {
       this.errorMessage = '查询物品失败，请重试';
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  private async refreshResults(): Promise<void> {
+    this.loading = true;
+    this.errorMessage = '';
+    try {
+      const result = await AppServices.get().searchItems.search(this.currentQuery());
+      if (result.ok) {
+        this.items = result.getData().items;
+      } else {
+        this.errorMessage = result.getError().message;
+      }
+    } catch (_) {
+      this.errorMessage = '鏌ヨ鐗╁搧澶辫触锛岃閲嶈瘯';
     } finally {
       this.loading = false;
     }

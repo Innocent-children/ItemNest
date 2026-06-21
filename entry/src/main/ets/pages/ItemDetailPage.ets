@@ -3,16 +3,18 @@ import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { ErrorState } from '../components/ErrorState';
 import { ExpiryStatusTag } from '../components/ExpiryStatusTag';
 import { LoadingState } from '../components/LoadingState';
+import { AppEventBus } from '../common/AppEventBus';
 import { ExpiryStatus } from '../model/ExpiryStatus';
 import { Item } from '../model/Item';
 import { ReminderRecordStatus } from '../model/ReminderRecord';
-import { ItemFormRouteParams, createItemResult, requireItemId } from '../navigation/RouteContract';
+import { ItemFormRouteParams, requireItemId } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
 
 @Entry
 @Component
 struct ItemDetailPage {
+  @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @State private loading: boolean = true;
   @State private deleting: boolean = false;
   @State private errorMessage: string = '';
@@ -45,6 +47,12 @@ struct ItemDetailPage {
 
   onPageShow(): void {
     if (this.itemId.length > 0) {
+      this.loadDetail();
+    }
+  }
+
+  private onDataRevisionChanged(): void {
+    if (this.itemId.length > 0 && !this.deleting) {
       this.loadDetail();
     }
   }
@@ -299,11 +307,12 @@ struct ItemDetailPage {
   private async deleteItem(): Promise<void> {
     this.deleting = true;
     const result = await AppServices.get().deleteItem.delete(this.itemId, true);
-    this.deleting = false;
     if (result.ok) {
-      NavigationHelper.back({ url: RouteName.ITEM_LIST, params: createItemResult('deleted', this.itemId) });
+      AppEventBus.notifyDataChanged();
+      this.openItemList();
       return;
     }
+    this.deleting = false;
     this.showDeleteConfirm = false;
     this.errorMessage = result.getError().message;
   }
@@ -395,10 +404,17 @@ struct ItemDetailPage {
     if (result.ok) {
       this.item = result.getData();
       this.photoPath = '';
+      AppEventBus.notifyDataChanged();
     } else {
       this.errorMessage = result.getError().message;
     }
     this.removingPhoto = false;
+  }
+
+  private openItemList(): void {
+    NavigationHelper.replaceUrl({ url: RouteName.ITEM_LIST }).catch(() => {
+      NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST });
+    });
   }
 
   private handleDeleteRequest(): void {

@@ -11,6 +11,8 @@ import { AppServices } from '../service/AppServices';
 @Component
 struct Index {
   @StorageLink('itemtrace.quickAddRequest') @Watch('onQuickAddRequested') private quickAddRequest: string = '';
+  @StorageLink('itemtrace.dataRevision') @Watch('onRevisionChanged') private dataRevision: number = 0;
+  @StorageLink('itemtrace.preferenceRevision') @Watch('onRevisionChanged') private preferenceRevision: number = 0;
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private recentItems: ItemSummary[] = [];
@@ -32,6 +34,10 @@ struct Index {
 
   private onQuickAddRequested(): void {
     this.openQuickAddIfRequested();
+  }
+
+  private onRevisionChanged(): void {
+    this.loadSummary();
   }
 
   private openQuickAddIfRequested(): void {

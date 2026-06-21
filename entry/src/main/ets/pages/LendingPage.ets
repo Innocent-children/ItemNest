@@ -1,6 +1,7 @@
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
+import { AppEventBus } from '../common/AppEventBus';
 import { TraceEvent, TraceEventType } from '../model/TraceEvent';
 import { BatchRouteParams, requireItemId } from '../navigation/RouteContract';
 import { AppServices } from '../service/AppServices';
@@ -8,6 +9,7 @@ import { AppServices } from '../service/AppServices';
 @Entry
 @Component
 struct LendingPage {
+  @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private quantityText: string = '1';
@@ -27,6 +29,12 @@ struct LendingPage {
     }
     this.itemId = itemIdResult.getData();
     this.loadState();
+  }
+
+  private onDataRevisionChanged(): void {
+    if (this.itemId.length > 0) {
+      this.loadState();
+    }
   }
 
   build() {
@@ -137,6 +145,7 @@ struct LendingPage {
     const result = await AppServices.get().lending.borrow(this.itemId, Number(this.quantityText), this.counterpart, undefined, this.note);
     if (result.ok) {
       await this.loadState();
+      AppEventBus.notifyDataChanged();
     } else {
       this.errorMessage = result.getError().message;
     }
@@ -146,6 +155,7 @@ struct LendingPage {
     const result = await AppServices.get().lending.returnItem(this.itemId, Number(this.quantityText), undefined, this.note);
     if (result.ok) {
       await this.loadState();
+      AppEventBus.notifyDataChanged();
     } else {
       this.errorMessage = result.getError().message;
     }
