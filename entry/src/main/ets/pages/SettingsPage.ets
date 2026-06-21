@@ -9,6 +9,8 @@ import { AppServices } from '../service/AppServices';
 @Entry
 @Component
 struct SettingsPage {
+  @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
+  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private defaultReminderDays: string = '7';
   @State private defaultSort: ItemSortMode = ItemSortMode.UPDATED_DESC;
   @State private showRecentSection: boolean = true;
@@ -43,7 +45,6 @@ struct SettingsPage {
           .backgroundColor($r('app.color.surface_accent'))
           .borderRadius($r('app.float.radius_control'))
           .onClick(() => NavigationHelper.back())
-          // TODO: 迁移到 Navigation 组件
       }
       .width('100%')
       .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
@@ -81,6 +82,7 @@ struct SettingsPage {
     }
     .width('100%')
     .height('100%')
+    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
     .backgroundColor($r('app.color.surface_app'))
   }
 
@@ -161,7 +163,7 @@ struct SettingsPage {
   @Builder
   private themeCard() {
     Column({ space: $r('app.float.space_3') }) {
-      this.cardTitle('外观', '主题偏好已保存；系统颜色模式会在后续适配中应用。')
+      this.cardTitle('外观', '主题偏好保存后会立即应用到当前界面。')
       Flex({ wrap: FlexWrap.Wrap }) {
         this.themeChoiceButton('跟随系统', ThemeMode.SYSTEM)
         this.themeChoiceButton('浅色', ThemeMode.LIGHT)
@@ -299,6 +301,10 @@ struct SettingsPage {
         statusBarContentColor: contentColor,
         navigationBarContentColor: contentColor
       });
+      const avoidArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
+      const uiContext = mainWindow.getUIContext();
+      AppStorage.setOrCreate<number>('itemtrace.safeAreaTop', Math.max(0, uiContext.px2vp(avoidArea.topRect.height)));
+      AppStorage.setOrCreate<number>('itemtrace.safeAreaBottom', Math.max(0, uiContext.px2vp(avoidArea.bottomRect.height)));
     } catch (_) {
     }
   }

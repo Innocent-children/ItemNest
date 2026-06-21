@@ -12,6 +12,8 @@ import { AppServices } from '../service/AppServices';
 @Entry
 @Component
 struct ItemFormPage {
+  @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
+  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private name: string = '';
   @State private quantityText: string = '1';
   @State private unit: ItemUnit = ItemUnit.PIECE;
@@ -212,6 +214,7 @@ struct ItemFormPage {
     }
     .width('100%')
     .height('100%')
+    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
     .backgroundColor($r('app.color.surface_app'))
   }
 

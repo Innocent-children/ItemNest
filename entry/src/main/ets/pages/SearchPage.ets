@@ -15,6 +15,8 @@ import { AppServices } from '../service/AppServices';
 @Component
 struct SearchPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
+  @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
+  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private name: string = '';
   @State private selectedLocation: string = '';
   @State private selectedCategory: string = '';
@@ -31,6 +33,14 @@ struct SearchPage {
     this.readInitialQuery();
     this.loadFilterOptions();
     this.loadSuggestions();
+  }
+
+  onPageShow(): void {
+    this.loadFilterOptions();
+    this.loadSuggestions();
+    if (this.searched) {
+      this.refreshResults();
+    }
   }
 
   private onDataRevisionChanged(): void {
@@ -172,6 +182,7 @@ struct SearchPage {
     }
     .width('100%')
     .height('100%')
+    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
     .backgroundColor($r('app.color.surface_app'))
   }
 

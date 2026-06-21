@@ -15,15 +15,8 @@ export interface BatchRouteParams extends ItemRouteParams {
   mode?: 'create' | 'edit';
 }
 
-export interface ItemOperationResult {
-  operation: 'created' | 'updated' | 'deleted';
-  itemId: string;
-  notice?: string;
-}
-
 export interface ItemListRouteParams {
   query?: ItemQuery;
-  notice?: string;
 }
 
 export function requireItemId(params: ItemRouteParams): Result<string> {
@@ -32,10 +25,6 @@ export function requireItemId(params: ItemRouteParams): Result<string> {
     return failure<string>(new AppError(AppErrorCode.ROUTE_INVALID, '缺少物品标识，无法打开页面'));
   }
   return success(itemId);
-}
-
-export function createItemResult(operation: 'created' | 'updated' | 'deleted', itemId: string, notice?: string): ItemOperationResult {
-  return { operation: operation, itemId: itemId, notice: notice };
 }
 
 export function requireBatchId(params: BatchRouteParams): Result<string> {

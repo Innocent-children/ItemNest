@@ -2,16 +2,19 @@
 export struct DeleteConfirmDialog {
   @Link visible: boolean;
   @Link confirmed: boolean;
+  @Prop title: string = '确认删除物品？';
+  @Prop description: string = '删除后不可恢复。';
+  @Prop confirmText: string = '确认删除';
 
   build() {
     if (this.visible) {
       Column() {
         Column({ space: $r('app.float.space_4') }) {
-          Text('确认删除物品？')
+          Text(this.title)
             .fontSize($r('app.float.font_section'))
             .fontWeight(FontWeight.Bold)
             .fontColor($r('app.color.text_primary'))
-          Text('第一阶段删除后不可恢复。')
+          Text(this.description)
             .fontSize($r('app.float.font_body'))
             .fontColor($r('app.color.text_secondary'))
           Row({ space: $r('app.float.space_3') }) {
@@ -23,7 +26,7 @@ export struct DeleteConfirmDialog {
               .onClick(() => {
                 this.visible = false;
               })
-            Button('确认删除')
+            Button(this.confirmText)
               .layoutWeight(1)
               .fontColor($r('app.color.brand_on_primary'))
               .backgroundColor($r('app.color.status_danger'))

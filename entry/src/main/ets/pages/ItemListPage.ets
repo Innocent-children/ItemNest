@@ -15,9 +15,10 @@ import { AppServices } from '../service/AppServices';
 struct ItemListPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.preferenceRevision') @Watch('onRevisionChanged') private preferenceRevision: number = 0;
+  @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
+  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
-  @State private noticeMessage: string = '';
   @State private items: ItemSummary[] = [];
   private query: ItemQuery = new ItemQuery();
 
@@ -65,16 +66,6 @@ struct ItemListPage {
       .width('100%')
       .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
 
-      if (this.noticeMessage.length > 0) {
-        Text(this.noticeMessage)
-          .fontSize($r('app.float.font_caption'))
-          .fontColor($r('app.color.status_warning'))
-          .backgroundColor($r('app.color.status_warning_soft'))
-          .padding($r('app.float.space_3'))
-          .margin({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
-          .borderRadius($r('app.float.radius_control'))
-      }
-
       if (this.loading) {
         LoadingState({ text: '正在加载物品…' })
       } else if (this.errorMessage.length > 0) {
@@ -109,6 +100,7 @@ struct ItemListPage {
     }
     .width('100%')
     .height('100%')
+    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
     .backgroundColor($r('app.color.surface_app'))
   }
 
@@ -116,11 +108,9 @@ struct ItemListPage {
     const params = NavigationHelper.getParams() as ItemListRouteParams;
     if (!params) {
       this.query = new ItemQuery();
-      this.noticeMessage = '';
       return;
     }
     this.query = params.query ?? new ItemQuery();
-    this.noticeMessage = params.notice ?? '';
   }
 
   private async loadItems(): Promise<void> {

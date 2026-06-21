@@ -25,8 +25,11 @@ export default class EntryAbility extends UIAbility {
   onWindowStageCreate(windowStage: window.WindowStage): void {
     // Main window is created, set main page for this ability
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
-    this.applyImmersiveWindow(windowStage);
+    this.loadMainContent(windowStage);
+  }
 
+  private async loadMainContent(windowStage: window.WindowStage): Promise<void> {
+    await this.applyImmersiveWindow(windowStage);
     windowStage.loadContent('pages/Index', (err) => {
       if (err.code) {
         hilog.error(DOMAIN, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));
@@ -91,8 +94,35 @@ export default class EntryAbility extends UIAbility {
         statusBarContentColor: contentColor,
         navigationBarContentColor: contentColor
       });
+      this.updateSafeArea(mainWindow);
+      mainWindow.on('avoidAreaChange', (options: window.AvoidAreaOptions) => {
+        if (options.type === window.AvoidAreaType.TYPE_SYSTEM) {
+          this.updateSafeAreaFromArea(mainWindow, options.area);
+        }
+      });
     } catch (err) {
       hilog.error(DOMAIN, 'testTag', 'Failed to apply immersive window. Cause: %{public}s', JSON.stringify(err));
+    }
+  }
+
+  private updateSafeArea(mainWindow: window.Window): void {
+    try {
+      const avoidArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
+      this.updateSafeAreaFromArea(mainWindow, avoidArea);
+    } catch (err) {
+      hilog.error(DOMAIN, 'testTag', 'Failed to update safe area. Cause: %{public}s', JSON.stringify(err));
+    }
+  }
+
+  private updateSafeAreaFromArea(mainWindow: window.Window, avoidArea: window.AvoidArea): void {
+    try {
+      const uiContext = mainWindow.getUIContext();
+      const top = Math.max(0, uiContext.px2vp(avoidArea.topRect.height));
+      const bottom = Math.max(0, uiContext.px2vp(avoidArea.bottomRect.height));
+      AppStorage.setOrCreate<number>('itemtrace.safeAreaTop', top);
+      AppStorage.setOrCreate<number>('itemtrace.safeAreaBottom', bottom);
+    } catch (err) {
+      hilog.error(DOMAIN, 'testTag', 'Failed to apply safe area. Cause: %{public}s', JSON.stringify(err));
     }
   }
 

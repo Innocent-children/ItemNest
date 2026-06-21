@@ -8,6 +8,8 @@ import { AppServices } from '../service/AppServices';
 @Component
 struct LocationManagementPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
+  @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
+  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private name: string = '';
@@ -15,6 +17,10 @@ struct LocationManagementPage {
   @State private locations: LocationRecord[] = [];
 
   aboutToAppear(): void {
+    this.loadLocations();
+  }
+
+  onPageShow(): void {
     this.loadLocations();
   }
 
@@ -101,6 +107,7 @@ struct LocationManagementPage {
     }
     .width('100%')
     .height('100%')
+    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
     .backgroundColor($r('app.color.surface_app'))
   }
 

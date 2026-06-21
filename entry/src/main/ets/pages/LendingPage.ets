@@ -10,6 +10,8 @@ import { AppServices } from '../service/AppServices';
 @Component
 struct LendingPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
+  @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
+  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private quantityText: string = '1';
@@ -29,6 +31,12 @@ struct LendingPage {
     }
     this.itemId = itemIdResult.getData();
     this.loadState();
+  }
+
+  onPageShow(): void {
+    if (this.itemId.length > 0) {
+      this.loadState();
+    }
   }
 
   private onDataRevisionChanged(): void {
@@ -122,6 +130,7 @@ struct LendingPage {
     }
     .width('100%')
     .height('100%')
+    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
     .backgroundColor($r('app.color.surface_app'))
   }
 

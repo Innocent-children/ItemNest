@@ -7,7 +7,8 @@ description: "ItemTrace 本地物品追踪核心闭环的可执行任务清单"
 # 任务：ItemTrace 本地物品追踪核心闭环
 
 **输入**：[spec.md](spec.md)、[plan.md](plan.md)、[research.md](research.md)、
-[data-model.md](data-model.md)、[契约](contracts/) 与 [quickstart.md](quickstart.md)。
+[data-model.md](data-model.md)、[契约](contracts/)、[quickstart.md](quickstart.md)
+与 [用户交互修复计划](ux-interaction-fix-plan.md)。
 
 **前置条件**：任务开始前必须阅读 `AGENTS.md`、`.specify/memory/constitution.md` 与本文件中
 任务依赖的设计文档。不得增加后端、账号、云同步、多人共享、广告或第三方统计。
@@ -234,4 +235,3 @@ Phase 0：T001–T006
 - 全部 95 项任务均使用 `- [ ] Tnnn [P] [USn]` 所要求的检查清单格式；非用户故事任务不带 `US` 标签。
 - 每个任务均标明文件或目录、输入、输出和验收方式；没有任务依赖外部服务。
 - 系统能力任务 T003、T051、T054、T060、T066、T069、T081、T090 均明确要求“先查证 API，再实现抽象封装”。
-

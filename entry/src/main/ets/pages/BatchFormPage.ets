@@ -9,6 +9,8 @@ import { AppServices } from '../service/AppServices';
 @Entry
 @Component
 struct BatchFormPage {
+  @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
+  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private loading: boolean = true;
   @State private saving: boolean = false;
   @State private errorMessage: string = '';
@@ -113,6 +115,7 @@ struct BatchFormPage {
     }
     .width('100%')
     .height('100%')
+    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
     .backgroundColor($r('app.color.surface_app'))
   }
 
