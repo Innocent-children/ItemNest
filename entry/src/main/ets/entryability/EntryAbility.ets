@@ -25,6 +25,7 @@ export default class EntryAbility extends UIAbility {
   onWindowStageCreate(windowStage: window.WindowStage): void {
     // Main window is created, set main page for this ability
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
+    this.applyImmersiveWindow(windowStage);
 
     windowStage.loadContent('pages/Index', (err) => {
       if (err.code) {
@@ -68,6 +69,41 @@ export default class EntryAbility extends UIAbility {
     } catch (err) {
       hilog.error(DOMAIN, 'testTag', 'Failed to apply colorMode. Cause: %{public}s', JSON.stringify(err));
     }
+  }
+
+  private async applyImmersiveWindow(windowStage: window.WindowStage): Promise<void> {
+    try {
+      let themeMode = ThemeMode.SYSTEM;
+      const result = await AppServices.get().preferences.get();
+      if (result.ok) {
+        themeMode = result.getData().themeMode;
+      }
+      const useLightIcon = this.shouldUseLightSystemBarIcon(themeMode);
+      const contentColor = useLightIcon ? '#FFFFFF' : '#000000';
+      const mainWindow = await windowStage.getMainWindow();
+      await mainWindow.setWindowLayoutFullScreen(true);
+      mainWindow.setImmersiveModeEnabledState(true);
+      await mainWindow.setWindowSystemBarProperties({
+        statusBarColor: '#00000000',
+        navigationBarColor: '#00000000',
+        isStatusBarLightIcon: useLightIcon,
+        isNavigationBarLightIcon: useLightIcon,
+        statusBarContentColor: contentColor,
+        navigationBarContentColor: contentColor
+      });
+    } catch (err) {
+      hilog.error(DOMAIN, 'testTag', 'Failed to apply immersive window. Cause: %{public}s', JSON.stringify(err));
+    }
+  }
+
+  private shouldUseLightSystemBarIcon(themeMode: ThemeMode): boolean {
+    if (themeMode === ThemeMode.DARK) {
+      return true;
+    }
+    if (themeMode === ThemeMode.LIGHT) {
+      return false;
+    }
+    return this.context.config.colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK;
   }
 
   private handleFormLinkWant(want: Want): void {

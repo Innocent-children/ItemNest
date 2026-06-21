@@ -9,10 +9,6 @@ export class NavigationHelper {
     return router.pushUrl(options);
   }
 
-  static replaceUrl(options: router.RouterOptions): Promise<void> {
-    return router.replaceUrl(options);
-  }
-
   static getParams(): Object {
     return router.getParams();
   }

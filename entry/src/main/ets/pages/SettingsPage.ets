@@ -1,4 +1,5 @@
 import { ConfigurationConstant } from '@kit.AbilityKit';
+import { window } from '@kit.ArkUI';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
@@ -19,7 +20,6 @@ struct SettingsPage {
   @State private loading: boolean = false;
   @State private saving: boolean = false;
   @State private errorMessage: string = '';
-  @State private savedMessage: string = '';
 
   aboutToAppear(): void {
     this.load();
@@ -64,14 +64,6 @@ struct SettingsPage {
                 .padding($r('app.float.space_3'))
                 .borderRadius($r('app.float.radius_control'))
                 .backgroundColor($r('app.color.status_danger_soft'))
-            }
-            if (this.savedMessage.length > 0) {
-              Text(this.savedMessage)
-                .fontSize($r('app.float.font_caption'))
-                .fontColor($r('app.color.status_success'))
-                .padding($r('app.float.space_3'))
-                .borderRadius($r('app.float.radius_control'))
-                .backgroundColor($r('app.color.status_success_soft'))
             }
             Button(this.saving ? '正在保存…' : '保存设置')
               .width('100%')
@@ -242,7 +234,6 @@ struct SettingsPage {
 
   private async save(): Promise<void> {
     this.errorMessage = '';
-    this.savedMessage = '';
     const preferences: UserPreferences = {
       defaultReminderDays: Number(this.defaultReminderDays),
       defaultSort: this.defaultSort,
@@ -267,8 +258,9 @@ struct SettingsPage {
       }
       this.applyPreferences(result.getData());
       this.applyColorMode(result.getData().themeMode);
+      await this.applySystemBarStyle(result.getData().themeMode);
       AppEventBus.notifyPreferencesChanged();
-      this.savedMessage = '设置已保存';
+      this.showSavedToast();
     } else {
       this.errorMessage = result.getError().message;
     }
@@ -284,6 +276,36 @@ struct SettingsPage {
     try {
       const hostContext = this.getUIContext().getHostContext();
       hostContext?.getApplicationContext().setColorMode(colorMode);
+    } catch (_) {
+    }
+  }
+
+  private async applySystemBarStyle(themeMode: ThemeMode): Promise<void> {
+    try {
+      const hostContext = this.getUIContext().getHostContext();
+      if (hostContext === undefined) {
+        return;
+      }
+      const useLightIcon = themeMode === ThemeMode.DARK;
+      const contentColor = useLightIcon ? '#FFFFFF' : '#000000';
+      const mainWindow = await window.getLastWindow(hostContext);
+      await mainWindow.setWindowLayoutFullScreen(true);
+      mainWindow.setImmersiveModeEnabledState(true);
+      await mainWindow.setWindowSystemBarProperties({
+        statusBarColor: '#00000000',
+        navigationBarColor: '#00000000',
+        isStatusBarLightIcon: useLightIcon,
+        isNavigationBarLightIcon: useLightIcon,
+        statusBarContentColor: contentColor,
+        navigationBarContentColor: contentColor
+      });
+    } catch (_) {
+    }
+  }
+
+  private showSavedToast(): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: '设置已保存', duration: 1600 });
     } catch (_) {
     }
   }

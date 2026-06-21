@@ -309,7 +309,7 @@ struct ItemDetailPage {
     const result = await AppServices.get().deleteItem.delete(this.itemId, true);
     if (result.ok) {
       AppEventBus.notifyDataChanged();
-      this.openItemList();
+      NavigationHelper.back();
       return;
     }
     this.deleting = false;
@@ -409,12 +409,6 @@ struct ItemDetailPage {
       this.errorMessage = result.getError().message;
     }
     this.removingPhoto = false;
-  }
-
-  private openItemList(): void {
-    NavigationHelper.replaceUrl({ url: RouteName.ITEM_LIST }).catch(() => {
-      NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST });
-    });
   }
 
   private handleDeleteRequest(): void {

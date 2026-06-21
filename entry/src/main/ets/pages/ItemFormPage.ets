@@ -6,7 +6,6 @@ import { CATEGORY_OPTIONS, Category } from '../model/Category';
 import { Item, ItemDraft, ItemUnit } from '../model/Item';
 import { AssetSource } from '../model/ItemAsset';
 import { ItemFormRouteParams, requireItemId } from '../navigation/RouteContract';
-import { RouteName } from '../navigation/RouteName';
 import { AppEventBus } from '../common/AppEventBus';
 import { AppServices } from '../service/AppServices';
 
@@ -286,7 +285,7 @@ struct ItemFormPage {
         if (result.ok) {
           const notice = await this.synchronizeAfterSave(result.getData());
           AppEventBus.notifyDataChanged();
-          this.openItemList(notice);
+          this.finishSave(notice);
           return;
         }
         this.errorMessage = result.getError().message;
@@ -295,7 +294,7 @@ struct ItemFormPage {
         if (result.ok) {
           const notice = await this.synchronizeAfterSave(result.getData());
           AppEventBus.notifyDataChanged();
-          this.openItemList(notice);
+          this.finishSave(notice);
           return;
         }
         this.errorMessage = result.getError().message;
@@ -307,10 +306,17 @@ struct ItemFormPage {
     }
   }
 
-  private openItemList(notice?: string): void {
-    NavigationHelper.replaceUrl({ url: RouteName.ITEM_LIST, params: { notice: notice } }).catch(() => {
-      NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST, params: { notice: notice } });
-    });
+  private finishSave(notice?: string): void {
+    if (notice !== undefined) {
+      try {
+        this.getUIContext().getPromptAction().showToast({
+          message: notice,
+          duration: 2000
+        });
+      } catch (_) {
+      }
+    }
+    NavigationHelper.back();
   }
 
   private createDraft(): ItemDraft {
