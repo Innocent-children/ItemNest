@@ -7,7 +7,7 @@ import { MainEntryBar } from '../components/MainEntryBar';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { ItemSortMode } from '../model/UserPreferences';
-import { ItemListRouteParams } from '../navigation/RouteContract';
+import { ItemListRouteParams, RouteRefreshParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
 
@@ -22,6 +22,7 @@ struct ItemListPage {
   @State private errorMessage: string = '';
   @State private items: ItemSummary[] = [];
   private query: ItemQuery = new ItemQuery();
+  private lastRouteRefreshAt: number = 0;
 
   aboutToAppear(): void {
     this.readQuery();
@@ -29,11 +30,27 @@ struct ItemListPage {
   }
 
   onPageShow(): void {
-    this.loadItems(false);
+    if (!this.handleRouteRefreshParams()) {
+      this.loadItems(false);
+    }
   }
 
   private onRevisionChanged(): void {
     this.loadItems(false);
+  }
+
+  private handleRouteRefreshParams(): boolean {
+    try {
+      const params = this.getUIContext().getRouter().getParams() as RouteRefreshParams | undefined;
+      const refreshAt = params?.refreshAt ?? 0;
+      if (refreshAt > 0 && refreshAt !== this.lastRouteRefreshAt) {
+        this.lastRouteRefreshAt = refreshAt;
+        this.loadItems(false);
+        return true;
+      }
+    } catch (_) {
+    }
+    return false;
   }
 
   build() {
@@ -62,7 +79,7 @@ struct ItemListPage {
           .fontColor($r('app.color.brand_on_primary'))
           .backgroundColor($r('app.color.brand_primary'))
           .borderRadius($r('app.float.radius_control'))
-          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } }))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create', returnTo: RouteName.ITEM_LIST } }))
       }
       .width('100%')
       .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
@@ -171,7 +188,7 @@ struct ItemListPage {
 
   private handleEmptyAction(): void {
     if (this.query.isEmpty()) {
-      NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } });
+      NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create', returnTo: RouteName.ITEM_LIST } });
       return;
     }
     this.query.clear();

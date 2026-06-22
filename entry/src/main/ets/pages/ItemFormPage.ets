@@ -9,6 +9,7 @@ import { Item, ItemDraft, ItemUnit } from '../model/Item';
 import { AssetSource } from '../model/ItemAsset';
 import { LocationRecord } from '../model/Location';
 import { ItemFormRouteParams, requireItemId } from '../navigation/RouteContract';
+import { RouteName } from '../navigation/RouteName';
 import { AppEventBus } from '../common/AppEventBus';
 import { AppServices } from '../service/AppServices';
 
@@ -45,6 +46,7 @@ struct ItemFormPage {
   @State private showNotesSection: boolean = false;
   @State private showPhotoSection: boolean = false;
   private initialDraftSignature: string = '';
+  private returnToRoute: string = RouteName.HOME;
 
   aboutToAppear(): void {
     this.readRoute();
@@ -410,6 +412,7 @@ struct ItemFormPage {
   private readRoute(): void {
     const params = NavigationHelper.getParams() as ItemFormRouteParams | undefined;
     this.editMode = params?.mode === 'edit';
+    this.returnToRoute = params?.returnTo ?? (this.editMode ? RouteName.ITEM_DETAIL : RouteName.HOME);
     if (!this.editMode) {
       return;
     }
@@ -516,6 +519,7 @@ struct ItemFormPage {
       if (this.editMode) {
         const result = await AppServices.get().updateItem.update(this.itemId, draft);
         if (result.ok) {
+          this.itemId = result.getData().id;
           const notice = await this.synchronizeAfterSave(result.getData());
           this.finishSave(notice);
           return;
@@ -524,6 +528,7 @@ struct ItemFormPage {
       } else {
         const result = await AppServices.get().createItem.create(draft);
         if (result.ok) {
+          this.itemId = result.getData().id;
           const notice = await this.synchronizeAfterSave(result.getData());
           this.finishSave(notice);
           return;
@@ -539,8 +544,14 @@ struct ItemFormPage {
 
   private finishSave(notice?: string): void {
     this.showToast(notice ?? '物品已保存');
-    NavigationHelper.back();
     AppEventBus.notifyDataChanged();
+    NavigationHelper.back({
+      url: this.returnToRoute,
+      params: {
+        refreshAt: Date.now(),
+        itemId: this.itemId
+      }
+    });
   }
 
   private showToast(message: string): void {

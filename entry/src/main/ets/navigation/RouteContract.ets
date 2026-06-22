@@ -8,6 +8,12 @@ export interface ItemRouteParams {
 
 export interface ItemFormRouteParams extends ItemRouteParams {
   mode?: 'create' | 'edit';
+  returnTo?: string;
+}
+
+export interface RouteRefreshParams {
+  refreshAt?: number;
+  itemId?: string;
 }
 
 export interface BatchRouteParams extends ItemRouteParams {

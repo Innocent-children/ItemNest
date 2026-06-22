@@ -4,8 +4,10 @@ import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
 import { MainEntryBar } from '../components/MainEntryBar';
+import { AppEventBus } from '../common/AppEventBus';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
+import { RouteRefreshParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
 
@@ -26,14 +28,20 @@ struct Index {
   @State private showRecentSection: boolean = true;
   @State private showExpirySection: boolean = true;
   @State private showStockSection: boolean = true;
+  private dataRefreshListenerId: number = 0;
+  private summaryLoadId: number = 0;
+  private lastRouteRefreshAt: number = 0;
 
   aboutToAppear(): void {
-    this.loadSummary(true);
+    this.subscribeDataRefresh();
+    this.refreshSummary(true);
     this.openQuickAddIfRequested();
   }
 
   onPageShow(): void {
-    this.loadSummary(false);
+    if (!this.handleRouteRefreshParams()) {
+      this.refreshSummary(false);
+    }
     this.openQuickAddIfRequested();
   }
 
@@ -42,7 +50,33 @@ struct Index {
   }
 
   private onRevisionChanged(): void {
-    this.loadSummary(false);
+    this.refreshSummary(false);
+  }
+
+  private handleRouteRefreshParams(): boolean {
+    try {
+      const params = this.getUIContext().getRouter().getParams() as RouteRefreshParams | undefined;
+      const refreshAt = params?.refreshAt ?? 0;
+      if (refreshAt > 0 && refreshAt !== this.lastRouteRefreshAt) {
+        this.lastRouteRefreshAt = refreshAt;
+        this.refreshSummary(false);
+        return true;
+      }
+    } catch (_) {
+    }
+    return false;
+  }
+
+  private subscribeDataRefresh(): void {
+    if (this.dataRefreshListenerId > 0) {
+      return;
+    }
+    this.dataRefreshListenerId = AppEventBus.subscribeDataChanged(() => this.refreshSummary(false));
+  }
+
+  private refreshSummary(showLoading: boolean = false): void {
+    this.loadSummary(showLoading);
+    setTimeout(() => this.loadSummary(false), 300);
   }
 
   private openQuickAddIfRequested(): void {
@@ -50,7 +84,7 @@ struct Index {
       return;
     }
     AppStorage.setOrCreate('itemtrace.quickAddRequest', '');
-    NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } });
+    NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create', returnTo: RouteName.HOME } });
   }
 
   build() {
@@ -128,7 +162,7 @@ struct Index {
           .fontColor($r('app.color.brand_on_primary'))
           .backgroundColor($r('app.color.brand_primary'))
           .borderRadius($r('app.float.radius_control'))
-          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } }))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create', returnTo: RouteName.HOME } }))
         Button('搜索')
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_card'))
@@ -255,18 +289,25 @@ struct Index {
   }
 
   private async loadSummary(showLoading: boolean = true): Promise<void> {
+    const loadId = ++this.summaryLoadId;
     if (showLoading) {
       this.loading = true;
       this.errorMessage = '';
     }
     try {
       const preferencesResult = await AppServices.get().preferences.get();
+      if (loadId !== this.summaryLoadId) {
+        return;
+      }
       if (preferencesResult.ok) {
         this.showRecentSection = preferencesResult.getData().showRecentSection;
         this.showExpirySection = preferencesResult.getData().showExpirySection;
         this.showStockSection = preferencesResult.getData().showStockSection;
       }
       const result = await AppServices.get().homeSummary.getSummary();
+      if (loadId !== this.summaryLoadId) {
+        return;
+      }
       if (!result.ok) {
         if (showLoading || this.recentItems.length + this.dueSoonItems.length + this.outOfStockItems.length === 0) {
           this.errorMessage = result.getError().message;
@@ -277,19 +318,21 @@ struct Index {
       this.recentItems = result.getData().recentItems;
       this.dueSoonItems = result.getData().dueSoonItems;
       this.outOfStockItems = result.getData().outOfStockItems;
-      await this.loadLocationShortcuts();
+      await this.loadLocationShortcuts(loadId);
     } catch (_) {
-      if (showLoading || this.recentItems.length + this.dueSoonItems.length + this.outOfStockItems.length === 0) {
+      if (loadId === this.summaryLoadId && (showLoading || this.recentItems.length + this.dueSoonItems.length + this.outOfStockItems.length === 0)) {
         this.errorMessage = '数据库初始化失败，请重试';
       }
     } finally {
-      this.loading = false;
+      if (loadId === this.summaryLoadId) {
+        this.loading = false;
+      }
     }
   }
 
-  private async loadLocationShortcuts(): Promise<void> {
+  private async loadLocationShortcuts(loadId: number): Promise<void> {
     const result = await AppServices.get().searchItems.getFilterOptions();
-    if (result.ok) {
+    if (loadId === this.summaryLoadId && result.ok) {
       this.locationPaths = result.getData().locationPaths.slice(0, 6);
     }
   }

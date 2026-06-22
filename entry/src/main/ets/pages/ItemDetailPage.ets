@@ -7,7 +7,7 @@ import { AppEventBus } from '../common/AppEventBus';
 import { ExpiryStatus } from '../model/ExpiryStatus';
 import { Item } from '../model/Item';
 import { ReminderRecordStatus } from '../model/ReminderRecord';
-import { ItemFormRouteParams, requireItemId } from '../navigation/RouteContract';
+import { ItemFormRouteParams, requireItemId, RouteRefreshParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
 
@@ -31,6 +31,7 @@ struct ItemDetailPage {
   @State private showDeleteConfirm: boolean = false;
   @State @Watch('handleDeleteRequest') private deleteRequested: boolean = false;
   private itemId: string = '';
+  private lastRouteRefreshAt: number = 0;
 
   aboutToAppear(): void {
     const params = NavigationHelper.getParams() as ItemFormRouteParams | undefined;
@@ -50,6 +51,9 @@ struct ItemDetailPage {
   }
 
   onPageShow(): void {
+    if (this.handleRouteRefreshParams()) {
+      return;
+    }
     if (this.itemId.length > 0) {
       this.loadDetail(false);
     }
@@ -59,6 +63,20 @@ struct ItemDetailPage {
     if (this.itemId.length > 0 && !this.deleting) {
       this.loadDetail(false);
     }
+  }
+
+  private handleRouteRefreshParams(): boolean {
+    try {
+      const params = this.getUIContext().getRouter().getParams() as RouteRefreshParams | undefined;
+      const refreshAt = params?.refreshAt ?? 0;
+      if (refreshAt > 0 && refreshAt !== this.lastRouteRefreshAt) {
+        this.lastRouteRefreshAt = refreshAt;
+        this.loadDetail(false);
+        return true;
+      }
+    } catch (_) {
+    }
+    return false;
   }
 
   build() {
@@ -314,7 +332,7 @@ struct ItemDetailPage {
   }
 
   private openEdit(): void {
-    NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'edit', itemId: this.itemId } });
+    NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'edit', itemId: this.itemId, returnTo: RouteName.ITEM_DETAIL } });
   }
 
   private async deleteItem(): Promise<void> {
@@ -322,8 +340,8 @@ struct ItemDetailPage {
     const result = await AppServices.get().deleteItem.delete(this.itemId, true);
     if (result.ok) {
       this.showToast('物品已删除');
-      NavigationHelper.back();
       AppEventBus.notifyDataChanged();
+      NavigationHelper.back();
       return;
     }
     this.deleting = false;
