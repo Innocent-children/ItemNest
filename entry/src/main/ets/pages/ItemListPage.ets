@@ -3,6 +3,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
+import { MainEntryBar } from '../components/MainEntryBar';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { ItemSortMode } from '../model/UserPreferences';
@@ -98,6 +99,8 @@ struct ItemListPage {
         .layoutWeight(1)
         .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
       }
+
+      MainEntryBar({ activeRoute: RouteName.ITEM_LIST })
     }
     .width('100%')
     .height('100%')

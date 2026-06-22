@@ -3,6 +3,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
+import { MainEntryBar } from '../components/MainEntryBar';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { RouteName } from '../navigation/RouteName';
@@ -88,6 +89,8 @@ struct Index {
         }
         .layoutWeight(1)
       }
+
+      MainEntryBar({ activeRoute: RouteName.HOME })
     }
     .width('100%')
     .height('100%')

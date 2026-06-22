@@ -3,6 +3,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
+import { MainEntryBar } from '../components/MainEntryBar';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { SearchHistory } from '../model/SearchHistory';
@@ -28,6 +29,7 @@ struct SearchPage {
   @State private searched: boolean = false;
   @State private errorMessage: string = '';
   private searchRequestId: number = 0;
+  private inputSearchVersion: number = 0;
 
   aboutToAppear(): void {
     this.readInitialQuery();
@@ -92,7 +94,7 @@ struct SearchPage {
               .onChange((value: string) => {
                 this.name = value;
                 this.loadSuggestions();
-                this.search(false, false);
+                this.scheduleSearch();
               })
             if (this.suggestions.length > 0 || this.history.length > 0) {
               this.suggestionPanel()
@@ -101,6 +103,10 @@ struct SearchPage {
           .padding($r('app.float.space_4'))
           .borderRadius($r('app.float.radius_card'))
           .backgroundColor($r('app.color.surface_card'))
+
+          if (!this.currentQuery().isEmpty()) {
+            this.selectedConditionPanel()
+          }
 
           Column({ space: $r('app.float.space_3') }) {
             Text('位置筛选')
@@ -189,6 +195,8 @@ struct SearchPage {
         .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
       }
       .layoutWeight(1)
+
+      MainEntryBar({ activeRoute: RouteName.SEARCH })
     }
     .width('100%')
     .height('100%')
@@ -241,6 +249,48 @@ struct SearchPage {
       }
     }
     .width('100%')
+  }
+
+  @Builder
+  private selectedConditionPanel() {
+    Column({ space: $r('app.float.space_2') }) {
+      Row() {
+        Text('已选条件')
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.text_secondary'))
+          .layoutWeight(1)
+        Button('全部清除')
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_app'))
+          .onClick(() => this.clearQuery())
+      }
+      Flex({ wrap: FlexWrap.Wrap }) {
+        if (this.name.trim().length > 0) {
+          this.conditionChip(`名称：${this.name.trim()}`, 'name')
+        }
+        if (this.selectedLocation.length > 0) {
+          this.conditionChip(`位置：${this.selectedLocation}`, 'location')
+        }
+        if (this.selectedCategory.length > 0) {
+          this.conditionChip(`分类：${this.selectedCategory}`, 'category')
+        }
+      }
+    }
+    .width('100%')
+    .padding($r('app.float.space_3'))
+    .borderRadius($r('app.float.radius_control'))
+    .backgroundColor($r('app.color.surface_card'))
+  }
+
+  @Builder
+  private conditionChip(label: string, type: string) {
+    Button(`${label}  ×`)
+      .type(ButtonType.Capsule)
+      .fontColor($r('app.color.brand_primary'))
+      .backgroundColor($r('app.color.surface_accent'))
+      .fontSize($r('app.float.font_caption'))
+      .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+      .onClick(() => this.clearCondition(type))
   }
 
   private readInitialQuery(): void {
@@ -353,6 +403,18 @@ struct SearchPage {
     this.errorMessage = '';
   }
 
+  private clearCondition(type: string): void {
+    if (type === 'name') {
+      this.name = '';
+      this.loadSuggestions();
+    } else if (type === 'location') {
+      this.selectedLocation = '';
+    } else if (type === 'category') {
+      this.selectedCategory = '';
+    }
+    this.search(false, false);
+  }
+
   private currentQuery(): ItemQuery {
     return new ItemQuery(
       this.name,
@@ -367,6 +429,15 @@ struct SearchPage {
       this.suggestions = result.getData().suggestions;
       this.history = result.getData().history;
     }
+  }
+
+  private scheduleSearch(): void {
+    const version = ++this.inputSearchVersion;
+    setTimeout(() => {
+      if (version === this.inputSearchVersion) {
+        this.search(false, false);
+      }
+    }, 250);
   }
 
   private async clearHistory(): Promise<void> {

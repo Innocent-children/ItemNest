@@ -2,6 +2,7 @@ import { ConfigurationConstant } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { LoadingState } from '../components/LoadingState';
+import { MainEntryBar } from '../components/MainEntryBar';
 import { AppEventBus } from '../common/AppEventBus';
 import { ItemSortMode, ThemeMode, UserPreferences } from '../model/UserPreferences';
 import { RouteName } from '../navigation/RouteName';
@@ -81,6 +82,8 @@ struct SettingsPage {
         }
         .layoutWeight(1)
       }
+
+      MainEntryBar({ activeRoute: RouteName.SETTINGS })
     }
     .width('100%')
     .height('100%')
