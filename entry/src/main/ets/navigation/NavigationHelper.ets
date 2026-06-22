@@ -9,7 +9,7 @@ export class NavigationHelper {
     return router.pushUrl(options);
   }
 
-  static getParams(): Object {
+  static getParams(): Object | undefined {
     return router.getParams();
   }
 

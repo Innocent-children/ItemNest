@@ -6,6 +6,7 @@ import { ExpiryStatusTag } from './ExpiryStatusTag';
 @Component
 export struct ItemCard {
   @Prop item: ItemSummary;
+  @State private pressed: boolean = false;
 
   build() {
     Row({ space: $r('app.float.space_3') }) {
@@ -53,12 +54,23 @@ export struct ItemCard {
         }
       }
       .layoutWeight(1)
+      Text('>')
+        .fontSize($r('app.float.font_body'))
+        .fontColor($r('app.color.text_secondary'))
     }
     .width('100%')
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
-    .backgroundColor($r('app.color.surface_card'))
+    .backgroundColor(this.pressed ? $r('app.color.surface_accent') : $r('app.color.surface_card'))
     .border({ width: 1, color: $r('app.color.border_subtle') })
+    .scale({ x: this.pressed ? 0.99 : 1, y: this.pressed ? 0.99 : 1 })
+    .onTouch((event: TouchEvent) => {
+      if (event.type === TouchType.Down) {
+        this.pressed = true;
+      } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+        this.pressed = false;
+      }
+    })
     .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_DETAIL, params: { itemId: this.item.id } }))
   }
 }

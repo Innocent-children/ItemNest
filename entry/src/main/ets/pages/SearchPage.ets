@@ -3,7 +3,6 @@ import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
-import { Category } from '../model/Category';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { SearchHistory } from '../model/SearchHistory';
@@ -21,33 +20,34 @@ struct SearchPage {
   @State private selectedLocation: string = '';
   @State private selectedCategory: string = '';
   @State private locationPaths: string[] = [];
-  @State private categories: Category[] = [];
+  @State private categories: string[] = [];
   @State private items: ItemSummary[] = [];
   @State private suggestions: string[] = [];
   @State private history: SearchHistory[] = [];
   @State private loading: boolean = true;
   @State private searched: boolean = false;
   @State private errorMessage: string = '';
+  private searchRequestId: number = 0;
 
   aboutToAppear(): void {
     this.readInitialQuery();
-    this.loadFilterOptions();
+    this.loadFilterOptions(true);
     this.loadSuggestions();
   }
 
   onPageShow(): void {
-    this.loadFilterOptions();
+    this.loadFilterOptions(false);
     this.loadSuggestions();
     if (this.searched) {
-      this.refreshResults();
+      this.refreshResults(false);
     }
   }
 
   private onDataRevisionChanged(): void {
-    this.loadFilterOptions();
+    this.loadFilterOptions(false);
     this.loadSuggestions();
     if (this.searched) {
-      this.refreshResults();
+      this.refreshResults(false);
     }
   }
 
@@ -88,6 +88,7 @@ struct SearchPage {
               .onChange((value: string) => {
                 this.name = value;
                 this.loadSuggestions();
+                this.search(false, false);
               })
             if (this.suggestions.length > 0 || this.history.length > 0) {
               this.suggestionPanel()
@@ -113,7 +114,10 @@ struct SearchPage {
                   .backgroundColor(this.selectedLocation === location ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
                   .fontSize($r('app.float.font_caption'))
                   .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-                  .onClick(() => this.selectedLocation = this.selectedLocation === location ? '' : location)
+                  .onClick(() => {
+                    this.selectedLocation = this.selectedLocation === location ? '' : location;
+                    this.search(false, false);
+                  })
               }, (location: string) => location)
             }
           }
@@ -127,27 +131,31 @@ struct SearchPage {
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))
             Flex({ wrap: FlexWrap.Wrap }) {
-              ForEach(this.categories, (category: Category) => {
+              ForEach(this.categories, (category: string) => {
                 Button(category)
                   .type(ButtonType.Capsule)
                   .fontColor(this.selectedCategory === category ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
                   .backgroundColor(this.selectedCategory === category ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
                   .fontSize($r('app.float.font_caption'))
                   .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-                  .onClick(() => this.selectedCategory = this.selectedCategory === category ? '' : category)
-              }, (category: Category) => category)
+                  .onClick(() => {
+                    this.selectedCategory = this.selectedCategory === category ? '' : category;
+                    this.search(false, false);
+                  })
+              }, (category: string) => category)
             }
           }
           .padding($r('app.float.space_4'))
           .borderRadius($r('app.float.radius_card'))
           .backgroundColor($r('app.color.surface_card'))
 
-          Button('应用搜索与筛选')
+          Button('记录本次搜索')
             .width('100%')
             .fontColor($r('app.color.brand_on_primary'))
             .backgroundColor($r('app.color.brand_primary'))
             .borderRadius($r('app.float.radius_control'))
-            .onClick(() => this.search())
+            .enabled(!this.currentQuery().isEmpty())
+            .onClick(() => this.search(true, true))
 
           if (this.loading) {
             LoadingState({ text: '正在读取筛选条件…' })
@@ -156,9 +164,15 @@ struct SearchPage {
             Button('重试')
               .fontColor($r('app.color.brand_on_primary'))
               .backgroundColor($r('app.color.brand_primary'))
-              .onClick(() => this.search())
+              .onClick(() => this.search(true, true))
           } else if (this.searched && this.items.length === 0) {
             EmptyState({ title: '暂无搜索结果', description: '请修改或清除筛选条件后重试。' })
+            Button('清除条件')
+              .width('100%')
+              .fontColor($r('app.color.brand_primary'))
+              .backgroundColor($r('app.color.surface_accent'))
+              .borderRadius($r('app.float.radius_control'))
+              .onClick(() => this.clearQuery())
           } else if (this.searched) {
             Text(`找到 ${this.items.length} 个物品`)
               .fontSize($r('app.float.font_section'))
@@ -169,7 +183,7 @@ struct SearchPage {
               .fontColor($r('app.color.brand_primary'))
               .backgroundColor($r('app.color.surface_accent'))
               .borderRadius($r('app.float.radius_control'))
-              .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST, params: { query: this.currentQuery() } }))
+              .onClick(() => this.openResultList())
             ForEach(this.items, (item: ItemSummary) => {
               ItemCard({ item: item })
             }, (item: ItemSummary) => item.id)
@@ -201,7 +215,10 @@ struct SearchPage {
               .backgroundColor($r('app.color.surface_accent'))
               .fontSize($r('app.float.font_caption'))
               .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-              .onClick(() => this.name = suggestion)
+              .onClick(() => {
+                this.name = suggestion;
+                this.search(false, false);
+              })
           }, (suggestion: string) => suggestion)
         }
       }
@@ -231,64 +248,101 @@ struct SearchPage {
   }
 
   private readInitialQuery(): void {
-    const params = NavigationHelper.getParams() as ItemListRouteParams;
-    if (!params) {
-      return;
-    }
-    const query = params.query;
-    if (query !== undefined) {
-      this.name = query.name;
+    try {
+      const params = NavigationHelper.getParams() as ItemListRouteParams | undefined;
+      const query = params?.query;
+      if (query === undefined) {
+        return;
+      }
+      this.name = query.name ?? '';
       this.selectedLocation = query.locationPath ?? '';
       this.selectedCategory = query.category ?? '';
+    } catch (_) {
     }
   }
 
-  private async loadFilterOptions(): Promise<void> {
-    this.loading = true;
+  private async loadFilterOptions(showLoading: boolean = true): Promise<void> {
+    if (showLoading) {
+      this.loading = true;
+    }
     const result = await AppServices.get().searchItems.getFilterOptions();
     if (!result.ok) {
-      this.errorMessage = result.getError().message;
+      if (showLoading || this.locationPaths.length + this.categories.length === 0) {
+        this.errorMessage = result.getError().message;
+      }
       this.loading = false;
       return;
     }
+    this.errorMessage = '';
     this.locationPaths = result.getData().locationPaths;
     this.categories = result.getData().categories;
     this.loading = false;
   }
 
-  private async search(): Promise<void> {
-    this.loading = true;
-    this.errorMessage = '';
+  private async search(showLoading: boolean = true, recordHistory: boolean = true): Promise<void> {
     const query = this.currentQuery();
+    if (query.isEmpty()) {
+      this.searchRequestId++;
+      this.items = [];
+      this.searched = false;
+      this.errorMessage = '';
+      this.loading = false;
+      return;
+    }
+    this.searched = true;
+    if (showLoading) {
+      this.loading = true;
+      this.errorMessage = '';
+    }
+    const requestId = ++this.searchRequestId;
     try {
       const result = await AppServices.get().searchItems.search(query);
+      if (requestId !== this.searchRequestId) {
+        return;
+      }
       if (result.ok) {
         this.items = result.getData().items;
         this.searched = true;
-        await AppServices.get().searchSuggestions.recordSearch(query);
-        await this.loadSuggestions();
+        this.errorMessage = '';
+        if (recordHistory) {
+          await AppServices.get().searchSuggestions.recordSearch(query);
+          await this.loadSuggestions();
+        }
       } else {
-        this.errorMessage = result.getError().message;
+        if (showLoading || this.items.length === 0) {
+          this.errorMessage = result.getError().message;
+        }
       }
     } catch (_) {
-      this.errorMessage = '查询物品失败，请重试';
+      if (requestId === this.searchRequestId && (showLoading || this.items.length === 0)) {
+        this.errorMessage = '查询物品失败，请重试';
+      }
     } finally {
-      this.loading = false;
+      if (requestId === this.searchRequestId) {
+        this.loading = false;
+      }
     }
   }
 
-  private async refreshResults(): Promise<void> {
-    this.loading = true;
-    this.errorMessage = '';
+  private async refreshResults(showLoading: boolean = false): Promise<void> {
+    if (showLoading) {
+      this.loading = true;
+      this.errorMessage = '';
+    }
     try {
       const result = await AppServices.get().searchItems.search(this.currentQuery());
       if (result.ok) {
         this.items = result.getData().items;
+        this.errorMessage = '';
       } else {
-        this.errorMessage = result.getError().message;
+        if (showLoading || this.items.length === 0) {
+          this.errorMessage = result.getError().message;
+        }
       }
     } catch (_) {
-      this.errorMessage = '鏌ヨ鐗╁搧澶辫触锛岃閲嶈瘯';
+      if (showLoading || this.items.length === 0) {
+        this.errorMessage = '查询物品失败，请重试';
+      }
     } finally {
       this.loading = false;
     }
@@ -300,13 +354,14 @@ struct SearchPage {
     this.selectedCategory = '';
     this.items = [];
     this.searched = false;
+    this.errorMessage = '';
   }
 
   private currentQuery(): ItemQuery {
     return new ItemQuery(
       this.name,
       this.selectedLocation.length === 0 ? undefined : this.selectedLocation,
-      this.selectedCategory.length === 0 ? undefined : this.selectedCategory as Category
+      this.selectedCategory.length === 0 ? undefined : this.selectedCategory
     );
   }
 
@@ -331,6 +386,16 @@ struct SearchPage {
     this.name = record.queryText ?? '';
     this.selectedLocation = record.locationPath ?? '';
     this.selectedCategory = record.category ?? '';
+    this.search(false, false);
+  }
+
+  private openResultList(): void {
+    const query = this.currentQuery();
+    if (query.isEmpty()) {
+      return;
+    }
+    AppServices.get().searchSuggestions.recordSearch(query);
+    NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST, params: { query: query } });
   }
 
 }

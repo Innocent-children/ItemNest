@@ -1,5 +1,4 @@
 import { failure, Result, success } from '../common/Result';
-import { Category } from '../model/Category';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
@@ -19,9 +18,9 @@ export class SearchResult {
 
 export class FilterOptions {
   readonly locationPaths: string[];
-  readonly categories: Category[];
+  readonly categories: string[];
 
-  constructor(locationPaths: string[], categories: Category[]) {
+  constructor(locationPaths: string[], categories: string[]) {
     this.locationPaths = locationPaths;
     this.categories = categories;
   }
@@ -56,7 +55,7 @@ export class ItemSearchService {
       return failure<FilterOptions>(itemsResult.getError());
     }
     const locationPaths: string[] = [];
-    const categories: Category[] = [];
+    const categories: string[] = [];
     const items = itemsResult.getData();
     for (let index = 0; index < items.length; index++) {
       const item = items[index];

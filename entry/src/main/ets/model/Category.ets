@@ -10,7 +10,7 @@ export enum Category {
   OTHER = '其他'
 }
 
-export const CATEGORY_OPTIONS: Category[] = [
+export const CATEGORY_OPTIONS: string[] = [
   Category.MEDICINE,
   Category.FOOD,
   Category.DOCUMENT,
@@ -23,7 +23,7 @@ export const CATEGORY_OPTIONS: Category[] = [
 ];
 
 export function isCategory(value: string): boolean {
-  return CATEGORY_OPTIONS.indexOf(value as Category) >= 0;
+  return CATEGORY_OPTIONS.indexOf(value) >= 0;
 }
 
 export interface CategoryRecord {

@@ -1,4 +1,5 @@
 import { NavigationHelper } from '../navigation/NavigationHelper';
+import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
 import { Batch, BatchDraft } from '../model/Batch';
@@ -19,12 +20,15 @@ struct BatchFormPage {
   @State private expirationDate: string = '';
   @State private locationPath: string = '';
   @State private notes: string = '';
+  @State private showDiscardConfirm: boolean = false;
+  @State @Watch('handleDiscardRequest') private discardConfirmed: boolean = false;
   private itemId: string = '';
   private batchId: string = '';
   private editMode: boolean = false;
+  private initialDraftSignature: string = '';
 
   aboutToAppear(): void {
-    const params = NavigationHelper.getParams() as BatchRouteParams;
+    const params = NavigationHelper.getParams() as BatchRouteParams | undefined;
     const itemIdResult = requireItemId(params);
     if (!itemIdResult.ok) {
       this.errorMessage = itemIdResult.getError().message;
@@ -32,9 +36,10 @@ struct BatchFormPage {
       return;
     }
     this.itemId = itemIdResult.getData();
-    this.editMode = params.mode === 'edit';
+    this.editMode = params?.mode === 'edit';
     if (!this.editMode) {
       this.loading = false;
+      this.markClean();
       return;
     }
     const batchIdResult = requireBatchId(params);
@@ -48,19 +53,30 @@ struct BatchFormPage {
   }
 
   build() {
-    Column() {
-      Text(this.editMode ? '编辑批次' : '新增批次')
-        .fontSize($r('app.float.font_title'))
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.text_primary'))
+    Stack({ alignContent: Alignment.Center }) {
+      Column() {
+        Row() {
+          Text(this.editMode ? '编辑批次' : '新增批次')
+            .fontSize($r('app.float.font_title'))
+            .fontWeight(FontWeight.Bold)
+            .fontColor($r('app.color.text_primary'))
+            .layoutWeight(1)
+          Button('取消')
+            .fontColor($r('app.color.brand_primary'))
+            .backgroundColor($r('app.color.surface_card'))
+            .border({ width: 1, color: $r('app.color.border_subtle') })
+            .borderRadius($r('app.float.radius_control'))
+            .enabled(!this.saving)
+            .onClick(() => this.requestClose())
+        }
         .width('100%')
         .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
 
-      if (this.loading) {
-        LoadingState({ text: '正在读取批次…' })
-      } else {
-        Scroll() {
-          Column({ space: $r('app.float.space_4') }) {
+        if (this.loading) {
+          LoadingState({ text: '正在读取批次…' })
+        } else {
+          Scroll() {
+            Column({ space: $r('app.float.space_4') }) {
             TextInput({ text: this.quantityText, placeholder: '数量' })
               .type(InputType.Number)
               .backgroundColor($r('app.color.surface_card'))
@@ -107,16 +123,27 @@ struct BatchFormPage {
               .enabled(!this.saving)
               .onClick(() => this.save())
           }
-          .width('100%')
-          .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
+            .width('100%')
+            .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
+          }
+          .layoutWeight(1)
         }
-        .layoutWeight(1)
       }
+      .width('100%')
+      .height('100%')
+      .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
+      .backgroundColor($r('app.color.surface_app'))
+
+      DeleteConfirmDialog({
+        visible: $showDiscardConfirm,
+        confirmed: $discardConfirmed,
+        title: '放弃未保存的修改？',
+        description: '当前填写的批次内容尚未保存，放弃后无法恢复。',
+        confirmText: '放弃编辑'
+      })
     }
     .width('100%')
     .height('100%')
-    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
-    .backgroundColor($r('app.color.surface_app'))
   }
 
   private async loadBatch(): Promise<void> {
@@ -129,6 +156,7 @@ struct BatchFormPage {
         this.expirationDate = batch.expirationDate ?? '';
         this.locationPath = batch.locationPath ?? '';
         this.notes = batch.notes ?? '';
+        this.markClean();
       } else {
         this.errorMessage = '批次不存在或已删除';
       }
@@ -138,6 +166,48 @@ struct BatchFormPage {
     this.loading = false;
   }
 
+  onBackPress(): boolean {
+    this.requestClose();
+    return true;
+  }
+
+  private requestClose(): void {
+    if (this.hasUnsavedChanges()) {
+      this.showDiscardConfirm = true;
+      return;
+    }
+    NavigationHelper.back();
+  }
+
+  private handleDiscardRequest(): void {
+    if (!this.discardConfirmed) {
+      return;
+    }
+    this.discardConfirmed = false;
+    NavigationHelper.back();
+  }
+
+  private hasUnsavedChanges(): boolean {
+    if (this.loading || this.saving) {
+      return false;
+    }
+    return this.currentDraftSignature() !== this.initialDraftSignature;
+  }
+
+  private markClean(): void {
+    this.initialDraftSignature = this.currentDraftSignature();
+  }
+
+  private currentDraftSignature(): string {
+    return JSON.stringify({
+      quantityText: this.quantityText,
+      unit: this.unit,
+      expirationDate: this.expirationDate,
+      locationPath: this.locationPath,
+      notes: this.notes
+    });
+  }
+
   private async save(): Promise<void> {
     this.saving = true;
     this.errorMessage = '';
@@ -145,11 +215,22 @@ struct BatchFormPage {
     const result = this.editMode ? await AppServices.get().batches.update(this.batchId, draft) : await AppServices.get().batches.create(draft);
     if (result.ok) {
       AppEventBus.notifyDataChanged();
+      this.showToast(this.editMode ? '批次已更新' : '批次已保存');
       NavigationHelper.back();
     } else {
       this.errorMessage = result.getError().message;
     }
     this.saving = false;
+  }
+
+  private showToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({
+        message: message,
+        duration: 1600
+      });
+    } catch (_) {
+    }
   }
 
   private createDraft(): BatchDraft {

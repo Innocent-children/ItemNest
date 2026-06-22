@@ -1,6 +1,5 @@
 import { AppError, AppErrorCode } from './AppError';
 import { failure, Result, success } from './Result';
-import { Category, isCategory } from '../model/Category';
 import { ItemDraft, isItemUnit, ItemUnit } from '../model/Item';
 import { LOCATION_PATH_MAX_LENGTH, normalizeLocationPath } from '../model/LocationPath';
 
@@ -9,12 +8,12 @@ export class ValidatedItemDraft {
   readonly quantity: number;
   readonly unit: ItemUnit;
   readonly locationPath?: string;
-  readonly category?: Category;
+  readonly category?: string;
   readonly expirationDate?: string;
   readonly reminderDays?: number;
   readonly notes?: string;
 
-  constructor(name: string, quantity: number, unit: ItemUnit, locationPath?: string, category?: Category,
+  constructor(name: string, quantity: number, unit: ItemUnit, locationPath?: string, category?: string,
     expirationDate?: string, reminderDays?: number, notes?: string) {
     this.name = name;
     this.quantity = quantity;
@@ -112,14 +111,15 @@ export class ItemValidator {
     return success(normalized);
   }
 
-  validateCategory(value?: Category): Result<Category | undefined> {
-    if (value === undefined || value.length === 0) {
+  validateCategory(value?: string): Result<string | undefined> {
+    const normalized = value?.trim() ?? '';
+    if (normalized.length === 0) {
       return success(undefined);
     }
-    if (!isCategory(value)) {
-      return failure<Category | undefined>(new AppError(AppErrorCode.VALIDATION, '请选择有效的物品分类'));
+    if (normalized.length > 40) {
+      return failure<string | undefined>(new AppError(AppErrorCode.VALIDATION, '分类名称不能超过 40 个字符'));
     }
-    return success(value as Category);
+    return success(normalized);
   }
 
   validateExpirationDate(value?: string): Result<string | undefined> {

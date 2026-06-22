@@ -3,8 +3,8 @@ import { DATABASE_NAME, DATABASE_VERSION, ITEM_TABLE } from '../../../main/ets/d
 
 export default function itemSchemaTest() {
   describe('ItemSchema', () => {
-    it('声明稳定的 v1 数据库标识', 0, () => {
-      expect(DATABASE_VERSION).assertEqual(1);
+    it('声明当前数据库标识和迁移版本', 0, () => {
+      expect(DATABASE_VERSION).assertEqual(9);
       expect(DATABASE_NAME).assertEqual('itemtrace.db');
       expect(ITEM_TABLE).assertEqual('item');
     });

@@ -1,10 +1,8 @@
-import { Category } from './Category';
-
 export interface SearchHistory {
   id: string;
   queryText?: string;
   locationPath?: string;
-  category?: Category;
+  category?: string;
   viewedItemId?: string;
   createdAt: number;
 }

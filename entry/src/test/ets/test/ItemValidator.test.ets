@@ -34,5 +34,15 @@ export default function itemValidatorTest() {
         expect(result.getData().quantity).assertEqual(2.5);
       }
     });
+
+    it('接受自定义分类并拒绝超长分类', 0, () => {
+      const validator = new ItemValidator();
+      const custom = validator.validate({ name: '备用电池', category: '  应急用品  ' });
+      expect(custom.ok).assertTrue();
+      if (custom.ok) {
+        expect(custom.getData().category).assertEqual('应急用品');
+      }
+      expect(validator.validate({ name: '备用电池', category: 'a'.repeat(41) }).ok).assertFalse();
+    });
   });
 }

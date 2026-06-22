@@ -1,7 +1,6 @@
 import { relationalStore } from '@kit.ArkData';
 import { AppError, AppErrorCode, toAppError } from '../../common/AppError';
 import { failure, Result, success } from '../../common/Result';
-import { Category } from '../../model/Category';
 import { SearchHistory } from '../../model/SearchHistory';
 import { RdbDatabase } from '../rdb/RdbDatabase';
 import { SEARCH_HISTORY_TABLE } from '../rdb/SearchHistorySchema';
@@ -65,7 +64,7 @@ export class SearchHistoryRepository {
       id: this.readString(resultSet, 'id') ?? '',
       queryText: this.readString(resultSet, 'query_text'),
       locationPath: this.readString(resultSet, 'location_path'),
-      category: this.readString(resultSet, 'category') as Category | undefined,
+      category: this.readString(resultSet, 'category'),
       viewedItemId: this.readString(resultSet, 'viewed_item_id'),
       createdAt: this.readLong(resultSet, 'created_at') ?? 0
     };

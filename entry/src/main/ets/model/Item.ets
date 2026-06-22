@@ -1,4 +1,3 @@
-import { Category } from './Category';
 import { ExpiryStatus } from './ExpiryStatus';
 import { StockStatus } from './StockStatus';
 
@@ -31,7 +30,7 @@ export interface Item {
   quantity: number;
   unit: ItemUnit;
   locationPath?: string;
-  category?: Category;
+  category?: string;
   expirationDate?: string;
   reminderDays?: number;
   notes?: string;
@@ -46,7 +45,7 @@ export interface ItemDraft {
   quantity?: number;
   unit?: ItemUnit;
   locationPath?: string;
-  category?: Category;
+  category?: string;
   expirationDate?: string;
   reminderDays?: number;
   notes?: string;
@@ -58,7 +57,7 @@ export interface ItemSummary {
   quantity: number;
   unit: ItemUnit;
   locationPath?: string;
-  category?: Category;
+  category?: string;
   expirationDate?: string;
   expiryStatus: ExpiryStatus;
   stockStatus: StockStatus;

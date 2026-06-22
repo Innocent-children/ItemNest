@@ -19,16 +19,16 @@ export interface ItemListRouteParams {
   query?: ItemQuery;
 }
 
-export function requireItemId(params: ItemRouteParams): Result<string> {
-  const itemId = params.itemId?.trim() ?? '';
+export function requireItemId(params?: ItemRouteParams): Result<string> {
+  const itemId = params?.itemId?.trim() ?? '';
   if (itemId.length === 0) {
     return failure<string>(new AppError(AppErrorCode.ROUTE_INVALID, '缺少物品标识，无法打开页面'));
   }
   return success(itemId);
 }
 
-export function requireBatchId(params: BatchRouteParams): Result<string> {
-  const batchId = params.batchId?.trim() ?? '';
+export function requireBatchId(params?: BatchRouteParams): Result<string> {
+  const batchId = params?.batchId?.trim() ?? '';
   if (batchId.length === 0) {
     return failure<string>(new AppError(AppErrorCode.ROUTE_INVALID, '缺少批次标识，无法打开页面'));
   }

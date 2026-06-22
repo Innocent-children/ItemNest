@@ -31,7 +31,7 @@ struct ItemDetailPage {
   private itemId: string = '';
 
   aboutToAppear(): void {
-    const params = NavigationHelper.getParams() as ItemFormRouteParams;
+    const params = NavigationHelper.getParams() as ItemFormRouteParams | undefined;
     if (!params) {
       this.loading = false;
       this.errorMessage = '缺少物品标识，无法打开页面';
@@ -44,18 +44,18 @@ struct ItemDetailPage {
       return;
     }
     this.itemId = itemIdResult.getData();
-    this.loadDetail();
+    this.loadDetail(true);
   }
 
   onPageShow(): void {
     if (this.itemId.length > 0) {
-      this.loadDetail();
+      this.loadDetail(false);
     }
   }
 
   private onDataRevisionChanged(): void {
     if (this.itemId.length > 0 && !this.deleting) {
-      this.loadDetail();
+      this.loadDetail(false);
     }
   }
 
@@ -283,21 +283,28 @@ struct ItemDetailPage {
     .width('100%')
   }
 
-  private async loadDetail(): Promise<void> {
-    this.loading = true;
-    this.errorMessage = '';
+  private async loadDetail(showLoading: boolean = true): Promise<void> {
+    if (showLoading) {
+      this.loading = true;
+      this.errorMessage = '';
+    }
     try {
       const result = await AppServices.get().detailItem.getDetail(this.itemId);
       if (!result.ok) {
-        this.errorMessage = result.getError().message;
+        if (showLoading || this.item === undefined) {
+          this.errorMessage = result.getError().message;
+        }
         return;
       }
+      this.errorMessage = '';
       this.item = result.getData();
       this.expiryStatus = AppServices.get().listItems.toSummary(result.getData()).expiryStatus;
       await this.loadReminderState(result.getData());
       await this.loadPhotoPath(result.getData());
     } catch (_) {
-      this.errorMessage = '读取物品失败，请重试';
+      if (showLoading || this.item === undefined) {
+        this.errorMessage = '读取物品失败，请重试';
+      }
     } finally {
       this.loading = false;
     }
@@ -312,6 +319,7 @@ struct ItemDetailPage {
     const result = await AppServices.get().deleteItem.delete(this.itemId, true);
     if (result.ok) {
       AppEventBus.notifyDataChanged();
+      this.showToast('物品已删除');
       NavigationHelper.back();
       return;
     }
@@ -376,26 +384,50 @@ struct ItemDetailPage {
         .fontSize($r('app.float.font_section'))
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
-      Row({ space: $r('app.float.space_2') }) {
-        Button('批次')
-          .layoutWeight(1)
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_accent'))
-          .borderRadius($r('app.float.radius_control'))
-          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.BATCH_LIST, params: { itemId: item.id } }))
-        Button('借还')
-          .layoutWeight(1)
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_accent'))
-          .borderRadius($r('app.float.radius_control'))
-          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.LENDING, params: { itemId: item.id } }))
-      }
-      .width('100%')
+      this.managementEntry(
+        '批次管理',
+        `当前汇总 ${item.quantity}${item.unit}，可拆分数量、位置和到期日。`,
+        '查看批次',
+        RouteName.BATCH_LIST,
+        item.id
+      )
+      this.managementEntry(
+        '借出与归还',
+        '记录借出数量、归还动作和相关说明。',
+        '办理借还',
+        RouteName.LENDING,
+        item.id
+      )
     }
     .width('100%')
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+  }
+
+  @Builder
+  private managementEntry(title: string, description: string, actionText: string, route: RouteName, itemId: string) {
+    Row({ space: $r('app.float.space_3') }) {
+      Column({ space: $r('app.float.space_1') }) {
+        Text(title)
+          .fontSize($r('app.float.font_body'))
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.text_primary'))
+        Text(description)
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.text_secondary'))
+      }
+      .layoutWeight(1)
+      Button(actionText)
+        .fontColor($r('app.color.brand_primary'))
+        .backgroundColor($r('app.color.surface_accent'))
+        .borderRadius($r('app.float.radius_control'))
+        .onClick(() => NavigationHelper.pushUrl({ url: route, params: { itemId: itemId } }))
+    }
+    .width('100%')
+    .padding($r('app.float.space_3'))
+    .borderRadius($r('app.float.radius_control'))
+    .backgroundColor($r('app.color.surface_app'))
   }
 
   private async removePhoto(): Promise<void> {
@@ -408,6 +440,7 @@ struct ItemDetailPage {
       this.item = result.getData();
       this.photoPath = '';
       AppEventBus.notifyDataChanged();
+      this.showToast('照片已移除');
     } else {
       this.errorMessage = result.getError().message;
     }
@@ -418,6 +451,16 @@ struct ItemDetailPage {
     if (this.deleteRequested) {
       this.deleteRequested = false;
       this.deleteItem();
+    }
+  }
+
+  private showToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({
+        message: message,
+        duration: 1600
+      });
+    } catch (_) {
     }
   }
 }

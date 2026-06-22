@@ -24,15 +24,15 @@ struct ItemListPage {
 
   aboutToAppear(): void {
     this.readQuery();
-    this.loadItems();
+    this.loadItems(true);
   }
 
   onPageShow(): void {
-    this.loadItems();
+    this.loadItems(false);
   }
 
   private onRevisionChanged(): void {
-    this.loadItems();
+    this.loadItems(false);
   }
 
   build() {
@@ -73,13 +73,14 @@ struct ItemListPage {
         Button('重试')
           .fontColor($r('app.color.brand_on_primary'))
           .backgroundColor($r('app.color.brand_primary'))
-          .onClick(() => this.loadItems())
+          .onClick(() => this.loadItems(true))
       } else if (this.items.length === 0) {
         EmptyState({
           title: this.query.isEmpty() ? '暂无物品' : '暂无搜索结果',
           description: this.query.isEmpty() ? '新增第一个物品，开始记录它放在哪里。' : '请修改或清除搜索条件后重试。',
           actionText: this.query.isEmpty() ? '新增物品' : '清除条件',
-          actionRoute: this.query.isEmpty() ? RouteName.ITEM_FORM : ''
+          actionRoute: this.query.isEmpty() ? RouteName.ITEM_FORM : '',
+          actionMode: this.query.isEmpty() ? 'create' : ''
         })
         if (!this.query.isEmpty()) {
           Button('清除条件')
@@ -105,35 +106,50 @@ struct ItemListPage {
   }
 
   private readQuery(): void {
-    const params = NavigationHelper.getParams() as ItemListRouteParams;
-    if (!params) {
+    try {
+      const params = NavigationHelper.getParams() as ItemListRouteParams | undefined;
+      if (params === undefined || params.query === undefined) {
+        this.query = new ItemQuery();
+        return;
+      }
+      const query = params.query;
+      this.query = new ItemQuery(query.name ?? '', query.locationPath, query.category);
+    } catch (_) {
       this.query = new ItemQuery();
-      return;
     }
-    this.query = params.query ?? new ItemQuery();
   }
 
-  private async loadItems(): Promise<void> {
-    this.loading = true;
-    this.errorMessage = '';
+  private async loadItems(showLoading: boolean = true): Promise<void> {
+    if (showLoading) {
+      this.loading = true;
+      this.errorMessage = '';
+    }
     try {
       if (this.query.isEmpty()) {
         const result = await AppServices.get().listItems.listAll();
         if (result.ok) {
           this.items = await this.applyDefaultSort(result.getData());
+          this.errorMessage = '';
         } else {
-          this.errorMessage = result.getError().message;
+          if (showLoading || this.items.length === 0) {
+            this.errorMessage = result.getError().message;
+          }
         }
       } else {
         const result = await AppServices.get().searchItems.search(this.query);
         if (result.ok) {
           this.items = await this.applyDefaultSort(result.getData().items);
+          this.errorMessage = '';
         } else {
-          this.errorMessage = result.getError().message;
+          if (showLoading || this.items.length === 0) {
+            this.errorMessage = result.getError().message;
+          }
         }
       }
     } catch (_) {
-      this.errorMessage = '数据库初始化失败，请重试';
+      if (showLoading || this.items.length === 0) {
+        this.errorMessage = '数据库初始化失败，请重试';
+      }
     } finally {
       this.loading = false;
     }
@@ -145,7 +161,7 @@ struct ItemListPage {
       return;
     }
     this.query.clear();
-    this.loadItems();
+    this.loadItems(true);
   }
 
   private async applyDefaultSort(items: ItemSummary[]): Promise<ItemSummary[]> {

@@ -25,12 +25,12 @@ struct Index {
   @State private showStockSection: boolean = true;
 
   aboutToAppear(): void {
-    this.loadSummary();
+    this.loadSummary(true);
     this.openQuickAddIfRequested();
   }
 
   onPageShow(): void {
-    this.loadSummary();
+    this.loadSummary(false);
     this.openQuickAddIfRequested();
   }
 
@@ -39,7 +39,7 @@ struct Index {
   }
 
   private onRevisionChanged(): void {
-    this.loadSummary();
+    this.loadSummary(false);
   }
 
   private openQuickAddIfRequested(): void {
@@ -60,7 +60,7 @@ struct Index {
           Button('重新加载')
             .fontColor($r('app.color.brand_on_primary'))
             .backgroundColor($r('app.color.brand_primary'))
-            .onClick(() => this.loadSummary())
+            .onClick(() => this.loadSummary(true))
         }
         .padding($r('app.float.space_4'))
       } else {
@@ -68,7 +68,6 @@ struct Index {
           Column({ space: $r('app.float.space_6') }) {
             this.hero()
             this.overview()
-            this.managementEntrances()
             if (this.showRecentSection) {
               this.summarySection('最近添加', '刚记录的物品', this.recentItems, '暂无物品', RouteName.ITEM_FORM)
             }
@@ -155,32 +154,6 @@ struct Index {
   }
 
   @Builder
-  private managementEntrances() {
-    Column({ space: $r('app.float.space_3') }) {
-      Text('管理')
-        .fontSize($r('app.float.font_section'))
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.text_primary'))
-      Row({ space: $r('app.float.space_2') }) {
-        Button('位置')
-          .layoutWeight(1)
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_accent'))
-          .borderRadius($r('app.float.radius_control'))
-          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.LOCATION_MANAGEMENT }))
-        Button('分类')
-          .layoutWeight(1)
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_accent'))
-          .borderRadius($r('app.float.radius_control'))
-          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.CATEGORY_MANAGEMENT }))
-      }
-      .width('100%')
-    }
-    .width('100%')
-  }
-
-  @Builder
   private metricCard(label: string, count: number, background: ResourceColor, textColor: ResourceColor) {
     Column({ space: $r('app.float.space_1') }) {
       Text(count.toString())
@@ -220,7 +193,8 @@ struct Index {
         EmptyState({
           title: emptyText,
           actionText: title === '最近添加' ? '新增物品' : '查看全部',
-          actionRoute: actionRoute
+          actionRoute: actionRoute,
+          actionMode: actionRoute === RouteName.ITEM_FORM ? 'create' : ''
         })
       } else {
         ForEach(items, (item: ItemSummary) => {
@@ -231,9 +205,11 @@ struct Index {
     .width('100%')
   }
 
-  private async loadSummary(): Promise<void> {
-    this.loading = true;
-    this.errorMessage = '';
+  private async loadSummary(showLoading: boolean = true): Promise<void> {
+    if (showLoading) {
+      this.loading = true;
+      this.errorMessage = '';
+    }
     try {
       const preferencesResult = await AppServices.get().preferences.get();
       if (preferencesResult.ok) {
@@ -243,14 +219,19 @@ struct Index {
       }
       const result = await AppServices.get().homeSummary.getSummary();
       if (!result.ok) {
-        this.errorMessage = result.getError().message;
+        if (showLoading || this.recentItems.length + this.dueSoonItems.length + this.outOfStockItems.length === 0) {
+          this.errorMessage = result.getError().message;
+        }
         return;
       }
+      this.errorMessage = '';
       this.recentItems = result.getData().recentItems;
       this.dueSoonItems = result.getData().dueSoonItems;
       this.outOfStockItems = result.getData().outOfStockItems;
     } catch (_) {
-      this.errorMessage = '数据库初始化失败，请重试';
+      if (showLoading || this.recentItems.length + this.dueSoonItems.length + this.outOfStockItems.length === 0) {
+        this.errorMessage = '数据库初始化失败，请重试';
+      }
     } finally {
       this.loading = false;
     }

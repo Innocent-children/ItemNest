@@ -6,6 +6,7 @@ export struct EmptyState {
   @Prop description: string = '';
   @Prop actionText: string = '';
   @Prop actionRoute: string = '';
+  @Prop actionMode: string = '';
 
   build() {
     Column({ space: $r('app.float.space_2') }) {
@@ -23,7 +24,7 @@ export struct EmptyState {
         Button(this.actionText)
           .fontColor($r('app.color.brand_on_primary'))
           .backgroundColor($r('app.color.brand_primary'))
-          .onClick(() => NavigationHelper.pushUrl({ url: this.actionRoute }))
+          .onClick(() => this.openAction())
       }
     }
     .width('100%')
@@ -31,5 +32,13 @@ export struct EmptyState {
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
     .alignItems(HorizontalAlign.Center)
+  }
+
+  private openAction(): void {
+    if (this.actionMode.length > 0) {
+      NavigationHelper.pushUrl({ url: this.actionRoute, params: { mode: this.actionMode } });
+      return;
+    }
+    NavigationHelper.pushUrl({ url: this.actionRoute });
   }
 }

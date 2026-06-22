@@ -1,5 +1,4 @@
 import { Result, success } from '../common/Result';
-import { Category } from '../model/Category';
 import { Item } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { createSearchHistoryId, SearchHistory } from '../model/SearchHistory';
@@ -54,7 +53,7 @@ export class SearchSuggestionService {
       id: createSearchHistoryId(this.clock),
       queryText: normalized.name.length === 0 ? undefined : normalized.name,
       locationPath: normalized.locationPath,
-      category: normalized.category as Category | undefined,
+      category: normalized.category,
       createdAt: this.clock()
     });
   }

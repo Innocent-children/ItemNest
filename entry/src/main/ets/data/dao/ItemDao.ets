@@ -1,6 +1,5 @@
 import { relationalStore } from '@kit.ArkData';
 import { AppError, AppErrorCode } from '../../common/AppError';
-import { Category } from '../../model/Category';
 import { Item, ItemUnit, PhotoState } from '../../model/Item';
 import { ItemQuery } from '../../model/ItemQuery';
 import { ITEM_TABLE } from '../rdb/ItemSchema';
@@ -125,7 +124,7 @@ export class ItemDao {
       quantity: this.readDouble(resultSet, 'quantity') ?? 0,
       unit: (this.readString(resultSet, 'unit') ?? ItemUnit.PIECE) as ItemUnit,
       locationPath: this.readString(resultSet, 'location_path'),
-      category: this.readString(resultSet, 'category') as Category | undefined,
+      category: this.readString(resultSet, 'category'),
       expirationDate: this.readString(resultSet, 'expiration_date'),
       reminderDays: this.readLong(resultSet, 'reminder_days'),
       notes: this.readString(resultSet, 'notes'),

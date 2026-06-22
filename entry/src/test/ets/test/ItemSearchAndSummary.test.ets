@@ -1,5 +1,4 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { Category } from '../../../main/ets/model/Category';
 import { Item, ItemUnit, PhotoState } from '../../../main/ets/model/Item';
 import { ItemQuery } from '../../../main/ets/model/ItemQuery';
 import { ExpiryService } from '../../../main/ets/service/ExpiryService';
@@ -15,7 +14,7 @@ function createItem(index: number): Item {
     quantity: index === 1 ? 0 : 1,
     unit: ItemUnit.PIECE,
     locationPath: index === 49 ? '卧室 / 药箱' : '客厅 / 收纳箱',
-    category: index === 49 ? Category.MEDICINE : Category.DAILY_NECESSITIES,
+    category: index === 49 ? '药品' : '生活用品',
     expirationDate: index === 2 ? '2026-06-20' : undefined,
     photoState: PhotoState.NONE,
     createdAt: index,
@@ -32,7 +31,7 @@ export default function itemSearchAndSummaryTest() {
       }
       const listService = new ItemListService(repository, new ExpiryService());
       const searchService = new ItemSearchService(repository, listService);
-      const result = await searchService.search(new ItemQuery('目标', '卧室 / 药箱', Category.MEDICINE));
+      const result = await searchService.search(new ItemQuery('目标', '卧室 / 药箱', '药品'));
       expect(result.ok).assertTrue();
       if (result.ok) {
         expect(result.getData().items.length).assertEqual(1);

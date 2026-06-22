@@ -5,6 +5,7 @@ import itemMaintenanceServiceTest from './ets/test/ItemMaintenanceService.test';
 import itemSchemaTest from './ets/test/ItemSchema.test';
 import itemSearchAndSummaryTest from './ets/test/ItemSearchAndSummary.test';
 import itemValidatorTest from './ets/test/ItemValidator.test';
+import routeContractTest from './ets/test/RouteContract.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -14,4 +15,5 @@ export default function testsuite() {
   itemMaintenanceServiceTest();
   itemSearchAndSummaryTest();
   expiryServiceTest();
+  routeContractTest();
 }

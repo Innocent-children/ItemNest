@@ -1,11 +1,9 @@
-import { Category } from './Category';
-
 export class ItemQuery {
   name: string = '';
   locationPath?: string;
-  category?: Category;
+  category?: string;
 
-  constructor(name: string = '', locationPath?: string, category?: Category) {
+  constructor(name: string = '', locationPath?: string, category?: string) {
     this.name = name;
     this.locationPath = locationPath;
     this.category = category;
@@ -13,10 +11,11 @@ export class ItemQuery {
 
   normalized(): ItemQuery {
     const normalizedLocation = this.locationPath?.trim();
+    const normalizedCategory = this.category?.trim();
     return new ItemQuery(
       this.name.trim(),
       normalizedLocation === undefined || normalizedLocation.length === 0 ? undefined : normalizedLocation,
-      this.category
+      normalizedCategory === undefined || normalizedCategory.length === 0 ? undefined : normalizedCategory
     );
   }
 
