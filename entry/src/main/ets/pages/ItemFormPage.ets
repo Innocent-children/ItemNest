@@ -423,7 +423,6 @@ struct ItemFormPage {
         const result = await AppServices.get().updateItem.update(this.itemId, draft);
         if (result.ok) {
           const notice = await this.synchronizeAfterSave(result.getData());
-          AppEventBus.notifyDataChanged();
           this.finishSave(notice);
           return;
         }
@@ -432,7 +431,6 @@ struct ItemFormPage {
         const result = await AppServices.get().createItem.create(draft);
         if (result.ok) {
           const notice = await this.synchronizeAfterSave(result.getData());
-          AppEventBus.notifyDataChanged();
           this.finishSave(notice);
           return;
         }
@@ -448,6 +446,7 @@ struct ItemFormPage {
   private finishSave(notice?: string): void {
     this.showToast(notice ?? '物品已保存');
     NavigationHelper.back();
+    AppEventBus.notifyDataChanged();
   }
 
   private showToast(message: string): void {

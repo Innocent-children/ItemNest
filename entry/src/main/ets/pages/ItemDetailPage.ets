@@ -318,9 +318,9 @@ struct ItemDetailPage {
     this.deleting = true;
     const result = await AppServices.get().deleteItem.delete(this.itemId, true);
     if (result.ok) {
-      AppEventBus.notifyDataChanged();
       this.showToast('物品已删除');
       NavigationHelper.back();
+      AppEventBus.notifyDataChanged();
       return;
     }
     this.deleting = false;
