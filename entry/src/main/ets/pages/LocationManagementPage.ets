@@ -17,15 +17,15 @@ struct LocationManagementPage {
   @State private locations: LocationRecord[] = [];
 
   aboutToAppear(): void {
-    this.loadLocations();
+    this.loadLocations(true);
   }
 
   onPageShow(): void {
-    this.loadLocations();
+    this.loadLocations(false);
   }
 
   private onDataRevisionChanged(): void {
-    this.loadLocations();
+    this.loadLocations(false);
   }
 
   build() {
@@ -111,14 +111,18 @@ struct LocationManagementPage {
     .backgroundColor($r('app.color.surface_app'))
   }
 
-  private async loadLocations(): Promise<void> {
-    this.loading = true;
+  private async loadLocations(showLoading: boolean = true): Promise<void> {
+    if (showLoading) {
+      this.loading = true;
+    }
     const result = await AppServices.get().locations.list();
     if (result.ok) {
       this.locations = result.getData();
       this.errorMessage = '';
     } else {
-      this.errorMessage = result.getError().message;
+      if (showLoading || this.locations.length === 0) {
+        this.errorMessage = result.getError().message;
+      }
     }
     this.loading = false;
   }
@@ -130,8 +134,9 @@ struct LocationManagementPage {
     });
     if (result.ok) {
       this.name = '';
-      await this.loadLocations();
+      await this.loadLocations(false);
       AppEventBus.notifyDataChanged();
+      this.showToast('位置已新增');
     } else {
       this.errorMessage = result.getError().message;
     }
@@ -140,10 +145,21 @@ struct LocationManagementPage {
   private async toggleLocation(location: LocationRecord): Promise<void> {
     const result = location.active ? await AppServices.get().locations.deactivate(location.id) : await AppServices.get().locations.activate(location.id);
     if (result.ok) {
-      await this.loadLocations();
+      await this.loadLocations(false);
       AppEventBus.notifyDataChanged();
+      this.showToast(location.active ? '位置已停用' : '位置已启用');
     } else {
       this.errorMessage = result.getError().message;
+    }
+  }
+
+  private showToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({
+        message: message,
+        duration: 1600
+      });
+    } catch (_) {
     }
   }
 }

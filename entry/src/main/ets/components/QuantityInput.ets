@@ -21,6 +21,28 @@ export struct QuantityInput {
           this.quantityText = value;
           this.errorMessage = this.validateQuantity(value);
         })
+      Row({ space: $r('app.float.space_2') }) {
+        Button('-')
+          .layoutWeight(1)
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent'))
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => this.adjustQuantity(-1))
+        Button('+')
+          .layoutWeight(1)
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent'))
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => this.adjustQuantity(1))
+        Button('置 0')
+          .layoutWeight(1)
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_app'))
+          .border({ width: 1, color: $r('app.color.border_subtle') })
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => this.setQuantity('0'))
+      }
+      .width('100%')
       Flex({ wrap: FlexWrap.Wrap }) {
         ForEach(ITEM_UNIT_OPTIONS, (option: ItemUnit) => {
           Button(option)
@@ -50,5 +72,20 @@ export struct QuantityInput {
       return '数量必须是最多两位小数的非负数';
     }
     return '';
+  }
+
+  private adjustQuantity(delta: number): void {
+    const current = this.quantityText.trim().length === 0 ? 0 : Number(this.quantityText);
+    if (!Number.isFinite(current)) {
+      this.errorMessage = this.validateQuantity(this.quantityText);
+      return;
+    }
+    const next = Math.max(0, Math.round((current + delta) * 100) / 100);
+    this.setQuantity(next.toString());
+  }
+
+  private setQuantity(value: string): void {
+    this.quantityText = value;
+    this.errorMessage = this.validateQuantity(value);
   }
 }

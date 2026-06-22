@@ -30,18 +30,18 @@ struct LendingPage {
       return;
     }
     this.itemId = itemIdResult.getData();
-    this.loadState();
+    this.loadState(true);
   }
 
   onPageShow(): void {
     if (this.itemId.length > 0) {
-      this.loadState();
+      this.loadState(false);
     }
   }
 
   private onDataRevisionChanged(): void {
     if (this.itemId.length > 0) {
-      this.loadState();
+      this.loadState(false);
     }
   }
 
@@ -134,18 +134,25 @@ struct LendingPage {
     .backgroundColor($r('app.color.surface_app'))
   }
 
-  private async loadState(): Promise<void> {
-    this.loading = true;
-    this.errorMessage = '';
+  private async loadState(showLoading: boolean = true): Promise<void> {
+    if (showLoading) {
+      this.loading = true;
+      this.errorMessage = '';
+    }
     const state = await AppServices.get().lending.getState(this.itemId);
     const events = await AppServices.get().lending.getEvents(this.itemId);
     if (!state.ok) {
-      this.errorMessage = state.getError().message;
+      if (showLoading || this.events.length === 0) {
+        this.errorMessage = state.getError().message;
+      }
     } else if (!events.ok) {
-      this.errorMessage = events.getError().message;
+      if (showLoading || this.events.length === 0) {
+        this.errorMessage = events.getError().message;
+      }
     } else {
       this.borrowedQuantity = state.getData().borrowedQuantity;
       this.events = events.getData();
+      this.errorMessage = '';
     }
     this.loading = false;
   }
@@ -153,8 +160,9 @@ struct LendingPage {
   private async borrow(): Promise<void> {
     const result = await AppServices.get().lending.borrow(this.itemId, Number(this.quantityText), this.counterpart, undefined, this.note);
     if (result.ok) {
-      await this.loadState();
+      await this.loadState(false);
       AppEventBus.notifyDataChanged();
+      this.showToast('借出已记录');
     } else {
       this.errorMessage = result.getError().message;
     }
@@ -163,8 +171,9 @@ struct LendingPage {
   private async returnItem(): Promise<void> {
     const result = await AppServices.get().lending.returnItem(this.itemId, Number(this.quantityText), undefined, this.note);
     if (result.ok) {
-      await this.loadState();
+      await this.loadState(false);
       AppEventBus.notifyDataChanged();
+      this.showToast('归还已记录');
     } else {
       this.errorMessage = result.getError().message;
     }
@@ -178,5 +187,15 @@ struct LendingPage {
       return '归还';
     }
     return '记录';
+  }
+
+  private showToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({
+        message: message,
+        duration: 1600
+      });
+    } catch (_) {
+    }
   }
 }

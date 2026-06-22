@@ -4,6 +4,7 @@ import { NavigationHelper } from '../navigation/NavigationHelper';
 import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
 import { ItemSortMode, ThemeMode, UserPreferences } from '../model/UserPreferences';
+import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
 
 @Entry
@@ -58,6 +59,7 @@ struct SettingsPage {
             this.sortCard()
             this.homeCard()
             this.themeCard()
+            this.managementCard()
             if (this.errorMessage.length > 0) {
               Text(this.errorMessage)
                 .fontSize($r('app.float.font_caption'))
@@ -168,6 +170,32 @@ struct SettingsPage {
         this.themeChoiceButton('跟随系统', ThemeMode.SYSTEM)
         this.themeChoiceButton('浅色', ThemeMode.LIGHT)
         this.themeChoiceButton('深色', ThemeMode.DARK)
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .padding($r('app.float.space_4'))
+    .borderRadius($r('app.float.radius_card'))
+    .backgroundColor($r('app.color.surface_card'))
+  }
+
+  @Builder
+  private managementCard() {
+    Column({ space: $r('app.float.space_3') }) {
+      this.cardTitle('数据管理', '维护常用位置和分类，不影响已有物品记录。')
+      Row({ space: $r('app.float.space_2') }) {
+        Button('位置管理')
+          .layoutWeight(1)
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent'))
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.LOCATION_MANAGEMENT }))
+        Button('分类管理')
+          .layoutWeight(1)
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent'))
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.CATEGORY_MANAGEMENT }))
       }
       .width('100%')
     }

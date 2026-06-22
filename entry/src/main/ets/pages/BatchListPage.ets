@@ -33,18 +33,18 @@ struct BatchListPage {
       return;
     }
     this.itemId = itemIdResult.getData();
-    this.loadBatches();
+    this.loadBatches(true);
   }
 
   onPageShow(): void {
     if (this.itemId.length > 0) {
-      this.loadBatches();
+      this.loadBatches(false);
     }
   }
 
   private onDataRevisionChanged(): void {
     if (this.itemId.length > 0) {
-      this.loadBatches();
+      this.loadBatches(false);
     }
   }
 
@@ -77,6 +77,11 @@ struct BatchListPage {
           ErrorState({ message: this.errorMessage })
         } else if (this.batches.length === 0) {
           EmptyState({ title: '暂无批次', description: '新增批次后，物品总量和最早到期日会自动汇总。' })
+          Button('新增批次')
+            .fontColor($r('app.color.brand_on_primary'))
+            .backgroundColor($r('app.color.brand_primary'))
+            .borderRadius($r('app.float.radius_control'))
+            .onClick(() => NavigationHelper.pushUrl({ url: RouteName.BATCH_FORM, params: { mode: 'create', itemId: this.itemId } }))
         } else {
           List({ space: 12 }) {
             ForEach(this.batches, (batch: Batch) => {
@@ -139,14 +144,19 @@ struct BatchListPage {
     .height('100%')
   }
 
-  private async loadBatches(): Promise<void> {
-    this.loading = true;
-    this.errorMessage = '';
+  private async loadBatches(showLoading: boolean = true): Promise<void> {
+    if (showLoading) {
+      this.loading = true;
+      this.errorMessage = '';
+    }
     const result = await AppServices.get().batches.listByItemId(this.itemId);
     if (result.ok) {
       this.batches = result.getData();
+      this.errorMessage = '';
     } else {
-      this.errorMessage = result.getError().message;
+      if (showLoading || this.batches.length === 0) {
+        this.errorMessage = result.getError().message;
+      }
     }
     this.loading = false;
   }
@@ -163,8 +173,9 @@ struct BatchListPage {
     this.deleting = true;
     const result = await AppServices.get().batches.delete(batchId);
     if (result.ok) {
-      await this.loadBatches();
+      await this.loadBatches(false);
       AppEventBus.notifyDataChanged();
+      this.showToast('批次已删除');
     } else {
       this.errorMessage = result.getError().message;
     }
@@ -179,6 +190,16 @@ struct BatchListPage {
     this.deleteRequested = false;
     if (this.pendingDeleteBatchId.length > 0) {
       this.deleteBatch(this.pendingDeleteBatchId);
+    }
+  }
+
+  private showToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({
+        message: message,
+        duration: 1600
+      });
+    } catch (_) {
     }
   }
 }

@@ -16,15 +16,15 @@ struct CategoryManagementPage {
   @State private categories: CategoryRecord[] = [];
 
   aboutToAppear(): void {
-    this.loadCategories();
+    this.loadCategories(true);
   }
 
   onPageShow(): void {
-    this.loadCategories();
+    this.loadCategories(false);
   }
 
   private onDataRevisionChanged(): void {
-    this.loadCategories();
+    this.loadCategories(false);
   }
 
   build() {
@@ -91,14 +91,18 @@ struct CategoryManagementPage {
     .backgroundColor($r('app.color.surface_app'))
   }
 
-  private async loadCategories(): Promise<void> {
-    this.loading = true;
+  private async loadCategories(showLoading: boolean = true): Promise<void> {
+    if (showLoading) {
+      this.loading = true;
+    }
     const result = await AppServices.get().categories.list();
     if (result.ok) {
       this.categories = result.getData();
       this.errorMessage = '';
     } else {
-      this.errorMessage = result.getError().message;
+      if (showLoading || this.categories.length === 0) {
+        this.errorMessage = result.getError().message;
+      }
     }
     this.loading = false;
   }
@@ -107,8 +111,9 @@ struct CategoryManagementPage {
     const result = await AppServices.get().categories.create({ name: this.name });
     if (result.ok) {
       this.name = '';
-      await this.loadCategories();
+      await this.loadCategories(false);
       AppEventBus.notifyDataChanged();
+      this.showToast('分类已新增');
     } else {
       this.errorMessage = result.getError().message;
     }
@@ -117,10 +122,21 @@ struct CategoryManagementPage {
   private async toggleCategory(category: CategoryRecord): Promise<void> {
     const result = await AppServices.get().categories.setActive(category.id, !category.active);
     if (result.ok) {
-      await this.loadCategories();
+      await this.loadCategories(false);
       AppEventBus.notifyDataChanged();
+      this.showToast(category.active ? '分类已停用' : '分类已启用');
     } else {
       this.errorMessage = result.getError().message;
+    }
+  }
+
+  private showToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({
+        message: message,
+        duration: 1600
+      });
+    } catch (_) {
     }
   }
 }
