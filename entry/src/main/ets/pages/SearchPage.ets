@@ -3,6 +3,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
+import { Category } from '../model/Category';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { SearchHistory } from '../model/SearchHistory';
@@ -20,7 +21,7 @@ struct SearchPage {
   @State private selectedLocation: string = '';
   @State private selectedCategory: string = '';
   @State private locationPaths: string[] = [];
-  @State private categories: string[] = [];
+  @State private categories: Category[] = [];
   @State private items: ItemSummary[] = [];
   @State private suggestions: string[] = [];
   @State private history: SearchHistory[] = [];
@@ -131,7 +132,7 @@ struct SearchPage {
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))
             Flex({ wrap: FlexWrap.Wrap }) {
-              ForEach(this.categories, (category: string) => {
+              ForEach(this.categories, (category: Category) => {
                 Button(category)
                   .type(ButtonType.Capsule)
                   .fontColor(this.selectedCategory === category ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
@@ -142,7 +143,7 @@ struct SearchPage {
                     this.selectedCategory = this.selectedCategory === category ? '' : category;
                     this.search(false, false);
                   })
-              }, (category: string) => category)
+              }, (category: Category) => category)
             }
           }
           .padding($r('app.float.space_4'))
@@ -248,16 +249,15 @@ struct SearchPage {
   }
 
   private readInitialQuery(): void {
-    try {
-      const params = NavigationHelper.getParams() as ItemListRouteParams | undefined;
-      const query = params?.query;
-      if (query === undefined) {
-        return;
-      }
-      this.name = query.name ?? '';
+    const params = NavigationHelper.getParams() as ItemListRouteParams;
+    if (!params) {
+      return;
+    }
+    const query = params.query;
+    if (query !== undefined) {
+      this.name = query.name;
       this.selectedLocation = query.locationPath ?? '';
       this.selectedCategory = query.category ?? '';
-    } catch (_) {
     }
   }
 
@@ -361,7 +361,7 @@ struct SearchPage {
     return new ItemQuery(
       this.name,
       this.selectedLocation.length === 0 ? undefined : this.selectedLocation,
-      this.selectedCategory.length === 0 ? undefined : this.selectedCategory
+      this.selectedCategory.length === 0 ? undefined : this.selectedCategory as Category
     );
   }
 

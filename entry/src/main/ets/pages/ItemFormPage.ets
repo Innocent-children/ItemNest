@@ -1,13 +1,11 @@
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { LocationInput } from '../components/LocationInput';
-import { LocationSelector } from '../components/LocationSelector';
 import { LoadingState } from '../components/LoadingState';
 import { QuantityInput } from '../components/QuantityInput';
-import { CATEGORY_OPTIONS, CategoryRecord } from '../model/Category';
+import { CATEGORY_OPTIONS, Category } from '../model/Category';
 import { Item, ItemDraft, ItemUnit } from '../model/Item';
 import { AssetSource } from '../model/ItemAsset';
-import { LocationRecord } from '../model/Location';
 import { ItemFormRouteParams, requireItemId } from '../navigation/RouteContract';
 import { AppEventBus } from '../common/AppEventBus';
 import { AppServices } from '../service/AppServices';
@@ -34,8 +32,6 @@ struct ItemFormPage {
   @State private itemId: string = '';
   @State private pendingPhotoUri: string = '';
   @State private existingPhotoLocalId: string = '';
-  @State private managedLocations: LocationRecord[] = [];
-  @State private categoryOptions: string[] = CATEGORY_OPTIONS.slice();
   @State private pendingPhotoSource: AssetSource = AssetSource.PHOTO_PICKER;
   @State private photoPicking: boolean = false;
   @State private showDiscardConfirm: boolean = false;
@@ -47,8 +43,6 @@ struct ItemFormPage {
 
   aboutToAppear(): void {
     this.readRoute();
-    this.loadManagedLocations();
-    this.loadCategoryOptions();
     if (!this.editMode) {
       this.markClean();
       this.loadDefaultReminderDays();
@@ -93,7 +87,7 @@ struct ItemFormPage {
                 this.expirySection()
               }
 
-              this.sectionToggle('备注与条码', '补充注意事项或条码文本', this.showNotesSection, 'notes')
+              this.sectionToggle('备注与扫码', '补充注意事项或扫码文本', this.showNotesSection, 'notes')
               if (this.showNotesSection) {
                 this.notesSection()
               }
@@ -178,19 +172,12 @@ struct ItemFormPage {
     Column({ space: $r('app.float.space_4') }) {
       this.fieldTitle('放在哪里', '位置会优先显示在列表中。')
       LocationInput({ locationPath: $locationPath })
-      if (this.managedLocations.length > 0) {
-        Text('常用位置')
-          .fontSize($r('app.float.font_body'))
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
-        LocationSelector({ selectedPath: $locationPath, locations: this.managedLocations })
-      }
       Text('分类（可选）')
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
       Flex({ wrap: FlexWrap.Wrap }) {
-        ForEach(this.categoryOptions, (category: string) => {
+        ForEach(CATEGORY_OPTIONS, (category: Category) => {
           Button(category)
             .type(ButtonType.Capsule)
             .fontColor(this.categoryValue === category ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
@@ -198,7 +185,7 @@ struct ItemFormPage {
             .fontSize($r('app.float.font_caption'))
             .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
             .onClick(() => this.categoryValue = this.categoryValue === category ? '' : category)
-        }, (category: string) => category)
+        }, (category: Category) => category)
       }
     }
     .padding($r('app.float.space_4'))
@@ -287,22 +274,31 @@ struct ItemFormPage {
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
         .onChange((value: string) => this.notes = value)
-      Text('条码/二维码文本（可选）')
+      Text('扫码结果（可选）')
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
-      TextInput({ text: this.scanText, placeholder: '手动输入条码或二维码文本' })
+      TextInput({ text: this.scanText, placeholder: '可手动输入条码或二维码文本' })
         .backgroundColor($r('app.color.surface_app'))
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
         .onChange((value: string) => this.scanText = value)
-      Button('添加到备注')
-        .width('100%')
-        .fontColor($r('app.color.brand_primary'))
-        .backgroundColor($r('app.color.surface_app'))
-        .border({ width: 1, color: $r('app.color.border_subtle') })
-        .borderRadius($r('app.float.radius_control'))
-        .onClick(() => this.applyScanText())
+      Row({ space: $r('app.float.space_2') }) {
+        Button('启动扫码')
+          .layoutWeight(1)
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent'))
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => this.scanToText())
+        Button('添加到备注')
+          .layoutWeight(1)
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_app'))
+          .border({ width: 1, color: $r('app.color.border_subtle') })
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => this.applyScanText())
+      }
+      .width('100%')
     }
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
@@ -345,8 +341,13 @@ struct ItemFormPage {
   }
 
   private readRoute(): void {
-    const params = NavigationHelper.getParams() as ItemFormRouteParams | undefined;
-    this.editMode = params?.mode === 'edit';
+    const params = NavigationHelper.getParams() as ItemFormRouteParams;
+    if (!params) {
+      this.errorMessage = '页面参数错误';
+      this.loading = false;
+      return;
+    }
+    this.editMode = params.mode === 'edit';
     if (!this.editMode) {
       return;
     }
@@ -369,30 +370,6 @@ struct ItemFormPage {
       this.errorMessage = result.getError().message;
     }
     this.loading = false;
-  }
-
-  private async loadManagedLocations(): Promise<void> {
-    const result = await AppServices.get().locations.list();
-    if (result.ok) {
-      this.managedLocations = result.getData();
-    }
-  }
-
-  private async loadCategoryOptions(): Promise<void> {
-    const result = await AppServices.get().categories.list();
-    if (!result.ok) {
-      this.categoryOptions = CATEGORY_OPTIONS.slice();
-      return;
-    }
-    const options: string[] = CATEGORY_OPTIONS.slice();
-    const categories = result.getData();
-    for (let index = 0; index < categories.length; index++) {
-      const category: CategoryRecord = categories[index];
-      if (category.active && options.indexOf(category.name) < 0) {
-        options.push(category.name);
-      }
-    }
-    this.categoryOptions = options;
   }
 
   private applyItem(item: Item): void {
@@ -468,7 +445,7 @@ struct ItemFormPage {
       quantity: quantity,
       unit: this.unit,
       locationPath: this.locationPath,
-      category: this.categoryValue.length === 0 ? undefined : this.categoryValue,
+      category: this.categoryValue.length === 0 ? undefined : this.categoryValue as Category,
       expirationDate: this.expirationDate,
       reminderDays: reminderDays,
       notes: this.notes
@@ -597,6 +574,19 @@ struct ItemFormPage {
     return notices.length === 0 ? undefined : notices.join('；');
   }
 
+  private async scanToText(): Promise<void> {
+    this.errorMessage = '';
+    const result = await AppServices.get().scan.scan();
+    if (!result.ok) {
+      this.errorMessage = result.getError().message;
+      return;
+    }
+    const scanText = result.getData();
+    if (scanText !== undefined) {
+      this.scanText = scanText;
+    }
+  }
+
   private applyScanText(): void {
     const normalized = this.scanText.trim();
     if (normalized.length === 0) {
@@ -604,7 +594,7 @@ struct ItemFormPage {
       return;
     }
     const prefix = this.notes.trim().length === 0 ? '' : `${this.notes.trim()}\n`;
-    this.notes = `${prefix}条码信息：${normalized}`;
+    this.notes = `${prefix}扫码信息：${normalized}`;
     this.scanText = '';
   }
 }
