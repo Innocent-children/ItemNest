@@ -40,6 +40,7 @@ struct ItemFormPage {
   @State private photoPicking: boolean = false;
   @State private showDiscardConfirm: boolean = false;
   @State @Watch('handleDiscardRequest') private discardConfirmed: boolean = false;
+  @State private showCategorySection: boolean = false;
   @State private showExpirySection: boolean = false;
   @State private showNotesSection: boolean = false;
   @State private showPhotoSection: boolean = false;
@@ -88,6 +89,11 @@ struct ItemFormPage {
               this.coreSection()
               this.locationSection()
 
+              this.sectionToggle('分类', this.categoryValue.length > 0 ? `当前：${this.categoryValue}` : '可选，用于筛选和整理', this.showCategorySection, 'category')
+              if (this.showCategorySection) {
+                this.categorySection()
+              }
+
               this.sectionToggle('到期与提醒', '设置保质期和提前提醒', this.showExpirySection, 'expiry')
               if (this.showExpirySection) {
                 this.expirySection()
@@ -103,26 +109,13 @@ struct ItemFormPage {
                 this.photoSection()
               }
 
-            if (this.errorMessage.length > 0) {
-              Text(this.errorMessage)
-                .fontSize($r('app.float.font_caption'))
-                .fontColor($r('app.color.status_danger'))
-                .padding($r('app.float.space_3'))
-                .borderRadius($r('app.float.radius_control'))
-                .backgroundColor($r('app.color.status_danger_soft'))
             }
-            Button(this.saving ? '正在保存…' : '保存物品')
-              .width('100%')
-              .fontColor($r('app.color.brand_on_primary'))
-              .backgroundColor($r('app.color.brand_primary'))
-              .borderRadius($r('app.float.radius_control'))
-              .enabled(!this.saving)
-              .onClick(() => this.save())
-          }
             .width('100%')
-            .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
+            .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_4') })
           }
           .layoutWeight(1)
+
+          this.saveBar()
         }
       }
       .width('100%')
@@ -185,6 +178,15 @@ struct ItemFormPage {
           .fontColor($r('app.color.text_primary'))
         LocationSelector({ selectedPath: $locationPath, locations: this.managedLocations })
       }
+    }
+    .padding($r('app.float.space_4'))
+    .borderRadius($r('app.float.radius_card'))
+    .backgroundColor($r('app.color.surface_card'))
+  }
+
+  @Builder
+  private categorySection() {
+    Column({ space: $r('app.float.space_3') }) {
       Text('分类（可选）')
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
@@ -204,6 +206,30 @@ struct ItemFormPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+  }
+
+  @Builder
+  private saveBar() {
+    Column({ space: $r('app.float.space_2') }) {
+      if (this.errorMessage.length > 0) {
+        Text(this.errorMessage)
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.status_danger'))
+          .padding($r('app.float.space_3'))
+          .borderRadius($r('app.float.radius_control'))
+          .backgroundColor($r('app.color.status_danger_soft'))
+      }
+      Button(this.saving ? '正在保存…' : '保存物品')
+        .width('100%')
+        .fontColor($r('app.color.brand_on_primary'))
+        .backgroundColor($r('app.color.brand_primary'))
+        .borderRadius($r('app.float.radius_control'))
+        .enabled(!this.saving)
+        .onClick(() => this.save())
+    }
+    .width('100%')
+    .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_3'), bottom: $r('app.float.space_4') })
+    .backgroundColor($r('app.color.surface_app'))
   }
 
   @Builder
@@ -237,11 +263,29 @@ struct ItemFormPage {
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
-      TextInput({ text: this.expirationDate, placeholder: 'YYYY-MM-DD' })
-        .backgroundColor($r('app.color.surface_app'))
-        .border({ width: 1, color: $r('app.color.border_subtle') })
-        .borderRadius($r('app.float.radius_control'))
-        .onChange((value: string) => this.expirationDate = value)
+      Row() {
+        Text(this.expirationDate.length === 0 ? '未设置到期日期' : this.expirationDate)
+          .fontSize($r('app.float.font_body'))
+          .fontColor(this.expirationDate.length === 0 ? $r('app.color.text_secondary') : $r('app.color.text_primary'))
+          .layoutWeight(1)
+        Button('清除')
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent'))
+          .borderRadius($r('app.float.radius_control'))
+          .enabled(this.expirationDate.length > 0)
+          .onClick(() => this.expirationDate = '')
+      }
+      .width('100%')
+      .padding($r('app.float.space_3'))
+      .borderRadius($r('app.float.radius_control'))
+      .backgroundColor($r('app.color.surface_app'))
+      CalendarPicker({ selected: this.expirationPickerDate() })
+        .onChange((date: Date) => this.expirationDate = this.formatDate(date))
+      Flex({ wrap: FlexWrap.Wrap }) {
+        this.expirationShortcut('今天', 0)
+        this.expirationShortcut('30 天后', 30)
+        this.expirationShortcut('清除日期', -1)
+      }
       Text('提前提醒天数（可选）')
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
@@ -272,6 +316,25 @@ struct ItemFormPage {
       .fontSize($r('app.float.font_caption'))
       .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
       .onClick(() => this.reminderDaysText = value)
+  }
+
+  @Builder
+  private expirationShortcut(label: string, offsetDays: number) {
+    Button(label)
+      .type(ButtonType.Capsule)
+      .fontColor($r('app.color.brand_primary'))
+      .backgroundColor($r('app.color.surface_accent'))
+      .fontSize($r('app.float.font_caption'))
+      .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+      .onClick(() => {
+        if (offsetDays < 0) {
+          this.expirationDate = '';
+          return;
+        }
+        const date = new Date();
+        date.setDate(date.getDate() + offsetDays);
+        this.expirationDate = this.formatDate(date);
+      })
   }
 
   @Builder
@@ -405,9 +468,40 @@ struct ItemFormPage {
     this.reminderDaysText = item.reminderDays === undefined ? '' : item.reminderDays.toString();
     this.notes = item.notes ?? '';
     this.existingPhotoLocalId = item.photoLocalId ?? '';
+    this.showCategorySection = this.categoryValue.length > 0;
     this.showExpirySection = this.expirationDate.length > 0 || this.reminderDaysText.length > 0;
     this.showNotesSection = this.notes.length > 0;
     this.showPhotoSection = this.existingPhotoLocalId.length > 0;
+  }
+
+  private expirationPickerDate(): Date {
+    const parsed = this.parseDate(this.expirationDate);
+    return parsed ?? new Date();
+  }
+
+  private parseDate(value: string): Date | undefined {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return undefined;
+    }
+    const year = Number(value.substring(0, 4));
+    const month = Number(value.substring(5, 7));
+    const day = Number(value.substring(8, 10));
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() + 1 !== month || date.getDate() !== day) {
+      return undefined;
+    }
+    return date;
+  }
+
+  private formatDate(date: Date): string {
+    const year = date.getFullYear().toString();
+    const month = this.twoDigits(date.getMonth() + 1);
+    const day = this.twoDigits(date.getDate());
+    return `${year}-${month}-${day}`;
+  }
+
+  private twoDigits(value: number): string {
+    return value < 10 ? `0${value}` : value.toString();
   }
 
   private async save(): Promise<void> {
@@ -530,7 +624,9 @@ struct ItemFormPage {
   }
 
   private toggleSection(section: string): void {
-    if (section === 'expiry') {
+    if (section === 'category') {
+      this.showCategorySection = !this.showCategorySection;
+    } else if (section === 'expiry') {
       this.showExpirySection = !this.showExpirySection;
     } else if (section === 'notes') {
       this.showNotesSection = !this.showNotesSection;

@@ -4,6 +4,7 @@ import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
 import { ItemSummary } from '../model/Item';
+import { ItemQuery } from '../model/ItemQuery';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
 
@@ -20,6 +21,7 @@ struct Index {
   @State private recentItems: ItemSummary[] = [];
   @State private dueSoonItems: ItemSummary[] = [];
   @State private outOfStockItems: ItemSummary[] = [];
+  @State private locationPaths: string[] = [];
   @State private showRecentSection: boolean = true;
   @State private showExpirySection: boolean = true;
   @State private showStockSection: boolean = true;
@@ -68,6 +70,9 @@ struct Index {
           Column({ space: $r('app.float.space_6') }) {
             this.hero()
             this.overview()
+            if (this.locationPaths.length > 0) {
+              this.locationShortcutSection()
+            }
             if (this.showRecentSection) {
               this.summarySection('最近添加', '刚记录的物品', this.recentItems, '暂无物品', RouteName.ITEM_FORM)
             }
@@ -172,6 +177,46 @@ struct Index {
   }
 
   @Builder
+  private locationShortcutSection() {
+    Column({ space: $r('app.float.space_3') }) {
+      Row() {
+        Column({ space: $r('app.float.space_1') }) {
+          Text('按位置找')
+            .fontSize($r('app.float.font_section'))
+            .fontWeight(FontWeight.Bold)
+            .fontColor($r('app.color.text_primary'))
+          Text('从常用位置直接查看物品')
+            .fontSize($r('app.float.font_caption'))
+            .fontColor($r('app.color.text_secondary'))
+        }
+        .layoutWeight(1)
+        Button('全部')
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_app'))
+          .border({ width: 1, color: $r('app.color.border_subtle') })
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST }))
+      }
+      Flex({ wrap: FlexWrap.Wrap }) {
+        ForEach(this.locationPaths, (location: string) => {
+          Button(location)
+            .type(ButtonType.Capsule)
+            .fontColor($r('app.color.brand_primary'))
+            .backgroundColor($r('app.color.surface_accent'))
+            .fontSize($r('app.float.font_caption'))
+            .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+            .onClick(() => this.openLocationList(location))
+        }, (location: string) => location)
+      }
+    }
+    .width('100%')
+    .padding($r('app.float.space_4'))
+    .borderRadius($r('app.float.radius_card'))
+    .backgroundColor($r('app.color.surface_card'))
+    .border({ width: 1, color: $r('app.color.border_subtle') })
+  }
+
+  @Builder
   private summarySection(title: string, subtitle: string, items: ItemSummary[], emptyText: string, actionRoute: string) {
     Column({ space: $r('app.float.space_3') }) {
       Row() {
@@ -228,6 +273,7 @@ struct Index {
       this.recentItems = result.getData().recentItems;
       this.dueSoonItems = result.getData().dueSoonItems;
       this.outOfStockItems = result.getData().outOfStockItems;
+      await this.loadLocationShortcuts();
     } catch (_) {
       if (showLoading || this.recentItems.length + this.dueSoonItems.length + this.outOfStockItems.length === 0) {
         this.errorMessage = '数据库初始化失败，请重试';
@@ -235,5 +281,16 @@ struct Index {
     } finally {
       this.loading = false;
     }
+  }
+
+  private async loadLocationShortcuts(): Promise<void> {
+    const result = await AppServices.get().searchItems.getFilterOptions();
+    if (result.ok) {
+      this.locationPaths = result.getData().locationPaths.slice(0, 6);
+    }
+  }
+
+  private openLocationList(location: string): void {
+    NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST, params: { query: new ItemQuery('', location) } });
   }
 }

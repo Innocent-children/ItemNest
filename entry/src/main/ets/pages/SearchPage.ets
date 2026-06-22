@@ -31,8 +31,12 @@ struct SearchPage {
 
   aboutToAppear(): void {
     this.readInitialQuery();
-    this.loadFilterOptions(true);
+    const hasInitialQuery = !this.currentQuery().isEmpty();
+    this.loadFilterOptions(!hasInitialQuery);
     this.loadSuggestions();
+    if (hasInitialQuery) {
+      this.search(true, false);
+    }
   }
 
   onPageShow(): void {
@@ -59,7 +63,7 @@ struct SearchPage {
             .fontSize($r('app.float.font_title'))
             .fontWeight(FontWeight.Bold)
             .fontColor($r('app.color.text_primary'))
-          Text('按名称、位置和分类快速缩小范围')
+          Text('输入或点选条件后自动显示结果')
             .fontSize($r('app.float.font_caption'))
             .fontColor($r('app.color.text_secondary'))
         }
@@ -149,14 +153,6 @@ struct SearchPage {
           .borderRadius($r('app.float.radius_card'))
           .backgroundColor($r('app.color.surface_card'))
 
-          Button('记录本次搜索')
-            .width('100%')
-            .fontColor($r('app.color.brand_on_primary'))
-            .backgroundColor($r('app.color.brand_primary'))
-            .borderRadius($r('app.float.radius_control'))
-            .enabled(!this.currentQuery().isEmpty())
-            .onClick(() => this.search(true, true))
-
           if (this.loading) {
             LoadingState({ text: '正在读取筛选条件…' })
           } else if (this.errorMessage.length > 0) {
@@ -164,7 +160,7 @@ struct SearchPage {
             Button('重试')
               .fontColor($r('app.color.brand_on_primary'))
               .backgroundColor($r('app.color.brand_primary'))
-              .onClick(() => this.search(true, true))
+              .onClick(() => this.search(true, false))
           } else if (this.searched && this.items.length === 0) {
             EmptyState({ title: '暂无搜索结果', description: '请修改或清除筛选条件后重试。' })
             Button('清除条件')
@@ -178,7 +174,7 @@ struct SearchPage {
               .fontSize($r('app.float.font_section'))
               .fontWeight(FontWeight.Medium)
               .fontColor($r('app.color.text_primary'))
-            Button('在列表中查看结果')
+            Button('查看完整列表')
               .width('100%')
               .fontColor($r('app.color.brand_primary'))
               .backgroundColor($r('app.color.surface_accent'))
