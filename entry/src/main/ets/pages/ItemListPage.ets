@@ -76,18 +76,29 @@ struct ItemListPage {
           .backgroundColor($r('app.color.brand_primary'))
           .onClick(() => this.loadItems(true))
       } else if (this.items.length === 0) {
-        EmptyState({
-          title: this.query.isEmpty() ? '暂无物品' : '暂无搜索结果',
-          description: this.query.isEmpty() ? '新增第一个物品，开始记录它放在哪里。' : '请修改或清除搜索条件后重试。',
-          actionText: this.query.isEmpty() ? '新增物品' : '清除条件',
-          actionRoute: this.query.isEmpty() ? RouteName.ITEM_FORM : '',
-          actionMode: this.query.isEmpty() ? 'create' : ''
-        })
-        if (!this.query.isEmpty()) {
-          Button('清除条件')
-            .fontColor($r('app.color.brand_primary'))
-            .onClick(() => this.handleEmptyAction())
+        Column({ space: $r('app.float.space_3') }) {
+          if (this.query.isEmpty()) {
+            EmptyState({
+              title: '暂无物品',
+              description: '新增第一个物品，开始记录它放在哪里。',
+              actionText: '新增物品',
+              actionRoute: RouteName.ITEM_FORM,
+              actionMode: 'create'
+            })
+          } else {
+            EmptyState({
+              title: '暂无搜索结果',
+              description: '请修改或清除搜索条件后重试。'
+            })
+            Button('清除条件')
+              .width('100%')
+              .fontColor($r('app.color.brand_primary'))
+              .backgroundColor($r('app.color.surface_accent'))
+              .borderRadius($r('app.float.radius_control'))
+              .onClick(() => this.handleEmptyAction())
+          }
         }
+        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4') })
       } else {
         List({ space: 12 }) {
           ForEach(this.items, (item: ItemSummary) => {

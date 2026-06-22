@@ -240,7 +240,8 @@ struct Index {
       if (items.length === 0) {
         EmptyState({
           title: emptyText,
-          actionText: title === '最近添加' ? '新增物品' : '查看全部',
+          description: this.summaryEmptyDescription(title),
+          actionText: this.summaryEmptyActionText(title),
           actionRoute: actionRoute,
           actionMode: actionRoute === RouteName.ITEM_FORM ? 'create' : ''
         })
@@ -295,5 +296,25 @@ struct Index {
 
   private openLocationList(location: string): void {
     NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST, params: { query: new ItemQuery('', location) } });
+  }
+
+  private summaryEmptyDescription(title: string): string {
+    if (title === '最近添加') {
+      return '先记录一个物品，首页会自动显示最近内容。';
+    }
+    if (title === '即将到期') {
+      return '目前没有需要优先处理的到期物品。';
+    }
+    if (title === '待补货') {
+      return '数量为 0 的物品会自动出现在这里。';
+    }
+    return '';
+  }
+
+  private summaryEmptyActionText(title: string): string {
+    if (title === '最近添加') {
+      return '新增物品';
+    }
+    return '查看全部';
   }
 }

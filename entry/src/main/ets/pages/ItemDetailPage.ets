@@ -26,6 +26,8 @@ struct ItemDetailPage {
   @State private reminderRetrying: boolean = false;
   @State private photoPath: string = '';
   @State private removingPhoto: boolean = false;
+  @State private batchCount: number = 0;
+  @State private borrowedQuantity: number = 0;
   @State private showDeleteConfirm: boolean = false;
   @State @Watch('handleDeleteRequest') private deleteRequested: boolean = false;
   private itemId: string = '';
@@ -156,11 +158,11 @@ struct ItemDetailPage {
         .borderRadius($r('app.float.radius_card'))
         .backgroundColor($r('app.color.surface_card'))
 
+        this.managementSection(item)
         this.locationSection(item)
         this.expirySection(item)
         this.notesSection(item)
         this.photoSection(item)
-        this.managementSection(item)
 
         if (this.deleting) {
           LoadingState({ text: '正在删除物品…' })
@@ -301,6 +303,7 @@ struct ItemDetailPage {
       this.expiryStatus = AppServices.get().listItems.toSummary(result.getData()).expiryStatus;
       await this.loadReminderState(result.getData());
       await this.loadPhotoPath(result.getData());
+      await this.loadManagementState(result.getData());
     } catch (_) {
       if (showLoading || this.item === undefined) {
         this.errorMessage = '读取物品失败，请重试';
@@ -380,24 +383,31 @@ struct ItemDetailPage {
   @Builder
   private managementSection(item: Item) {
     Column({ space: $r('app.float.space_3') }) {
-      Text('增强管理')
-        .fontSize($r('app.float.font_section'))
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.text_primary'))
-      this.managementEntry(
-        '批次管理',
-        `当前汇总 ${item.quantity}${item.unit}，可拆分数量、位置和到期日。`,
-        '查看批次',
-        RouteName.BATCH_LIST,
-        item.id
-      )
-      this.managementEntry(
-        '借出与归还',
-        '记录借出数量、归还动作和相关说明。',
-        '办理借还',
-        RouteName.LENDING,
-        item.id
-      )
+      Row() {
+        Text('管理动作')
+          .fontSize($r('app.float.font_section'))
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.text_primary'))
+          .layoutWeight(1)
+        Text('批次 / 借还')
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.text_secondary'))
+      }
+      Row({ space: $r('app.float.space_2') }) {
+        this.managementEntry(
+          '批次',
+          this.batchCount === 0 ? `汇总 ${item.quantity}${item.unit}` : `${this.batchCount} 个批次`,
+          RouteName.BATCH_LIST,
+          item.id
+        )
+        this.managementEntry(
+          '借还',
+          this.borrowedQuantity === 0 ? '当前无借出' : `借出 ${this.borrowedQuantity}${item.unit}`,
+          RouteName.LENDING,
+          item.id
+        )
+      }
+      .width('100%')
     }
     .width('100%')
     .padding($r('app.float.space_4'))
@@ -406,28 +416,38 @@ struct ItemDetailPage {
   }
 
   @Builder
-  private managementEntry(title: string, description: string, actionText: string, route: RouteName, itemId: string) {
-    Row({ space: $r('app.float.space_3') }) {
-      Column({ space: $r('app.float.space_1') }) {
-        Text(title)
-          .fontSize($r('app.float.font_body'))
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
-        Text(description)
-          .fontSize($r('app.float.font_caption'))
-          .fontColor($r('app.color.text_secondary'))
-      }
-      .layoutWeight(1)
-      Button(actionText)
+  private managementEntry(title: string, description: string, route: RouteName, itemId: string) {
+    Column({ space: $r('app.float.space_1') }) {
+      Text(title)
+        .fontSize($r('app.float.font_body'))
+        .fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.text_primary'))
+      Text(description)
+        .fontSize($r('app.float.font_caption'))
+        .fontColor($r('app.color.text_secondary'))
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+      Text('进入')
+        .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.brand_primary'))
-        .backgroundColor($r('app.color.surface_accent'))
-        .borderRadius($r('app.float.radius_control'))
-        .onClick(() => NavigationHelper.pushUrl({ url: route, params: { itemId: itemId } }))
     }
-    .width('100%')
+    .layoutWeight(1)
     .padding($r('app.float.space_3'))
     .borderRadius($r('app.float.radius_control'))
     .backgroundColor($r('app.color.surface_app'))
+    .border({ width: 1, color: $r('app.color.border_subtle') })
+    .onClick(() => NavigationHelper.pushUrl({ url: route, params: { itemId: itemId } }))
+  }
+
+  private async loadManagementState(item: Item): Promise<void> {
+    const batchResult = await AppServices.get().batches.listByItemId(item.id);
+    if (batchResult.ok) {
+      this.batchCount = batchResult.getData().length;
+    }
+    const lendingResult = await AppServices.get().lending.getState(item.id);
+    if (lendingResult.ok) {
+      this.borrowedQuantity = lendingResult.getData().borrowedQuantity;
+    }
   }
 
   private async removePhoto(): Promise<void> {
