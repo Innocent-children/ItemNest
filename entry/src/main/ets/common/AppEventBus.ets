@@ -12,6 +12,11 @@ export class AppEventBus {
     setTimeout(() => AppEventBus.emitDataChanged(), 300);
   }
 
+  static notifyDataChangedAfterNavigation(): void {
+    AppEventBus.notifyDataChanged();
+    setTimeout(() => AppEventBus.emitDataChanged(), 800);
+  }
+
   private static emitDataChanged(): void {
     AppEventBus.increment(DATA_REVISION_KEY);
     AppEventBus.notifyListeners(AppEventBus.dataListeners);

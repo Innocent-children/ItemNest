@@ -544,7 +544,6 @@ struct ItemFormPage {
 
   private finishSave(notice?: string): void {
     this.showToast(notice ?? '物品已保存');
-    AppEventBus.notifyDataChanged();
     NavigationHelper.back({
       url: this.returnToRoute,
       params: {
@@ -552,6 +551,7 @@ struct ItemFormPage {
         itemId: this.itemId
       }
     });
+    AppEventBus.notifyDataChangedAfterNavigation();
   }
 
   private showToast(message: string): void {
