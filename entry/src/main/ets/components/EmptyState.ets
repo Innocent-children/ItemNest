@@ -7,6 +7,7 @@ export struct EmptyState {
   @Prop actionText: string = '';
   @Prop actionRoute: string = '';
   @Prop actionMode: string = '';
+  @Prop actionReturnTo: string = '';
 
   build() {
     Column({ space: $r('app.float.space_2') }) {
@@ -36,7 +37,17 @@ export struct EmptyState {
 
   private openAction(): void {
     if (this.actionMode.length > 0) {
-      NavigationHelper.pushUrl({ url: this.actionRoute, params: { mode: this.actionMode } });
+      if (this.actionReturnTo.length > 0) {
+        NavigationHelper.pushUrl({
+          url: this.actionRoute,
+          params: {
+            mode: this.actionMode,
+            returnTo: this.actionReturnTo
+          }
+        });
+      } else {
+        NavigationHelper.pushUrl({ url: this.actionRoute, params: { mode: this.actionMode } });
+      }
       return;
     }
     NavigationHelper.pushUrl({ url: this.actionRoute });

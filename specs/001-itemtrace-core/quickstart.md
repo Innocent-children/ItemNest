@@ -38,16 +38,22 @@ hvigorw.bat assembleApp --no-daemon
 
 ## Phase 1：本地闭环验收
 
-### 当前执行记录（2026-06-20）
+### 当前执行记录（2026-06-23）
 
-- 已实现并通过 `hvigorw.bat assembleApp --no-daemon`：Item 模型与字段校验、RDB Schema v1、DAO/
-  Repository、创建/编辑/删除、名称搜索、位置/分类筛选、到期状态、首页摘要以及首页、列表、详情、
+- macOS 当前可用构建命令：
+  `env DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw --no-daemon assembleApp`
+- 已通过构建：Item 模型与字段校验、RDB Schema/DAO/Repository、创建/编辑/删除、名称搜索、
+  位置/分类筛选、到期状态、首页摘要、Navigation/NavPathStack 页面跳转，以及首页、列表、详情、
   新增/编辑和搜索页面。
-- 本机构建任务未暴露单元测试或 `ohosTest` 的命令行入口。因此，`entry/src/test/` 中的服务与校验
-  测试、以及下列场景仍需在 DevEco Studio 选择 `ohosTest` 目标后实际执行；在结果产生前不得标记为
-  已通过。
-- 本次构建仍有既有签名、混淆与 Router 旧接口弃用警告。它们不阻塞编译；真机安装需要单独配置签名，
-  Router 接口迁移需在后续有经核验替代 API 时处理。
+- 已新增 `entry/src/test/ets/test/AppEventBus.test.ets` 与
+  `entry/src/ohosTest/ets/test/AppEventBusFlow.test.ets` 并接入对应测试套，覆盖数据 revision 递增、
+  订阅/取消订阅和偏好 revision 独立性。
+- 已确认 ohosTest 测试包可编译：
+  `env DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw assembleHap --mode module -p module=entry@ohosTest -p product=default -p buildMode=test --no-daemon`
+- 当前命令只证明测试包通过 ArkTS 编译，不等于已在设备上执行用例。`entry/src/test/` 和
+  `entry/src/ohosTest/` 的测试仍需通过 DevEco Studio 测试入口或后续确认的 `aa test`/Hypium 流程实际执行。
+- 当前构建剩余警告为混淆配置建议、无本机签名配置，以及 DevEco 打包工具内部 `sun.misc.Unsafe`
+  终端弃用提示；没有 ArkTS 编译错误或 Router 旧接口弃用警告。真机安装仍需单独配置签名。
 
 ### 场景 A：快速新增与持久化
 
@@ -87,13 +93,13 @@ hvigorw.bat assembleApp --no-daemon
 
 ## Phase 2：系统能力验收
 
-### 当前执行记录（2026-06-20）
+### 当前执行记录（2026-06-23）
 
 - 已多次执行 `hvigorw.bat assembleApp --no-daemon`，最近一次在加入 Preferences、Reminder、Photo Picker、
   Form Kit、扫码降级和深色资源后构建成功。
-- 当前命令行环境仍没有可直接执行的本地单元测试或 `ohosTest` 任务；下列验证需要在 DevEco Studio 配置签名后，
+- 当前命令行环境已确认可以构建 `entry@ohosTest` 测试包，但尚未确认设备侧测试执行命令；下列验证需要在 DevEco Studio 配置签名后，
   使用 phone/tablet 模拟器或真机实际完成。不得把构建成功等同于系统授权、相册复制、提醒投递或卡片刷新成功。
-- 当前已知构建警告包括 Router 旧接口弃用、现有 RDB 异常处理提示、未配置签名和工具链混淆提示；它们未阻断编译。
+- 当前已知构建警告包括未配置签名、工具链混淆提示和 DevEco 打包工具内部终端弃用提示；它们未阻断编译。
 
 1. **Preferences**：修改默认提醒天数、排序、首页分区或主题后重启应用，确认偏好生效且 Item 数据不变。
 2. **提醒/通知**：在设置页显式开启后新增带未来到期日的物品；验证创建、编辑重建、关闭/删除取消、授权拒绝、系统不可用和失败
@@ -118,5 +124,6 @@ hvigorw.bat assembleApp --no-daemon
 - 已实现批次管理页、批次表单页、借出/归还页、位置管理页、分类管理页；物品详情页提供批次与借还入口，首页提供位置与分类入口。
 - 已实现本地搜索建议与可清除历史；不会请求网络，应用搜索后才记录历史。
 - 已实现本地 JSON 导出、导入预检/确认抽象，以及备份/恢复服务抽象；当前不自动覆盖现有数据库，不导出图片二进制。
-- 已执行 `hvigorw.bat assembleApp --no-daemon`，构建成功。当前仍存在既有 ArkTS 警告（Schema/DAO 可抛异常提示、Router 旧接口弃用提示、签名/工具链提示），未阻塞构建。
-- 按本轮用户要求，未完成的自动化测试与设备测试不作为 Phase 3 本轮阻塞项。
+- 2026-06-23 复核：RDB 迁移已改为 `createTransaction()` 事务对象，数据层可处理 ArkTS 抛异常 warning
+  已通过 `ResultSetReader`/`SchemaExecutor` 收敛；页面路由已迁移到 `Navigation`/`NavPathStack`，主包
+  `assembleApp` 通过。未完成的自动化测试与设备测试仍是发布前缺口，不能再作为“非阻塞项”忽略。

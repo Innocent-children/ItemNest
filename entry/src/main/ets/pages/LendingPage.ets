@@ -6,9 +6,8 @@ import { TraceEvent, TraceEventType } from '../model/TraceEvent';
 import { BatchRouteParams, requireItemId } from '../navigation/RouteContract';
 import { AppServices } from '../service/AppServices';
 
-@Entry
 @Component
-struct LendingPage {
+export struct LendingPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
@@ -20,6 +19,7 @@ struct LendingPage {
   @State private borrowedQuantity: number = 0;
   @State private events: TraceEvent[] = [];
   private itemId: string = '';
+  private lastHandledDataRevision: number = -1;
 
   aboutToAppear(): void {
     const params = NavigationHelper.getParams() as BatchRouteParams | undefined;
@@ -30,19 +30,33 @@ struct LendingPage {
       return;
     }
     this.itemId = itemIdResult.getData();
-    this.loadState(true);
+    this.loadStateForCurrentRevision(true);
   }
 
   onPageShow(): void {
     if (this.itemId.length > 0) {
-      this.loadState(false);
+      this.refreshForRevisionChange(false);
     }
   }
 
   private onDataRevisionChanged(): void {
     if (this.itemId.length > 0) {
-      this.loadState(false);
+      this.refreshForRevisionChange(false);
     }
+  }
+
+  private refreshForRevisionChange(showLoading: boolean = false): boolean {
+    const dataRevision = AppEventBus.currentDataRevision();
+    if (dataRevision === this.lastHandledDataRevision) {
+      return false;
+    }
+    this.loadStateForCurrentRevision(showLoading);
+    return true;
+  }
+
+  private loadStateForCurrentRevision(showLoading: boolean = true): void {
+    this.lastHandledDataRevision = AppEventBus.currentDataRevision();
+    this.loadState(showLoading);
   }
 
   build() {
@@ -160,8 +174,8 @@ struct LendingPage {
   private async borrow(): Promise<void> {
     const result = await AppServices.get().lending.borrow(this.itemId, Number(this.quantityText), this.counterpart, undefined, this.note);
     if (result.ok) {
+      this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadState(false);
-      AppEventBus.notifyDataChanged();
       this.showToast('借出已记录');
     } else {
       this.errorMessage = result.getError().message;
@@ -171,8 +185,8 @@ struct LendingPage {
   private async returnItem(): Promise<void> {
     const result = await AppServices.get().lending.returnItem(this.itemId, Number(this.quantityText), undefined, this.note);
     if (result.ok) {
+      this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadState(false);
-      AppEventBus.notifyDataChanged();
       this.showToast('归还已记录');
     } else {
       this.errorMessage = result.getError().message;

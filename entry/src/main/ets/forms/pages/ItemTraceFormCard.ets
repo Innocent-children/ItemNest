@@ -1,3 +1,7 @@
+class QuickAddFormLinkParams {
+  source: string = 'itemtrace-form-quick-add';
+}
+
 @Entry
 @Component
 struct ItemTraceFormCard {
@@ -8,7 +12,7 @@ struct ItemTraceFormCard {
     FormLink({
       action: 'router',
       abilityName: 'EntryAbility',
-      params: { source: 'itemtrace-form-quick-add' }
+      params: new QuickAddFormLinkParams()
     }) {
       Column({ space: 8 }) {
         Text('ItemTrace')

@@ -1,4 +1,5 @@
 import { relationalStore } from '@kit.ArkData';
+import { SchemaExecutor } from './SchemaExecutor';
 
 export const TRACE_EVENT_TABLE: string = 'trace_event';
 
@@ -21,9 +22,9 @@ const TRACE_EVENT_INDEXES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_trace_event_created_at ON trace_event(created_at DESC)'
 ];
 
-export async function createTraceEventSchema(store: relationalStore.RdbStore): Promise<void> {
-  await store.executeSql(CREATE_TRACE_EVENT_TABLE);
+export async function createTraceEventSchema(store: relationalStore.Transaction): Promise<void> {
+  await SchemaExecutor.execute(store, CREATE_TRACE_EVENT_TABLE);
   for (let index = 0; index < TRACE_EVENT_INDEXES.length; index++) {
-    await store.executeSql(TRACE_EVENT_INDEXES[index]);
+    await SchemaExecutor.execute(store, TRACE_EVENT_INDEXES[index]);
   }
 }

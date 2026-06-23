@@ -1,4 +1,5 @@
 import localUnitTest from './LocalUnit.test';
+import appEventBusTest from './ets/test/AppEventBus.test';
 import expiryServiceTest from './ets/test/ExpiryService.test';
 import itemCreateServiceTest from './ets/test/ItemCreateService.test';
 import itemMaintenanceServiceTest from './ets/test/ItemMaintenanceService.test';
@@ -9,6 +10,7 @@ import routeContractTest from './ets/test/RouteContract.test';
 
 export default function testsuite() {
   localUnitTest();
+  appEventBusTest();
   itemValidatorTest();
   itemSchemaTest();
   itemCreateServiceTest();

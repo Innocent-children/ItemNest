@@ -4,6 +4,7 @@ import { failure, Result, success } from '../../common/Result';
 import { CategoryRecord } from '../../model/Category';
 import { CATEGORY_TABLE } from '../rdb/CategorySchema';
 import { RdbDatabase } from '../rdb/RdbDatabase';
+import { ResultSetReader } from '../rdb/ResultSetReader';
 
 export class CategoryRepository {
   private readonly database: RdbDatabase;
@@ -14,7 +15,7 @@ export class CategoryRepository {
 
   async create(category: CategoryRecord): Promise<Result<CategoryRecord>> {
     try {
-      await this.database.transaction(async (store: relationalStore.RdbStore): Promise<void> => {
+      await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
         const rowId = await store.insert(CATEGORY_TABLE, this.toValues(category));
         if (rowId < 0) {
           throw new AppError(AppErrorCode.DATABASE_WRITE, '保存分类失败，请重试');
@@ -39,7 +40,7 @@ export class CategoryRepository {
 
   async setActive(categoryId: string, active: boolean, updatedAt: number): Promise<Result<void>> {
     try {
-      await this.database.transaction(async (store: relationalStore.RdbStore): Promise<void> => {
+      await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
         const predicates = new relationalStore.RdbPredicates(CATEGORY_TABLE);
         predicates.equalTo('id', categoryId);
         const changed = await store.update({ active: active ? 1 : 0, updated_at: updatedAt }, predicates);
@@ -54,17 +55,21 @@ export class CategoryRepository {
   }
 
   private async query(predicates: relationalStore.RdbPredicates): Promise<CategoryRecord[]> {
-    const store = await this.database.requireStore();
-    const resultSet = await store.query(predicates);
-    const rows: CategoryRecord[] = [];
     try {
-      while (resultSet.goToNextRow()) {
-        rows.push(this.mapCategory(resultSet));
+      const store = await this.database.requireStore();
+      const resultSet = await store.query(predicates);
+      const rows: CategoryRecord[] = [];
+      try {
+        while (ResultSetReader.goToNextRow(resultSet)) {
+          rows.push(this.mapCategory(resultSet));
+        }
+      } finally {
+        ResultSetReader.close(resultSet);
       }
-    } finally {
-      resultSet.close();
+      return rows;
+    } catch (error) {
+      throw toAppError(error, AppErrorCode.DATABASE_READ, '读取分类失败，请重试');
     }
-    return rows;
   }
 
   private mapCategory(resultSet: relationalStore.ResultSet): CategoryRecord {
@@ -79,13 +84,11 @@ export class CategoryRepository {
   }
 
   private readString(resultSet: relationalStore.ResultSet, column: string): string | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getString(index);
+    return ResultSetReader.readString(resultSet, column);
   }
 
   private readLong(resultSet: relationalStore.ResultSet, column: string): number | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getLong(index);
+    return ResultSetReader.readLong(resultSet, column);
   }
 
   private toValues(category: CategoryRecord): relationalStore.ValuesBucket {

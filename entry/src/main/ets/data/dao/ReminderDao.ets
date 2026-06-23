@@ -3,6 +3,7 @@ import { AppError, AppErrorCode } from '../../common/AppError';
 import { ReminderRecord, ReminderRecordStatus } from '../../model/ReminderRecord';
 import { RdbDatabase } from '../rdb/RdbDatabase';
 import { REMINDER_TABLE } from '../rdb/ReminderSchema';
+import { ResultSetReader } from '../rdb/ResultSetReader';
 
 export class ReminderDao {
   private readonly database: RdbDatabase;
@@ -18,12 +19,12 @@ export class ReminderDao {
       const store = await this.database.requireStore();
       const resultSet = await store.query(predicates);
       try {
-        if (!resultSet.goToFirstRow()) {
+        if (!ResultSetReader.goToFirstRow(resultSet)) {
           return undefined;
         }
         return this.mapRecord(resultSet);
       } finally {
-        resultSet.close();
+        ResultSetReader.close(resultSet);
       }
     } catch (error) {
       if (error instanceof AppError) {
@@ -35,7 +36,7 @@ export class ReminderDao {
 
   async save(record: ReminderRecord): Promise<void> {
     try {
-      await this.database.transaction(async (store: relationalStore.RdbStore): Promise<void> => {
+      await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
         const predicates = new relationalStore.RdbPredicates(REMINDER_TABLE);
         predicates.equalTo('item_id', record.itemId);
         const changed = await store.update(this.toValues(record), predicates);
@@ -64,11 +65,11 @@ export class ReminderDao {
       const resultSet = await store.query(predicates);
       let count = 0;
       try {
-        while (resultSet.goToNextRow()) {
+        while (ResultSetReader.goToNextRow(resultSet)) {
           count++;
         }
       } finally {
-        resultSet.close();
+        ResultSetReader.close(resultSet);
       }
       return count;
     } catch (error) {
@@ -81,7 +82,7 @@ export class ReminderDao {
 
   async deleteByItemId(itemId: string): Promise<void> {
     try {
-      await this.database.transaction(async (store: relationalStore.RdbStore): Promise<void> => {
+      await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
         const predicates = new relationalStore.RdbPredicates(REMINDER_TABLE);
         predicates.equalTo('item_id', itemId);
         await store.delete(predicates);
@@ -117,12 +118,10 @@ export class ReminderDao {
   }
 
   private readString(resultSet: relationalStore.ResultSet, column: string): string | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getString(index);
+    return ResultSetReader.readString(resultSet, column);
   }
 
   private readLong(resultSet: relationalStore.ResultSet, column: string): number | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getLong(index);
+    return ResultSetReader.readLong(resultSet, column);
   }
 }

@@ -25,6 +25,16 @@ export interface ItemListRouteParams {
   query?: ItemQuery;
 }
 
+export interface NavigationRouteParams {
+  itemId?: string;
+  batchId?: string;
+  mode?: string;
+  returnTo?: string;
+  refreshAt?: number;
+  query?: ItemQuery;
+  source?: string;
+}
+
 export function requireItemId(params?: ItemRouteParams): Result<string> {
   const itemId = params?.itemId?.trim() ?? '';
   if (itemId.length === 0) {

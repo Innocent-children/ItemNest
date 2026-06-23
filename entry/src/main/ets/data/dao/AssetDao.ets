@@ -3,6 +3,7 @@ import { AppError, AppErrorCode } from '../../common/AppError';
 import { AssetSource, ItemAsset } from '../../model/ItemAsset';
 import { RdbDatabase } from '../rdb/RdbDatabase';
 import { ASSET_TABLE } from '../rdb/AssetSchema';
+import { ResultSetReader } from '../rdb/ResultSetReader';
 
 export class AssetDao {
   private readonly database: RdbDatabase;
@@ -13,7 +14,7 @@ export class AssetDao {
 
   async create(asset: ItemAsset): Promise<void> {
     try {
-      await this.database.transaction(async (store: relationalStore.RdbStore): Promise<void> => {
+      await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
         const rowId = await store.insert(ASSET_TABLE, this.toValues(asset));
         if (rowId < 0) {
           throw new AppError(AppErrorCode.DATABASE_WRITE, '保存图片记录失败，请重试');
@@ -45,7 +46,7 @@ export class AssetDao {
 
   async deleteById(assetId: string): Promise<void> {
     try {
-      await this.database.transaction(async (store: relationalStore.RdbStore): Promise<void> => {
+      await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
         const predicates = new relationalStore.RdbPredicates(ASSET_TABLE);
         predicates.equalTo('id', assetId);
         await store.delete(predicates);
@@ -64,11 +65,11 @@ export class AssetDao {
       const resultSet = await store.query(predicates);
       const assets: ItemAsset[] = [];
       try {
-        while (resultSet.goToNextRow()) {
+        while (ResultSetReader.goToNextRow(resultSet)) {
           assets.push(this.mapAsset(resultSet));
         }
       } finally {
-        resultSet.close();
+        ResultSetReader.close(resultSet);
       }
       return assets;
     } catch (error) {
@@ -100,12 +101,10 @@ export class AssetDao {
   }
 
   private readString(resultSet: relationalStore.ResultSet, column: string): string | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getString(index);
+    return ResultSetReader.readString(resultSet, column);
   }
 
   private readLong(resultSet: relationalStore.ResultSet, column: string): number | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getLong(index);
+    return ResultSetReader.readLong(resultSet, column);
   }
 }

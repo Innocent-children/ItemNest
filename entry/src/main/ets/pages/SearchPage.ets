@@ -4,6 +4,7 @@ import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
 import { MainEntryBar } from '../components/MainEntryBar';
+import { AppEventBus } from '../common/AppEventBus';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { SearchHistory } from '../model/SearchHistory';
@@ -11,9 +12,8 @@ import { ItemListRouteParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
 
-@Entry
 @Component
-struct SearchPage {
+export struct SearchPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
@@ -30,29 +30,39 @@ struct SearchPage {
   @State private errorMessage: string = '';
   private searchRequestId: number = 0;
   private inputSearchVersion: number = 0;
+  private lastHandledDataRevision: number = -1;
 
   aboutToAppear(): void {
     this.readInitialQuery();
     const hasInitialQuery = !this.currentQuery().isEmpty();
-    this.loadFilterOptions(!hasInitialQuery);
-    this.loadSuggestions();
+    this.loadSearchDataForCurrentRevision(!hasInitialQuery, false);
     if (hasInitialQuery) {
       this.search(true, false);
     }
   }
 
   onPageShow(): void {
-    this.loadFilterOptions(false);
-    this.loadSuggestions();
-    if (this.searched) {
-      this.refreshResults(false);
-    }
+    this.refreshForRevisionChange(false);
   }
 
   private onDataRevisionChanged(): void {
-    this.loadFilterOptions(false);
+    this.refreshForRevisionChange(false);
+  }
+
+  private refreshForRevisionChange(showLoading: boolean = false): boolean {
+    const dataRevision = AppEventBus.currentDataRevision();
+    if (dataRevision === this.lastHandledDataRevision) {
+      return false;
+    }
+    this.loadSearchDataForCurrentRevision(showLoading, true);
+    return true;
+  }
+
+  private loadSearchDataForCurrentRevision(showLoading: boolean = true, refreshResultsIfSearched: boolean = true): void {
+    this.lastHandledDataRevision = AppEventBus.currentDataRevision();
+    this.loadFilterOptions(showLoading);
     this.loadSuggestions();
-    if (this.searched) {
+    if (refreshResultsIfSearched && this.searched) {
       this.refreshResults(false);
     }
   }

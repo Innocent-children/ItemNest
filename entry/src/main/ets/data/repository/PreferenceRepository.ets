@@ -63,7 +63,11 @@ export class PreferenceRepository implements PreferenceRepositoryPort {
 
   private async requireStore(): Promise<preferences.Preferences> {
     if (this.store === undefined) {
-      this.store = await preferences.getPreferences(this.context, PREFERENCES_NAME);
+      try {
+        this.store = await preferences.getPreferences(this.context, PREFERENCES_NAME);
+      } catch (error) {
+        throw toAppError(error, AppErrorCode.PREFERENCE_READ, '读取偏好设置失败，请重试');
+      }
     }
     return this.store;
   }

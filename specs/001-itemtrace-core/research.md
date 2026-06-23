@@ -193,3 +193,68 @@ SDK 声明存在，不等同于已经配置权限或可以直接写入业务代�
   `ohos.extension.form` 及 `form_config.json` 的 `forms`、`src`、`uiSyntax`、尺寸、刷新字段格式。
 - 服务卡片仅绑定 `dueSoonCount` 与 `todayReminderCount`，并使用 FormLink 打开主应用；不输出 Item 名称、位置、备注或照片。
 - 仍需在目标桌面确认：绑定计数的首帧/刷新显示、桌面添加流程、FormLink 是否可直接抵达新增表单，以及不同卡片尺寸的视觉效果。
+
+## 2026-06-23 在线官方文档与本机复核
+
+### 页面导航与刷新
+
+- 华为官方文档 `页面路由(@ohos.router)(不推荐)`（2026-05-26）已将传统页面路由标为不推荐；ArkUI FAQ 建议
+  `Navigation` / `NavPathStack` 使用 `pushPath` 的 `onPop` 回调和 `pop(result)` 接收返回结果。
+  本轮已把页面整体迁移为 `Index.ets` 单入口 `Navigation(this.pathStack)` 宿主，所有业务页面改为
+  `NavDestination` 内的 `@Component export struct`，`main_pages.json` 仅保留 `pages/Index`。
+- `NavigationHelper` 已移除 `@ohos.router` 依赖，改为注册当前 `NavPathStack` 并通过
+  `pushPathByName`、`clear`、`pop(result)` 和 `getParamByIndex` 封装应用内跳转。路由参数新增
+  `NavigationRouteParams` 显式接口，避免 ArkTS 在 `Object` 参数下拒绝未声明 object literal。
+- 本次修复不继续依赖旧 `router.back` 返回参数是否能被来源页稳定读取；保存成功后通过
+  `AppEventBus.notifyDataChanged()` 增加全局数据修订号，首页、列表和详情在 `onPageShow` 与
+  `@StorageLink` watch 中比较修订号后重新查询，覆盖隐藏页面错过事件或返回参数失效的情况。
+- 服务卡片 `FormLink` 的快速新增不再由 `EntryAbility` 直接调用导航。Ability 只写入
+  `itemtrace.quickAddRequest`，由 `Index` 在 `NavPathStack` 注册后消费并打开新增表单，避免冷启动时
+  导航栈尚未就绪导致快速新增请求丢失。
+
+### RDB Store 与提醒
+
+- 华为官方 `通过关系型数据库实现数据持久化 (ArkTS)`（在线检索版本日期 2026-06-12）继续推荐 Stage 模型使用
+  `@kit.ArkData` 的 `relationalStore.getRdbStore`、`createTransaction`、`execute`、`querySql`、
+  `insert/update/delete/query`；文档强调数据库升级推荐使用事务保证原子性。
+- 已将 `RdbDatabase` 的迁移流程和业务写事务从 `beginTransaction/commit/rollBack` 收敛为
+  `createTransaction()` 事务对象，并将 schema SQL 从 `executeSql` 改为事务对象 `execute`。数据库版本更新
+  改为在同一事务内执行 `PRAGMA user_version = ${DATABASE_VERSION}`，避免 schema 已提交但版本号未更新导致
+  下一次启动重复迁移。构建通过；剩余 ArkTS warning 集中在 schema SQL、ResultSet getter、少量 Repository
+  查询结果读取等“可能抛异常”调用，后续应补更细粒度异常转换与失败路径测试。
+- 搜索页已纳入与首页/列表/详情一致的数据修订号刷新模型：从搜索页底部 `+` 新增物品返回后会按 revision
+  刷新筛选选项和已搜索结果，同时避免 `onPageShow` 与 `@StorageLink` watcher 双重刷新。首页订阅的
+  `AppEventBus` listener 已在 `aboutToDisappear` 释放，避免页面重建后重复监听。
+- 数据层 ArkTS “Function may throw exceptions” warning 已收敛：新增 `ResultSetReader` 统一包装
+  `ResultSet.goTo*`、`getColumnIndex`、`isColumnNull`、`getString/getDouble/getLong` 与 `close`，新增
+  `SchemaExecutor` 统一包装 schema 迁移 SQL 的 `Transaction.execute`。库存阈值保存不再在写事务内重新
+  打开 `RdbStore` 查询，改为使用同一个 `relationalStore.Transaction` 查询。迁移到 `Navigation` 后，
+  当前 ArkTS 编译不再出现 router deprecated warning。
+- 华为官方 `代理提醒(ArkTS)`（更新时间 2026-06-12）明确代理提醒存在管控、普通应用有效提醒数量上限、
+  `ohos.permission.PUBLISH_AGENT_REMINDER` 权限、通知授权和 Notification Kit 关系；错误码文档
+  （更新时间 2026-06-13）列出 `1700001` 通知未开启、`1700002` 数量超限等处理路径。当前提醒功能仍必须
+  保持应用内临期列表降级，不得把系统提醒成功作为 Item 保存前置条件。
+
+### macOS 构建复核
+
+- 当前本机 DevEco SDK 根目录应设置为 `/Applications/DevEco-Studio.app/Contents/sdk`，而不是
+  `.../sdk/default` 或 `.../sdk/default/openharmony`。使用后两者会触发 `SDK component missing`。
+- 已执行：
+  `env DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw --no-daemon assembleApp`
+- 初次结果：`CompileArkTS`、`PackageHap` 均完成；最终失败在 `SignHap`，因为根 `build-profile.json5`
+  的 `signingConfigs.default.material` 指向 Windows 路径
+  `C:\Users\zero\.ohos\config\default_ItemTrace_...p12`。
+- 已移除无效 Windows 签名材料与密码后重新执行同一命令，结果为 `BUILD SUCCESSFUL`。当前产物使用
+  无签名本地构建路径；真机安装仍需在 DevEco Studio 中为当前机器重新生成调试签名材料。
+- 完成 `Navigation` / `NavPathStack` 迁移后再次执行同一 `assembleApp` 命令，结果为
+  `BUILD SUCCESSFUL`。构建剩余警告为混淆配置建议、DevEco 打包工具内部 `sun.misc.Unsafe` 终端弃用
+  提示，以及无签名配置提示；没有 ArkTS 编译错误或 router deprecated warning。
+- 华为单元测试 FAQ（更新时间 2026-06-03）说明 `@ohos/hypium` 1.0.25 及以上可用于当前测试场景；
+  项目当前根 `oh-package.json5` 使用 `@ohos/hypium` 1.0.25。已新增 `AppEventBus` 本地单测并接入
+  `entry/src/test/List.test.ets`，同时新增 `entry/src/ohosTest/ets/test/AppEventBusFlow.test.ets` 并接入
+  `entry/src/ohosTest/ets/test/List.test.ets`，覆盖刷新链路共同依赖的数据修订号和监听释放机制。
+- 本机 `hvigorw --no-daemon tasks` 未直接列出测试运行任务。已确认不能把 `ohosTest` 当作 product，
+  也不能把 `ohosTest` 关联到 product；可用的测试包编译命令是
+  `hvigorw assembleHap --mode module -p module=entry@ohosTest -p product=default -p buildMode=test --no-daemon`。
+  该命令已通过并执行 `OhosTestCompileArkTS`，但尚未在设备上运行测试用例；后续必须通过 DevEco Studio
+  测试入口或确认的 `aa test`/Hypium 流程执行后才能把 T098/T100 标为完成。

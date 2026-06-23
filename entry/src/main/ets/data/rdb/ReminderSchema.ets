@@ -1,4 +1,5 @@
 import { relationalStore } from '@kit.ArkData';
+import { SchemaExecutor } from './SchemaExecutor';
 
 export const REMINDER_TABLE: string = 'reminder_record';
 
@@ -18,9 +19,9 @@ const REMINDER_INDEXES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_reminder_record_scheduled_at ON reminder_record(scheduled_at)'
 ];
 
-export async function createReminderSchema(store: relationalStore.RdbStore): Promise<void> {
-  await store.executeSql(CREATE_REMINDER_TABLE);
+export async function createReminderSchema(store: relationalStore.Transaction): Promise<void> {
+  await SchemaExecutor.execute(store, CREATE_REMINDER_TABLE);
   for (let index = 0; index < REMINDER_INDEXES.length; index++) {
-    await store.executeSql(REMINDER_INDEXES[index]);
+    await SchemaExecutor.execute(store, REMINDER_INDEXES[index]);
   }
 }

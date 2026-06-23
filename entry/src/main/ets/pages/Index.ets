@@ -10,6 +10,16 @@ import { ItemQuery } from '../model/ItemQuery';
 import { RouteRefreshParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
+import { BatchFormPage } from './BatchFormPage';
+import { BatchListPage } from './BatchListPage';
+import { CategoryManagementPage } from './CategoryManagementPage';
+import { ItemDetailPage } from './ItemDetailPage';
+import { ItemFormPage } from './ItemFormPage';
+import { ItemListPage } from './ItemListPage';
+import { LendingPage } from './LendingPage';
+import { LocationManagementPage } from './LocationManagementPage';
+import { SearchPage } from './SearchPage';
+import { SettingsPage } from './SettingsPage';
 
 @Entry
 @Component
@@ -31,16 +41,28 @@ struct Index {
   private dataRefreshListenerId: number = 0;
   private summaryLoadId: number = 0;
   private lastRouteRefreshAt: number = 0;
+  private lastHandledDataRevision: number = -1;
+  private lastHandledPreferenceRevision: number = -1;
+  private pathStack: NavPathStack = new NavPathStack();
 
   aboutToAppear(): void {
+    NavigationHelper.registerPathStack(this.pathStack);
     this.subscribeDataRefresh();
-    this.refreshSummary(true);
+    this.refreshSummaryForCurrentRevision(true);
     this.openQuickAddIfRequested();
   }
 
+  aboutToDisappear(): void {
+    if (this.dataRefreshListenerId > 0) {
+      AppEventBus.unsubscribeDataChanged(this.dataRefreshListenerId);
+      this.dataRefreshListenerId = 0;
+    }
+    NavigationHelper.unregisterPathStack(this.pathStack);
+  }
+
   onPageShow(): void {
-    if (!this.handleRouteRefreshParams()) {
-      this.refreshSummary(false);
+    if (!this.refreshForRevisionChange(false) && !this.handleRouteRefreshParams()) {
+      this.refreshSummaryForCurrentRevision(false);
     }
     this.openQuickAddIfRequested();
   }
@@ -50,16 +72,16 @@ struct Index {
   }
 
   private onRevisionChanged(): void {
-    this.refreshSummary(false);
+    this.refreshForRevisionChange(false);
   }
 
   private handleRouteRefreshParams(): boolean {
     try {
-      const params = this.getUIContext().getRouter().getParams() as RouteRefreshParams | undefined;
+      const params = NavigationHelper.getParams() as RouteRefreshParams | undefined;
       const refreshAt = params?.refreshAt ?? 0;
       if (refreshAt > 0 && refreshAt !== this.lastRouteRefreshAt) {
         this.lastRouteRefreshAt = refreshAt;
-        this.refreshSummary(false);
+        this.refreshSummaryForCurrentRevision(false);
         return true;
       }
     } catch (_) {
@@ -71,12 +93,23 @@ struct Index {
     if (this.dataRefreshListenerId > 0) {
       return;
     }
-    this.dataRefreshListenerId = AppEventBus.subscribeDataChanged(() => this.refreshSummary(false));
+    this.dataRefreshListenerId = AppEventBus.subscribeDataChanged(() => this.refreshForRevisionChange(false));
   }
 
-  private refreshSummary(showLoading: boolean = false): void {
+  private refreshForRevisionChange(showLoading: boolean = false): boolean {
+    const dataRevision = AppEventBus.currentDataRevision();
+    const preferenceRevision = AppEventBus.currentPreferenceRevision();
+    if (dataRevision === this.lastHandledDataRevision && preferenceRevision === this.lastHandledPreferenceRevision) {
+      return false;
+    }
+    this.refreshSummaryForCurrentRevision(showLoading);
+    return true;
+  }
+
+  private refreshSummaryForCurrentRevision(showLoading: boolean = false): void {
+    this.lastHandledDataRevision = AppEventBus.currentDataRevision();
+    this.lastHandledPreferenceRevision = AppEventBus.currentPreferenceRevision();
     this.loadSummary(showLoading);
-    setTimeout(() => this.loadSummary(false), 300);
   }
 
   private openQuickAddIfRequested(): void {
@@ -88,6 +121,18 @@ struct Index {
   }
 
   build() {
+    Navigation(this.pathStack) {
+      this.homeContent()
+    }
+    .hideTitleBar(true)
+    .navDestination(this.navDestinationBuilder)
+    .width('100%')
+    .height('100%')
+    .backgroundColor($r('app.color.surface_app'))
+  }
+
+  @Builder
+  private homeContent() {
     Column() {
       if (this.loading) {
         LoadingState({ text: '正在整理你的物品清单…' })
@@ -97,7 +142,7 @@ struct Index {
           Button('重新加载')
             .fontColor($r('app.color.brand_on_primary'))
             .backgroundColor($r('app.color.brand_primary'))
-            .onClick(() => this.loadSummary(true))
+            .onClick(() => this.refreshSummaryForCurrentRevision(true))
         }
         .padding($r('app.float.space_4'))
       } else {
@@ -109,7 +154,7 @@ struct Index {
               this.locationShortcutSection()
             }
             if (this.showRecentSection) {
-              this.summarySection('最近添加', '刚记录的物品', this.recentItems, '暂无物品', RouteName.ITEM_FORM)
+              this.summarySection('最近添加', '刚记录的物品', this.recentItems, '暂无物品', RouteName.ITEM_FORM, RouteName.HOME)
             }
             if (this.showExpirySection) {
               this.summarySection('即将到期', '优先处理，避免浪费', this.dueSoonItems, '暂无即将到期物品', RouteName.ITEM_LIST)
@@ -130,6 +175,36 @@ struct Index {
     .height('100%')
     .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
     .backgroundColor($r('app.color.surface_app'))
+  }
+
+  @Builder
+  private navDestinationBuilder(name: string, param: Object) {
+    NavDestination() {
+      if (name === RouteName.ITEM_LIST) {
+        ItemListPage()
+      } else if (name === RouteName.ITEM_DETAIL) {
+        ItemDetailPage()
+      } else if (name === RouteName.ITEM_FORM) {
+        ItemFormPage()
+      } else if (name === RouteName.SEARCH) {
+        SearchPage()
+      } else if (name === RouteName.SETTINGS) {
+        SettingsPage()
+      } else if (name === RouteName.BATCH_LIST) {
+        BatchListPage()
+      } else if (name === RouteName.BATCH_FORM) {
+        BatchFormPage()
+      } else if (name === RouteName.LENDING) {
+        LendingPage()
+      } else if (name === RouteName.LOCATION_MANAGEMENT) {
+        LocationManagementPage()
+      } else if (name === RouteName.CATEGORY_MANAGEMENT) {
+        CategoryManagementPage()
+      } else {
+        ErrorState({ message: '页面不存在，请返回首页后重试' })
+      }
+    }
+    .hideTitleBar(true)
   }
 
   @Builder
@@ -254,7 +329,7 @@ struct Index {
   }
 
   @Builder
-  private summarySection(title: string, subtitle: string, items: ItemSummary[], emptyText: string, actionRoute: string) {
+  private summarySection(title: string, subtitle: string, items: ItemSummary[], emptyText: string, actionRoute: string, actionReturnTo: string = '') {
     Column({ space: $r('app.float.space_3') }) {
       Row() {
         Column({ space: $r('app.float.space_1') }) {
@@ -277,7 +352,8 @@ struct Index {
           description: this.summaryEmptyDescription(title),
           actionText: this.summaryEmptyActionText(title),
           actionRoute: actionRoute,
-          actionMode: actionRoute === RouteName.ITEM_FORM ? 'create' : ''
+          actionMode: actionRoute === RouteName.ITEM_FORM ? 'create' : '',
+          actionReturnTo: actionReturnTo
         })
       } else {
         ForEach(items, (item: ItemSummary) => {

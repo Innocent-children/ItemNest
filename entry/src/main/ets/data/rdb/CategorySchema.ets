@@ -1,4 +1,5 @@
 import { relationalStore } from '@kit.ArkData';
+import { SchemaExecutor } from './SchemaExecutor';
 
 export const CATEGORY_TABLE: string = 'managed_category';
 
@@ -44,11 +45,11 @@ const MIGRATE_ITEM_CATEGORIES: string = `
   GROUP BY item.category
 `;
 
-export async function createCategorySchema(store: relationalStore.RdbStore): Promise<void> {
-  await store.executeSql(CREATE_CATEGORY_TABLE);
+export async function createCategorySchema(store: relationalStore.Transaction): Promise<void> {
+  await SchemaExecutor.execute(store, CREATE_CATEGORY_TABLE);
   for (let index = 0; index < CATEGORY_INDEXES.length; index++) {
-    await store.executeSql(CATEGORY_INDEXES[index]);
+    await SchemaExecutor.execute(store, CATEGORY_INDEXES[index]);
   }
-  await store.executeSql(SEED_PRESET_CATEGORIES);
-  await store.executeSql(MIGRATE_ITEM_CATEGORIES);
+  await SchemaExecutor.execute(store, SEED_PRESET_CATEGORIES);
+  await SchemaExecutor.execute(store, MIGRATE_ITEM_CATEGORIES);
 }

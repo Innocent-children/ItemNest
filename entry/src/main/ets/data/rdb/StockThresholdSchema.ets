@@ -1,4 +1,5 @@
 import { relationalStore } from '@kit.ArkData';
+import { SchemaExecutor } from './SchemaExecutor';
 
 export const STOCK_THRESHOLD_TABLE: string = 'stock_threshold';
 
@@ -11,6 +12,6 @@ const CREATE_STOCK_THRESHOLD_TABLE: string = `
   )
 `;
 
-export async function createStockThresholdSchema(store: relationalStore.RdbStore): Promise<void> {
-  await store.executeSql(CREATE_STOCK_THRESHOLD_TABLE);
+export async function createStockThresholdSchema(store: relationalStore.Transaction): Promise<void> {
+  await SchemaExecutor.execute(store, CREATE_STOCK_THRESHOLD_TABLE);
 }

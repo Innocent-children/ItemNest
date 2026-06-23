@@ -21,43 +21,42 @@ export async function migrateToLatest(store: relationalStore.RdbStore): Promise<
     return;
   }
 
-  let started = false;
+  let transaction: relationalStore.Transaction | undefined = undefined;
   try {
-    store.beginTransaction();
-    started = true;
+    transaction = await store.createTransaction();
     if (currentVersion < 1) {
-      await createItemSchema(store);
+      await createItemSchema(transaction);
     }
     if (currentVersion < 2) {
-      await createReminderSchema(store);
+      await createReminderSchema(transaction);
     }
     if (currentVersion < 3) {
-      await createAssetSchema(store);
+      await createAssetSchema(transaction);
     }
     if (currentVersion < 4) {
-      await createBatchSchema(store);
+      await createBatchSchema(transaction);
     }
     if (currentVersion < 5) {
-      await createStockThresholdSchema(store);
+      await createStockThresholdSchema(transaction);
     }
     if (currentVersion < 6) {
-      await createTraceEventSchema(store);
+      await createTraceEventSchema(transaction);
     }
     if (currentVersion < 7) {
-      await createLocationSchema(store);
+      await createLocationSchema(transaction);
     }
     if (currentVersion < 8) {
-      await createCategorySchema(store);
+      await createCategorySchema(transaction);
     }
     if (currentVersion < 9) {
-      await createSearchHistorySchema(store);
+      await createSearchHistorySchema(transaction);
     }
-    store.version = DATABASE_VERSION;
-    store.commit();
+    await transaction.execute(`PRAGMA user_version = ${DATABASE_VERSION}`);
+    await transaction.commit();
   } catch (error) {
-    if (started) {
+    if (transaction !== undefined) {
       try {
-        store.rollBack();
+        await transaction.rollback();
       } catch (_) {
         // 保留迁移失败结果，页面不会继续读取或写入。
       }
@@ -98,30 +97,32 @@ export class RdbDatabase {
     return result.getData();
   }
 
-  async transaction<T>(operation: (store: relationalStore.RdbStore) => Promise<T>): Promise<T> {
+  async transaction<T>(operation: (store: relationalStore.Transaction) => Promise<T>): Promise<T> {
     const store = await this.requireStore();
-    let started = false;
+    let transaction: relationalStore.Transaction | undefined = undefined;
     try {
-      store.beginTransaction();
-      started = true;
-      const value = await operation(store);
-      store.commit();
+      transaction = await store.createTransaction();
+      const value = await operation(transaction);
+      await transaction.commit();
       return value;
     } catch (error) {
-      if (started) {
+      if (transaction !== undefined) {
         try {
-          store.rollBack();
+          await transaction.rollback();
         } catch (_) {
           // 回滚失败不覆盖原始领域错误。
         }
       }
-      throw toAppError(error as Error, AppErrorCode.DATABASE_INIT, '数据库初始化失败，请重试');
+      throw toAppError(error as Error, AppErrorCode.DATABASE_WRITE, '数据库写入失败，请重试');
     }
   }
 
   close(): void {
     if (this.store !== undefined) {
-      this.store.close();
+      try {
+        this.store.close();
+      } catch (_) {
+      }
       this.store = undefined;
       this.initializing = undefined;
     }

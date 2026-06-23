@@ -13,9 +13,8 @@ import { RouteName } from '../navigation/RouteName';
 import { AppEventBus } from '../common/AppEventBus';
 import { AppServices } from '../service/AppServices';
 
-@Entry
 @Component
-struct ItemFormPage {
+export struct ItemFormPage {
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private name: string = '';
@@ -544,14 +543,14 @@ struct ItemFormPage {
 
   private finishSave(notice?: string): void {
     this.showToast(notice ?? '物品已保存');
+    const refreshAt = AppEventBus.notifyDataChanged();
     NavigationHelper.back({
       url: this.returnToRoute,
       params: {
-        refreshAt: Date.now(),
+        refreshAt: refreshAt,
         itemId: this.itemId
       }
     });
-    AppEventBus.notifyDataChangedAfterNavigation();
   }
 
   private showToast(message: string): void {

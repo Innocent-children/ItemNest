@@ -8,9 +8,8 @@ import { ItemSortMode, ThemeMode, UserPreferences } from '../model/UserPreferenc
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
 
-@Entry
 @Component
-struct SettingsPage {
+export struct SettingsPage {
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private defaultReminderDays: string = '7';

@@ -1,16 +1,13 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { router, window } from '@kit.ArkUI';
+import { window } from '@kit.ArkUI';
 import { AppServices } from '../service/AppServices';
 import { ThemeMode } from '../model/UserPreferences';
-import { RouteName } from '../navigation/RouteName';
 
 const DOMAIN = 0x0000;
+const QUICK_ADD_FORM_SOURCE = 'itemtrace-form-quick-add';
 
 export default class EntryAbility extends UIAbility {
-  private pageContentLoaded: boolean = false;
-  private pendingFormQuickAdd: boolean = false;
-
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     AppServices.configure(this.context);
     this.handleFormLinkWant(want);
@@ -35,8 +32,6 @@ export default class EntryAbility extends UIAbility {
         hilog.error(DOMAIN, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));
         return;
       }
-      this.pageContentLoaded = true;
-      this.openFormQuickAddIfNeeded();
       hilog.info(DOMAIN, 'testTag', 'Succeeded in loading the content.');
     });
   }
@@ -138,20 +133,9 @@ export default class EntryAbility extends UIAbility {
 
   private handleFormLinkWant(want: Want): void {
     const source = want.parameters?.['source'];
-    if (source === 'itemtrace-form-quick-add') {
-      this.pendingFormQuickAdd = true;
-      this.openFormQuickAddIfNeeded();
+    if (source === QUICK_ADD_FORM_SOURCE) {
+      AppStorage.setOrCreate<string>('itemtrace.quickAddRequest', `${QUICK_ADD_FORM_SOURCE}:${Date.now()}`);
     }
-  }
-
-  private openFormQuickAddIfNeeded(): void {
-    if (!this.pendingFormQuickAdd || !this.pageContentLoaded) {
-      return;
-    }
-    this.pendingFormQuickAdd = false;
-    router.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } }).catch((err: Error) => {
-      hilog.error(DOMAIN, 'testTag', 'Failed to open quick-add form. Cause: %{public}s', err.message);
-    });
   }
 
   onBackground(): void {

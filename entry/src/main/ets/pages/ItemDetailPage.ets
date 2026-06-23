@@ -11,9 +11,8 @@ import { ItemFormRouteParams, requireItemId, RouteRefreshParams } from '../navig
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
 
-@Entry
 @Component
-struct ItemDetailPage {
+export struct ItemDetailPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
@@ -32,6 +31,7 @@ struct ItemDetailPage {
   @State @Watch('handleDeleteRequest') private deleteRequested: boolean = false;
   private itemId: string = '';
   private lastRouteRefreshAt: number = 0;
+  private lastHandledDataRevision: number = -1;
 
   aboutToAppear(): void {
     const params = NavigationHelper.getParams() as ItemFormRouteParams | undefined;
@@ -47,36 +47,50 @@ struct ItemDetailPage {
       return;
     }
     this.itemId = itemIdResult.getData();
-    this.loadDetail(true);
+    this.loadDetailForCurrentRevision(true);
   }
 
   onPageShow(): void {
-    if (this.handleRouteRefreshParams()) {
+    if (this.refreshForRevisionChange(false) || this.handleRouteRefreshParams()) {
       return;
     }
     if (this.itemId.length > 0) {
-      this.loadDetail(false);
+      this.loadDetailForCurrentRevision(false);
     }
   }
 
   private onDataRevisionChanged(): void {
     if (this.itemId.length > 0 && !this.deleting) {
-      this.loadDetail(false);
+      this.refreshForRevisionChange(false);
     }
   }
 
   private handleRouteRefreshParams(): boolean {
     try {
-      const params = this.getUIContext().getRouter().getParams() as RouteRefreshParams | undefined;
+      const params = NavigationHelper.getParams() as RouteRefreshParams | undefined;
       const refreshAt = params?.refreshAt ?? 0;
       if (refreshAt > 0 && refreshAt !== this.lastRouteRefreshAt) {
         this.lastRouteRefreshAt = refreshAt;
-        this.loadDetail(false);
+        this.loadDetailForCurrentRevision(false);
         return true;
       }
     } catch (_) {
     }
     return false;
+  }
+
+  private refreshForRevisionChange(showLoading: boolean = false): boolean {
+    const dataRevision = AppEventBus.currentDataRevision();
+    if (dataRevision === this.lastHandledDataRevision) {
+      return false;
+    }
+    this.loadDetailForCurrentRevision(showLoading);
+    return true;
+  }
+
+  private loadDetailForCurrentRevision(showLoading: boolean = true): void {
+    this.lastHandledDataRevision = AppEventBus.currentDataRevision();
+    this.loadDetail(showLoading);
   }
 
   build() {

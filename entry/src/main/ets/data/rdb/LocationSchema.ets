@@ -1,4 +1,5 @@
 import { relationalStore } from '@kit.ArkData';
+import { SchemaExecutor } from './SchemaExecutor';
 
 export const LOCATION_TABLE: string = 'managed_location';
 
@@ -33,10 +34,10 @@ const MIGRATE_ITEM_LOCATIONS: string = `
   GROUP BY item.location_path
 `;
 
-export async function createLocationSchema(store: relationalStore.RdbStore): Promise<void> {
-  await store.executeSql(CREATE_LOCATION_TABLE);
+export async function createLocationSchema(store: relationalStore.Transaction): Promise<void> {
+  await SchemaExecutor.execute(store, CREATE_LOCATION_TABLE);
   for (let index = 0; index < LOCATION_INDEXES.length; index++) {
-    await store.executeSql(LOCATION_INDEXES[index]);
+    await SchemaExecutor.execute(store, LOCATION_INDEXES[index]);
   }
-  await store.executeSql(MIGRATE_ITEM_LOCATIONS);
+  await SchemaExecutor.execute(store, MIGRATE_ITEM_LOCATIONS);
 }

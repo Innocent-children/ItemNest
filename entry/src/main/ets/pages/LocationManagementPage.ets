@@ -4,9 +4,8 @@ import { AppEventBus } from '../common/AppEventBus';
 import { LocationRecord } from '../model/Location';
 import { AppServices } from '../service/AppServices';
 
-@Entry
 @Component
-struct LocationManagementPage {
+export struct LocationManagementPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
@@ -15,17 +14,32 @@ struct LocationManagementPage {
   @State private name: string = '';
   @State private selectedParentId: string = '';
   @State private locations: LocationRecord[] = [];
+  private lastHandledDataRevision: number = -1;
 
   aboutToAppear(): void {
-    this.loadLocations(true);
+    this.loadLocationsForCurrentRevision(true);
   }
 
   onPageShow(): void {
-    this.loadLocations(false);
+    this.refreshForRevisionChange(false);
   }
 
   private onDataRevisionChanged(): void {
-    this.loadLocations(false);
+    this.refreshForRevisionChange(false);
+  }
+
+  private refreshForRevisionChange(showLoading: boolean = false): boolean {
+    const dataRevision = AppEventBus.currentDataRevision();
+    if (dataRevision === this.lastHandledDataRevision) {
+      return false;
+    }
+    this.loadLocationsForCurrentRevision(showLoading);
+    return true;
+  }
+
+  private loadLocationsForCurrentRevision(showLoading: boolean = true): void {
+    this.lastHandledDataRevision = AppEventBus.currentDataRevision();
+    this.loadLocations(showLoading);
   }
 
   build() {
@@ -134,8 +148,8 @@ struct LocationManagementPage {
     });
     if (result.ok) {
       this.name = '';
+      this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadLocations(false);
-      AppEventBus.notifyDataChanged();
       this.showToast('位置已新增');
     } else {
       this.errorMessage = result.getError().message;
@@ -145,8 +159,8 @@ struct LocationManagementPage {
   private async toggleLocation(location: LocationRecord): Promise<void> {
     const result = location.active ? await AppServices.get().locations.deactivate(location.id) : await AppServices.get().locations.activate(location.id);
     if (result.ok) {
+      this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadLocations(false);
-      AppEventBus.notifyDataChanged();
       this.showToast(location.active ? '位置已停用' : '位置已启用');
     } else {
       this.errorMessage = result.getError().message;

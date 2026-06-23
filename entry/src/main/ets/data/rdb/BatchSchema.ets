@@ -1,4 +1,5 @@
 ﻿import { relationalStore } from '@kit.ArkData';
+import { SchemaExecutor } from './SchemaExecutor';
 
 export const BATCH_TABLE: string = 'batch';
 
@@ -38,10 +39,10 @@ const BATCH_INDEXES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_batch_expiration_date ON batch(expiration_date)'
 ];
 
-export async function createBatchSchema(store: relationalStore.RdbStore): Promise<void> {
-  await store.executeSql(CREATE_BATCH_TABLE);
+export async function createBatchSchema(store: relationalStore.Transaction): Promise<void> {
+  await SchemaExecutor.execute(store, CREATE_BATCH_TABLE);
   for (let index = 0; index < BATCH_INDEXES.length; index++) {
-    await store.executeSql(BATCH_INDEXES[index]);
+    await SchemaExecutor.execute(store, BATCH_INDEXES[index]);
   }
-  await store.executeSql(MIGRATE_ITEM_TO_DEFAULT_BATCH);
+  await SchemaExecutor.execute(store, MIGRATE_ITEM_TO_DEFAULT_BATCH);
 }

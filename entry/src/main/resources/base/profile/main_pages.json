@@ -1,15 +1,5 @@
 {
   "src": [
-    "pages/Index",
-    "pages/ItemListPage",
-    "pages/ItemDetailPage",
-    "pages/ItemFormPage",
-    "pages/SearchPage",
-    "pages/SettingsPage",
-    "pages/BatchListPage",
-    "pages/BatchFormPage",
-    "pages/LendingPage",
-    "pages/LocationManagementPage",
-    "pages/CategoryManagementPage"
+    "pages/Index"
   ]
 }

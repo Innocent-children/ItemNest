@@ -1,4 +1,5 @@
 import { relationalStore } from '@kit.ArkData';
+import { SchemaExecutor } from './SchemaExecutor';
 
 export const DATABASE_NAME: string = 'itemtrace.db';
 export const DATABASE_VERSION: number = 9;
@@ -29,9 +30,9 @@ const ITEM_INDEXES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_item_expiration_date ON item(expiration_date)'
 ];
 
-export async function createItemSchema(store: relationalStore.RdbStore): Promise<void> {
-  await store.executeSql(CREATE_ITEM_TABLE);
+export async function createItemSchema(store: relationalStore.Transaction): Promise<void> {
+  await SchemaExecutor.execute(store, CREATE_ITEM_TABLE);
   for (let index = 0; index < ITEM_INDEXES.length; index++) {
-    await store.executeSql(ITEM_INDEXES[index]);
+    await SchemaExecutor.execute(store, ITEM_INDEXES[index]);
   }
 }

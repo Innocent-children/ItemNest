@@ -232,6 +232,18 @@ Phase 0：T001–T006
 
 ## 格式与完整性检查
 
-- 全部 95 项任务均使用 `- [ ] Tnnn [P] [USn]` 所要求的检查清单格式；非用户故事任务不带 `US` 标签。
+- Phase 1 至 Phase 3 共 95 项任务，Phase 4 汇聚任务继续按 `T096+` 追加；非用户故事任务不带 `US` 标签。
 - 每个任务均标明文件或目录、输入、输出和验收方式；没有任务依赖外部服务。
 - 系统能力任务 T003、T051、T054、T060、T066、T069、T081、T090 均明确要求“先查证 API，再实现抽象封装”。
+
+## Phase 4: Convergence
+
+- [X] T096 CRITICAL 将根 `build-profile.json5` 的 Windows 签名材料替换为当前 macOS/DevEco 环境可用的本机签名配置，或提供不签名的本地编译验证路径 per Constitution V (contradicts)
+- [X] T097 HIGH 将 `entry/src/main/ets/navigation/NavigationHelper.ets`、`entry/src/main/ets/pages/` 与 `MainEntryBar` 从已不推荐的 `router.pushUrl/getParams/back` 迁移到华为官方推荐的 `Navigation`/`NavPathStack`/`NavDestination` 返回结果模型；`Index.ets` 成为唯一页面入口，`main_pages.json` 仅保留 `pages/Index`，`NavigationRouteParams` 显式约束路由参数，并通过 `assembleApp` 验证 per plan: latest ArkUI navigation decision
+- [ ] T098 HIGH 为新增、编辑、删除、照片移除、批次变更后的首页/列表/详情刷新链路补充本地或设备测试，覆盖 `AppEventBus` 数据修订号、`returnTo` 和返回参数降级 per FR-010/FR-011/T047 (partial)
+- [ ] T099 MEDIUM 消除 `entry/src/main/ets/data/rdb/`、`entry/src/main/ets/data/dao/` 与 `entry/src/main/ets/data/repository/` 中可处理的 ArkTS 抛异常 warning，补充失败路径测试 per DP-001 (partial)
+- [ ] T100 MEDIUM 补齐 Phase 1/2 的真实 ohosTest 设备流程，不再保留模板级 `Ability.test.ets` 作为验收证据 per SC-004/SC-005/T048/T075 (partial)
+- [X] T101 HIGH 将 `entry/src/main/ets/data/rdb/RdbDatabase.ets` 与各 Schema 迁移改为官方 2026 文档推荐的 `createTransaction()` 事务对象流程，业务写事务回调改为 `relationalStore.Transaction`，数据库版本号在迁移事务内通过 `PRAGMA user_version` 更新 per DP-001
+- [X] T102 HIGH 将 `entry/src/main/ets/pages/SearchPage.ets` 纳入 `AppEventBus` 数据修订号刷新模型，并在 `Index.ets` 释放全局数据监听，覆盖从搜索页新增物品返回后的结果刷新和重复监听风险 per FR-010/FR-011
+- [X] T103 MEDIUM 新增 `entry/src/main/ets/data/rdb/{ResultSetReader.ets,SchemaExecutor.ets}`，统一处理 ResultSet 读取、关闭与 schema SQL 执行异常；将数据层 ArkTS 抛异常 warning 收敛到 0，并保持 `assembleApp` 通过 per DP-001
+- [X] T104 MEDIUM 新增 `entry/src/test/ets/test/AppEventBus.test.ets` 与 `entry/src/ohosTest/ets/test/AppEventBusFlow.test.ets`，分别接入 Local Test/ohosTest 测试套，覆盖数据 revision 递增、订阅/取消订阅、偏好 revision 与数据 revision 独立；已确认 `assembleApp` 与 `entry@ohosTest` 测试包 ArkTS 编译通过，真实设备执行继续由 T098/T100 跟踪 per FR-010/FR-011

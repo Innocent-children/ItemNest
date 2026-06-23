@@ -4,6 +4,7 @@ import { failure, Result, success } from '../../common/Result';
 import { TraceEvent, TraceEventType } from '../../model/TraceEvent';
 import { RdbDatabase } from '../rdb/RdbDatabase';
 import { TRACE_EVENT_TABLE } from '../rdb/TraceEventSchema';
+import { ResultSetReader } from '../rdb/ResultSetReader';
 
 export class TraceEventRepository {
   private readonly database: RdbDatabase;
@@ -14,7 +15,7 @@ export class TraceEventRepository {
 
   async append(event: TraceEvent): Promise<Result<TraceEvent>> {
     try {
-      await this.database.transaction(async (store: relationalStore.RdbStore): Promise<void> => {
+      await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
         const rowId = await store.insert(TRACE_EVENT_TABLE, this.toValues(event));
         if (rowId < 0) {
           throw new AppError(AppErrorCode.DATABASE_WRITE, '保存操作记录失败，请重试');
@@ -48,17 +49,21 @@ export class TraceEventRepository {
   }
 
   private async query(predicates: relationalStore.RdbPredicates): Promise<TraceEvent[]> {
-    const store = await this.database.requireStore();
-    const resultSet = await store.query(predicates);
-    const events: TraceEvent[] = [];
     try {
-      while (resultSet.goToNextRow()) {
-        events.push(this.mapEvent(resultSet));
+      const store = await this.database.requireStore();
+      const resultSet = await store.query(predicates);
+      const events: TraceEvent[] = [];
+      try {
+        while (ResultSetReader.goToNextRow(resultSet)) {
+          events.push(this.mapEvent(resultSet));
+        }
+      } finally {
+        ResultSetReader.close(resultSet);
       }
-    } finally {
-      resultSet.close();
+      return events;
+    } catch (error) {
+      throw toAppError(error, AppErrorCode.DATABASE_READ, '读取操作记录失败，请重试');
     }
-    return events;
   }
 
   private mapEvent(resultSet: relationalStore.ResultSet): TraceEvent {
@@ -75,18 +80,15 @@ export class TraceEventRepository {
   }
 
   private readString(resultSet: relationalStore.ResultSet, column: string): string | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getString(index);
+    return ResultSetReader.readString(resultSet, column);
   }
 
   private readDouble(resultSet: relationalStore.ResultSet, column: string): number | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getDouble(index);
+    return ResultSetReader.readDouble(resultSet, column);
   }
 
   private readLong(resultSet: relationalStore.ResultSet, column: string): number | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getLong(index);
+    return ResultSetReader.readLong(resultSet, column);
   }
 
   private toValues(event: TraceEvent): relationalStore.ValuesBucket {

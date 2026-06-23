@@ -4,9 +4,8 @@ import { AppEventBus } from '../common/AppEventBus';
 import { CategoryRecord } from '../model/Category';
 import { AppServices } from '../service/AppServices';
 
-@Entry
 @Component
-struct CategoryManagementPage {
+export struct CategoryManagementPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
@@ -14,17 +13,32 @@ struct CategoryManagementPage {
   @State private errorMessage: string = '';
   @State private name: string = '';
   @State private categories: CategoryRecord[] = [];
+  private lastHandledDataRevision: number = -1;
 
   aboutToAppear(): void {
-    this.loadCategories(true);
+    this.loadCategoriesForCurrentRevision(true);
   }
 
   onPageShow(): void {
-    this.loadCategories(false);
+    this.refreshForRevisionChange(false);
   }
 
   private onDataRevisionChanged(): void {
-    this.loadCategories(false);
+    this.refreshForRevisionChange(false);
+  }
+
+  private refreshForRevisionChange(showLoading: boolean = false): boolean {
+    const dataRevision = AppEventBus.currentDataRevision();
+    if (dataRevision === this.lastHandledDataRevision) {
+      return false;
+    }
+    this.loadCategoriesForCurrentRevision(showLoading);
+    return true;
+  }
+
+  private loadCategoriesForCurrentRevision(showLoading: boolean = true): void {
+    this.lastHandledDataRevision = AppEventBus.currentDataRevision();
+    this.loadCategories(showLoading);
   }
 
   build() {
@@ -111,8 +125,8 @@ struct CategoryManagementPage {
     const result = await AppServices.get().categories.create({ name: this.name });
     if (result.ok) {
       this.name = '';
+      this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadCategories(false);
-      AppEventBus.notifyDataChanged();
       this.showToast('分类已新增');
     } else {
       this.errorMessage = result.getError().message;
@@ -122,8 +136,8 @@ struct CategoryManagementPage {
   private async toggleCategory(category: CategoryRecord): Promise<void> {
     const result = await AppServices.get().categories.setActive(category.id, !category.active);
     if (result.ok) {
+      this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadCategories(false);
-      AppEventBus.notifyDataChanged();
       this.showToast(category.active ? '分类已停用' : '分类已启用');
     } else {
       this.errorMessage = result.getError().message;

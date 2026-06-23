@@ -1,4 +1,5 @@
 import { relationalStore } from '@kit.ArkData';
+import { SchemaExecutor } from './SchemaExecutor';
 
 export const ASSET_TABLE: string = 'item_asset';
 
@@ -17,9 +18,9 @@ const ASSET_INDEXES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_item_asset_created_at ON item_asset(created_at DESC)'
 ];
 
-export async function createAssetSchema(store: relationalStore.RdbStore): Promise<void> {
-  await store.executeSql(CREATE_ASSET_TABLE);
+export async function createAssetSchema(store: relationalStore.Transaction): Promise<void> {
+  await SchemaExecutor.execute(store, CREATE_ASSET_TABLE);
   for (let index = 0; index < ASSET_INDEXES.length; index++) {
-    await store.executeSql(ASSET_INDEXES[index]);
+    await SchemaExecutor.execute(store, ASSET_INDEXES[index]);
   }
 }

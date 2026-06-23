@@ -4,6 +4,7 @@ import { Item, ItemUnit, PhotoState } from '../../model/Item';
 import { ItemQuery } from '../../model/ItemQuery';
 import { ITEM_TABLE } from '../rdb/ItemSchema';
 import { RdbDatabase } from '../rdb/RdbDatabase';
+import { ResultSetReader } from '../rdb/ResultSetReader';
 
 export class ItemDao {
   private readonly database: RdbDatabase;
@@ -14,7 +15,7 @@ export class ItemDao {
 
   async create(item: Item): Promise<void> {
     try {
-      await this.database.transaction(async (store: relationalStore.RdbStore): Promise<void> => {
+      await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
         const rowId = await store.insert(ITEM_TABLE, this.toValues(item));
         if (rowId < 0) {
           throw new AppError(AppErrorCode.DATABASE_WRITE, '保存物品失败，请重试');
@@ -66,7 +67,7 @@ export class ItemDao {
 
   async update(item: Item): Promise<boolean> {
     try {
-      return await this.database.transaction(async (store: relationalStore.RdbStore): Promise<boolean> => {
+      return await this.database.transaction(async (store: relationalStore.Transaction): Promise<boolean> => {
         const predicates = new relationalStore.RdbPredicates(ITEM_TABLE);
         predicates.equalTo('id', item.id);
         const changedRows = await store.update(this.toUpdateValues(item), predicates);
@@ -82,7 +83,7 @@ export class ItemDao {
 
   async deleteById(itemId: string): Promise<boolean> {
     try {
-      return await this.database.transaction(async (store: relationalStore.RdbStore): Promise<boolean> => {
+      return await this.database.transaction(async (store: relationalStore.Transaction): Promise<boolean> => {
         const predicates = new relationalStore.RdbPredicates(ITEM_TABLE);
         predicates.equalTo('id', itemId);
         const changedRows = await store.delete(predicates);
@@ -102,11 +103,11 @@ export class ItemDao {
       const resultSet = await store.query(predicates);
       const items: Item[] = [];
       try {
-        while (resultSet.goToNextRow()) {
+        while (ResultSetReader.goToNextRow(resultSet)) {
           items.push(this.mapItem(resultSet));
         }
       } finally {
-        resultSet.close();
+        ResultSetReader.close(resultSet);
       }
       return items;
     } catch (error) {
@@ -136,18 +137,15 @@ export class ItemDao {
   }
 
   private readString(resultSet: relationalStore.ResultSet, column: string): string | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getString(index);
+    return ResultSetReader.readString(resultSet, column);
   }
 
   private readDouble(resultSet: relationalStore.ResultSet, column: string): number | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getDouble(index);
+    return ResultSetReader.readDouble(resultSet, column);
   }
 
   private readLong(resultSet: relationalStore.ResultSet, column: string): number | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getLong(index);
+    return ResultSetReader.readLong(resultSet, column);
   }
 
   private toValues(item: Item): relationalStore.ValuesBucket {

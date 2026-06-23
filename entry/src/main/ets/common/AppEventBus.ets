@@ -7,23 +7,26 @@ export class AppEventBus {
   private static nextListenerId: number = 1;
   private static dataListeners: Map<number, AppEventListener> = new Map<number, AppEventListener>();
 
-  static notifyDataChanged(): void {
-    AppEventBus.emitDataChanged();
-    setTimeout(() => AppEventBus.emitDataChanged(), 300);
+  static notifyDataChanged(): number {
+    return AppEventBus.emitDataChanged();
   }
 
-  static notifyDataChangedAfterNavigation(): void {
-    AppEventBus.notifyDataChanged();
-    setTimeout(() => AppEventBus.emitDataChanged(), 800);
+  static currentDataRevision(): number {
+    return AppStorage.get<number>(DATA_REVISION_KEY) ?? 0;
   }
 
-  private static emitDataChanged(): void {
-    AppEventBus.increment(DATA_REVISION_KEY);
+  static currentPreferenceRevision(): number {
+    return AppStorage.get<number>(PREFERENCE_REVISION_KEY) ?? 0;
+  }
+
+  private static emitDataChanged(): number {
+    const revision = AppEventBus.increment(DATA_REVISION_KEY);
     AppEventBus.notifyListeners(AppEventBus.dataListeners);
+    return revision;
   }
 
-  static notifyPreferencesChanged(): void {
-    AppEventBus.increment(PREFERENCE_REVISION_KEY);
+  static notifyPreferencesChanged(): number {
+    return AppEventBus.increment(PREFERENCE_REVISION_KEY);
   }
 
   static subscribeDataChanged(listener: AppEventListener): number {
@@ -36,13 +39,15 @@ export class AppEventBus {
     AppEventBus.dataListeners.delete(listenerId);
   }
 
-  private static increment(key: string): void {
+  private static increment(key: string): number {
     const current = AppStorage.get<number>(key) ?? 0;
+    const next = current + 1;
     try {
-      AppStorage.set<number>(key, current + 1);
+      AppStorage.set<number>(key, next);
     } catch (_) {
-      AppStorage.setOrCreate<number>(key, current + 1);
+      AppStorage.setOrCreate<number>(key, next);
     }
+    return next;
   }
 
   private static notifyListeners(listeners: Map<number, AppEventListener>): void {

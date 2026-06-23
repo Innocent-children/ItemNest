@@ -9,11 +9,11 @@ import { ItemQuery } from '../model/ItemQuery';
 import { ItemSortMode } from '../model/UserPreferences';
 import { ItemListRouteParams, RouteRefreshParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
+import { AppEventBus } from '../common/AppEventBus';
 import { AppServices } from '../service/AppServices';
 
-@Entry
 @Component
-struct ItemListPage {
+export struct ItemListPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.preferenceRevision') @Watch('onRevisionChanged') private preferenceRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
@@ -23,34 +23,52 @@ struct ItemListPage {
   @State private items: ItemSummary[] = [];
   private query: ItemQuery = new ItemQuery();
   private lastRouteRefreshAt: number = 0;
+  private lastHandledDataRevision: number = -1;
+  private lastHandledPreferenceRevision: number = -1;
 
   aboutToAppear(): void {
     this.readQuery();
-    this.loadItems(true);
+    this.loadItemsForCurrentRevision(true);
   }
 
   onPageShow(): void {
-    if (!this.handleRouteRefreshParams()) {
-      this.loadItems(false);
+    if (!this.refreshForRevisionChange(false) && !this.handleRouteRefreshParams()) {
+      this.loadItemsForCurrentRevision(false);
     }
   }
 
   private onRevisionChanged(): void {
-    this.loadItems(false);
+    this.refreshForRevisionChange(false);
   }
 
   private handleRouteRefreshParams(): boolean {
     try {
-      const params = this.getUIContext().getRouter().getParams() as RouteRefreshParams | undefined;
+      const params = NavigationHelper.getParams() as RouteRefreshParams | undefined;
       const refreshAt = params?.refreshAt ?? 0;
       if (refreshAt > 0 && refreshAt !== this.lastRouteRefreshAt) {
         this.lastRouteRefreshAt = refreshAt;
-        this.loadItems(false);
+        this.loadItemsForCurrentRevision(false);
         return true;
       }
     } catch (_) {
     }
     return false;
+  }
+
+  private refreshForRevisionChange(showLoading: boolean = false): boolean {
+    const dataRevision = AppEventBus.currentDataRevision();
+    const preferenceRevision = AppEventBus.currentPreferenceRevision();
+    if (dataRevision === this.lastHandledDataRevision && preferenceRevision === this.lastHandledPreferenceRevision) {
+      return false;
+    }
+    this.loadItemsForCurrentRevision(showLoading);
+    return true;
+  }
+
+  private loadItemsForCurrentRevision(showLoading: boolean = true): void {
+    this.lastHandledDataRevision = AppEventBus.currentDataRevision();
+    this.lastHandledPreferenceRevision = AppEventBus.currentPreferenceRevision();
+    this.loadItems(showLoading);
   }
 
   build() {
@@ -91,7 +109,7 @@ struct ItemListPage {
         Button('重试')
           .fontColor($r('app.color.brand_on_primary'))
           .backgroundColor($r('app.color.brand_primary'))
-          .onClick(() => this.loadItems(true))
+          .onClick(() => this.loadItemsForCurrentRevision(true))
       } else if (this.items.length === 0) {
         Column({ space: $r('app.float.space_3') }) {
           if (this.query.isEmpty()) {
@@ -100,7 +118,8 @@ struct ItemListPage {
               description: '新增第一个物品，开始记录它放在哪里。',
               actionText: '新增物品',
               actionRoute: RouteName.ITEM_FORM,
-              actionMode: 'create'
+              actionMode: 'create',
+              actionReturnTo: RouteName.ITEM_LIST
             })
           } else {
             EmptyState({
@@ -192,7 +211,7 @@ struct ItemListPage {
       return;
     }
     this.query.clear();
-    this.loadItems(true);
+    this.loadItemsForCurrentRevision(true);
   }
 
   private async applyDefaultSort(items: ItemSummary[]): Promise<ItemSummary[]> {

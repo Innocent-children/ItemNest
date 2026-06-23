@@ -4,6 +4,7 @@ import { Batch } from '../../model/Batch';
 import { ItemUnit } from '../../model/Item';
 import { BATCH_TABLE } from '../rdb/BatchSchema';
 import { RdbDatabase } from '../rdb/RdbDatabase';
+import { ResultSetReader } from '../rdb/ResultSetReader';
 
 export class BatchDao {
   private readonly database: RdbDatabase;
@@ -14,7 +15,7 @@ export class BatchDao {
 
   async create(batch: Batch): Promise<void> {
     try {
-      await this.database.transaction(async (store: relationalStore.RdbStore): Promise<void> => {
+      await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
         const rowId = await store.insert(BATCH_TABLE, this.toValues(batch));
         if (rowId < 0) {
           throw new AppError(AppErrorCode.DATABASE_WRITE, '保存批次失败，请重试');
@@ -51,7 +52,7 @@ export class BatchDao {
 
   async update(batch: Batch): Promise<boolean> {
     try {
-      return await this.database.transaction(async (store: relationalStore.RdbStore): Promise<boolean> => {
+      return await this.database.transaction(async (store: relationalStore.Transaction): Promise<boolean> => {
         const predicates = new relationalStore.RdbPredicates(BATCH_TABLE);
         predicates.equalTo('id', batch.id);
         const changedRows = await store.update(this.toUpdateValues(batch), predicates);
@@ -67,7 +68,7 @@ export class BatchDao {
 
   async deleteById(batchId: string): Promise<boolean> {
     try {
-      return await this.database.transaction(async (store: relationalStore.RdbStore): Promise<boolean> => {
+      return await this.database.transaction(async (store: relationalStore.Transaction): Promise<boolean> => {
         const predicates = new relationalStore.RdbPredicates(BATCH_TABLE);
         predicates.equalTo('id', batchId);
         const changedRows = await store.delete(predicates);
@@ -87,11 +88,11 @@ export class BatchDao {
       const resultSet = await store.query(predicates);
       const batches: Batch[] = [];
       try {
-        while (resultSet.goToNextRow()) {
+        while (ResultSetReader.goToNextRow(resultSet)) {
           batches.push(this.mapBatch(resultSet));
         }
       } finally {
-        resultSet.close();
+        ResultSetReader.close(resultSet);
       }
       return batches;
     } catch (error) {
@@ -117,18 +118,15 @@ export class BatchDao {
   }
 
   private readString(resultSet: relationalStore.ResultSet, column: string): string | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getString(index);
+    return ResultSetReader.readString(resultSet, column);
   }
 
   private readDouble(resultSet: relationalStore.ResultSet, column: string): number | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getDouble(index);
+    return ResultSetReader.readDouble(resultSet, column);
   }
 
   private readLong(resultSet: relationalStore.ResultSet, column: string): number | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getLong(index);
+    return ResultSetReader.readLong(resultSet, column);
   }
 
   private toValues(batch: Batch): relationalStore.ValuesBucket {

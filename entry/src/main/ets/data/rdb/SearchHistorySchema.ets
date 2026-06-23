@@ -1,4 +1,5 @@
 import { relationalStore } from '@kit.ArkData';
+import { SchemaExecutor } from './SchemaExecutor';
 
 export const SEARCH_HISTORY_TABLE: string = 'search_history';
 
@@ -18,9 +19,9 @@ const SEARCH_HISTORY_INDEXES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_search_history_viewed_item_id ON search_history(viewed_item_id)'
 ];
 
-export async function createSearchHistorySchema(store: relationalStore.RdbStore): Promise<void> {
-  await store.executeSql(CREATE_SEARCH_HISTORY_TABLE);
+export async function createSearchHistorySchema(store: relationalStore.Transaction): Promise<void> {
+  await SchemaExecutor.execute(store, CREATE_SEARCH_HISTORY_TABLE);
   for (let index = 0; index < SEARCH_HISTORY_INDEXES.length; index++) {
-    await store.executeSql(SEARCH_HISTORY_INDEXES[index]);
+    await SchemaExecutor.execute(store, SEARCH_HISTORY_INDEXES[index]);
   }
 }

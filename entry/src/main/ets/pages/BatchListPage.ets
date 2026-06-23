@@ -9,9 +9,8 @@ import { BatchRouteParams, requireItemId } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
 
-@Entry
 @Component
-struct BatchListPage {
+export struct BatchListPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
@@ -23,6 +22,7 @@ struct BatchListPage {
   @State @Watch('handleDeleteRequest') private deleteRequested: boolean = false;
   private itemId: string = '';
   private pendingDeleteBatchId: string = '';
+  private lastHandledDataRevision: number = -1;
 
   aboutToAppear(): void {
     const params = NavigationHelper.getParams() as BatchRouteParams | undefined;
@@ -33,19 +33,33 @@ struct BatchListPage {
       return;
     }
     this.itemId = itemIdResult.getData();
-    this.loadBatches(true);
+    this.loadBatchesForCurrentRevision(true);
   }
 
   onPageShow(): void {
     if (this.itemId.length > 0) {
-      this.loadBatches(false);
+      this.refreshForRevisionChange(false);
     }
   }
 
   private onDataRevisionChanged(): void {
     if (this.itemId.length > 0) {
-      this.loadBatches(false);
+      this.refreshForRevisionChange(false);
     }
+  }
+
+  private refreshForRevisionChange(showLoading: boolean = false): boolean {
+    const dataRevision = AppEventBus.currentDataRevision();
+    if (dataRevision === this.lastHandledDataRevision) {
+      return false;
+    }
+    this.loadBatchesForCurrentRevision(showLoading);
+    return true;
+  }
+
+  private loadBatchesForCurrentRevision(showLoading: boolean = true): void {
+    this.lastHandledDataRevision = AppEventBus.currentDataRevision();
+    this.loadBatches(showLoading);
   }
 
   build() {
@@ -173,8 +187,8 @@ struct BatchListPage {
     this.deleting = true;
     const result = await AppServices.get().batches.delete(batchId);
     if (result.ok) {
+      this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadBatches(false);
-      AppEventBus.notifyDataChanged();
       this.showToast('批次已删除');
     } else {
       this.errorMessage = result.getError().message;

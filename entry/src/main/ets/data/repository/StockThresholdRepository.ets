@@ -4,6 +4,7 @@ import { failure, Result, success } from '../../common/Result';
 import { StockThreshold } from '../../model/StockThreshold';
 import { RdbDatabase } from '../rdb/RdbDatabase';
 import { STOCK_THRESHOLD_TABLE } from '../rdb/StockThresholdSchema';
+import { ResultSetReader } from '../rdb/ResultSetReader';
 
 export class StockThresholdRepository {
   private readonly database: RdbDatabase;
@@ -14,8 +15,8 @@ export class StockThresholdRepository {
 
   async save(threshold: StockThreshold): Promise<Result<StockThreshold>> {
     try {
-      await this.database.transaction(async (store: relationalStore.RdbStore): Promise<void> => {
-        const existing = await this.findByItemIdRaw(threshold.itemId);
+      await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
+        const existing = await this.findByItemIdInStore(store, threshold.itemId);
         if (existing === undefined) {
           const rowId = await store.insert(STOCK_THRESHOLD_TABLE, this.toValues(threshold));
           if (rowId < 0) {
@@ -49,11 +50,11 @@ export class StockThresholdRepository {
       const resultSet = await store.query(predicates);
       const rows: StockThreshold[] = [];
       try {
-        while (resultSet.goToNextRow()) {
+        while (ResultSetReader.goToNextRow(resultSet)) {
           rows.push(this.mapThreshold(resultSet));
         }
       } finally {
-        resultSet.close();
+        ResultSetReader.close(resultSet);
       }
       return success(rows);
     } catch (error) {
@@ -62,26 +63,48 @@ export class StockThresholdRepository {
   }
 
   private async findByItemIdRaw(itemId: string): Promise<StockThreshold | undefined> {
-    const predicates = new relationalStore.RdbPredicates(STOCK_THRESHOLD_TABLE);
-    predicates.equalTo('item_id', itemId);
-    const store = await this.database.requireStore();
-    const resultSet = await store.query(predicates);
     try {
-      if (resultSet.goToNextRow()) {
-        return this.mapThreshold(resultSet);
+      const predicates = new relationalStore.RdbPredicates(STOCK_THRESHOLD_TABLE);
+      predicates.equalTo('item_id', itemId);
+      const store = await this.database.requireStore();
+      const resultSet = await store.query(predicates);
+      try {
+        if (ResultSetReader.goToNextRow(resultSet)) {
+          return this.mapThreshold(resultSet);
+        }
+        return undefined;
+      } finally {
+        ResultSetReader.close(resultSet);
       }
-      return undefined;
-    } finally {
-      resultSet.close();
+    } catch (error) {
+      throw toAppError(error, AppErrorCode.DATABASE_READ, '读取低库存阈值失败，请重试');
+    }
+  }
+
+  private async findByItemIdInStore(store: relationalStore.Transaction, itemId: string): Promise<StockThreshold | undefined> {
+    try {
+      const predicates = new relationalStore.RdbPredicates(STOCK_THRESHOLD_TABLE);
+      predicates.equalTo('item_id', itemId);
+      const resultSet = await store.query(predicates);
+      try {
+        if (ResultSetReader.goToNextRow(resultSet)) {
+          return this.mapThreshold(resultSet);
+        }
+        return undefined;
+      } finally {
+        ResultSetReader.close(resultSet);
+      }
+    } catch (error) {
+      throw toAppError(error, AppErrorCode.DATABASE_READ, '读取低库存阈值失败，请重试');
     }
   }
 
   private mapThreshold(resultSet: relationalStore.ResultSet): StockThreshold {
     return {
-      itemId: resultSet.getString(resultSet.getColumnIndex('item_id')),
-      threshold: resultSet.getDouble(resultSet.getColumnIndex('threshold')),
-      enabled: resultSet.getLong(resultSet.getColumnIndex('enabled')) === 1,
-      updatedAt: resultSet.getLong(resultSet.getColumnIndex('updated_at'))
+      itemId: ResultSetReader.readString(resultSet, 'item_id') ?? '',
+      threshold: ResultSetReader.readDouble(resultSet, 'threshold') ?? 0,
+      enabled: ResultSetReader.readLong(resultSet, 'enabled') === 1,
+      updatedAt: ResultSetReader.readLong(resultSet, 'updated_at') ?? 0
     };
   }
 

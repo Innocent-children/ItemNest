@@ -42,6 +42,6 @@ export struct MainEntryBar {
       .borderRadius(24)
       .width(48)
       .height(40)
-      .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create' } }))
+      .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create', returnTo: this.activeRoute } }))
   }
 }

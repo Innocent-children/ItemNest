@@ -4,6 +4,7 @@ import { failure, Result, success } from '../../common/Result';
 import { SearchHistory } from '../../model/SearchHistory';
 import { RdbDatabase } from '../rdb/RdbDatabase';
 import { SEARCH_HISTORY_TABLE } from '../rdb/SearchHistorySchema';
+import { ResultSetReader } from '../rdb/ResultSetReader';
 
 export class SearchHistoryRepository {
   private readonly database: RdbDatabase;
@@ -14,7 +15,7 @@ export class SearchHistoryRepository {
 
   async add(history: SearchHistory): Promise<Result<SearchHistory>> {
     try {
-      await this.database.transaction(async (store: relationalStore.RdbStore): Promise<void> => {
+      await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
         const rowId = await store.insert(SEARCH_HISTORY_TABLE, this.toValues(history));
         if (rowId < 0) {
           throw new AppError(AppErrorCode.DATABASE_WRITE, '保存搜索历史失败，请重试');
@@ -35,11 +36,11 @@ export class SearchHistoryRepository {
       const resultSet = await store.query(predicates);
       const rows: SearchHistory[] = [];
       try {
-        while (resultSet.goToNextRow()) {
+        while (ResultSetReader.goToNextRow(resultSet)) {
           rows.push(this.mapHistory(resultSet));
         }
       } finally {
-        resultSet.close();
+        ResultSetReader.close(resultSet);
       }
       return success(rows);
     } catch (error) {
@@ -49,7 +50,7 @@ export class SearchHistoryRepository {
 
   async clear(): Promise<Result<void>> {
     try {
-      await this.database.transaction(async (store: relationalStore.RdbStore): Promise<void> => {
+      await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
         const predicates = new relationalStore.RdbPredicates(SEARCH_HISTORY_TABLE);
         await store.delete(predicates);
       });
@@ -71,13 +72,11 @@ export class SearchHistoryRepository {
   }
 
   private readString(resultSet: relationalStore.ResultSet, column: string): string | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getString(index);
+    return ResultSetReader.readString(resultSet, column);
   }
 
   private readLong(resultSet: relationalStore.ResultSet, column: string): number | undefined {
-    const index = resultSet.getColumnIndex(column);
-    return resultSet.isColumnNull(index) ? undefined : resultSet.getLong(index);
+    return ResultSetReader.readLong(resultSet, column);
   }
 
   private toValues(history: SearchHistory): relationalStore.ValuesBucket {

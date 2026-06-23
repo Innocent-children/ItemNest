@@ -7,9 +7,8 @@ import { ITEM_UNIT_OPTIONS, ItemUnit } from '../model/Item';
 import { BatchRouteParams, requireBatchId, requireItemId } from '../navigation/RouteContract';
 import { AppServices } from '../service/AppServices';
 
-@Entry
 @Component
-struct BatchFormPage {
+export struct BatchFormPage {
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private loading: boolean = true;
