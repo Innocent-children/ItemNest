@@ -1,11 +1,11 @@
 {
     "schema_version": 1,
-    "commit": "976c42089377d485e6a717303022de41bd59575e",
-    "indexed_at": "2026-06-23T09:09:59Z",
+    "commit": "4d29e8b9c6203ebdbd5db3e357883a3f3aed4cb7",
+    "indexed_at": "2026-06-23T09:15:00Z",
     "project": "Users-innocent-children-DevecostudioProjects-ItemTrace",
-    "nodes": 0,
-    "edges": 0,
-    "original_size": 102400,
-    "compressed_size": 1396,
+    "nodes": 681,
+    "edges": 696,
+    "original_size": 2555904,
+    "compressed_size": 154833,
     "compression_level": 3
 }
