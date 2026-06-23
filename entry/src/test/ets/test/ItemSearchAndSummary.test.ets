@@ -53,5 +53,27 @@ export default function itemSearchAndSummaryTest() {
         expect(summary.getData().outOfStockItems.length).assertEqual(1);
       }
     });
+
+    it('新增物品后首页最近添加立即包含最新物品', 0, async () => {
+      const repository = new FakeItemRepository();
+      for (let index = 0; index < 10; index++) {
+        repository.items.push(createItem(index));
+      }
+      const latestItem = createItem(100);
+      latestItem.name = '刚新增的物品';
+      const createResult = await repository.create(latestItem);
+      expect(createResult.ok).assertTrue();
+
+      const summary = await new HomeSummaryService(repository, new ExpiryService())
+        .getSummary(new Date(2026, 5, 20));
+
+      expect(summary.ok).assertTrue();
+      if (summary.ok) {
+        expect(repository.listRecentCallCount).assertEqual(1);
+        expect(summary.getData().recentItems.length).assertEqual(10);
+        expect(summary.getData().recentItems[0].id).assertEqual('item-100');
+        expect(summary.getData().recentItems[0].name).assertEqual('刚新增的物品');
+      }
+    });
   });
 }

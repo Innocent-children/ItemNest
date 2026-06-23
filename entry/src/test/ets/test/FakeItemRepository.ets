@@ -7,6 +7,7 @@ import { ItemRepositoryPort } from '../../../main/ets/data/repository/ItemReposi
 export class FakeItemRepository implements ItemRepositoryPort {
   items: Item[] = [];
   failNextOperation: boolean = false;
+  listRecentCallCount: number = 0;
 
   async create(item: Item): Promise<Result<Item>> {
     if (this.consumeFailure()) {
@@ -69,6 +70,7 @@ export class FakeItemRepository implements ItemRepositoryPort {
   }
 
   async listRecent(limit: number): Promise<Result<Item[]>> {
+    this.listRecentCallCount += 1;
     const allResult = await this.listAll();
     if (!allResult.ok) {
       return allResult;

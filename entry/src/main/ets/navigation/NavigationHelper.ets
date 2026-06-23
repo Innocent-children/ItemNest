@@ -9,6 +9,7 @@ export interface NavigationOptions {
 }
 
 type NavigationBackHandler = () => boolean;
+type NavigationRouteResultListener = (result: Object | undefined) => void;
 
 /**
  * 统一封装应用内导航。当前实现基于官方推荐的 Navigation/NavPathStack。
@@ -17,6 +18,9 @@ export class NavigationHelper {
   private static pathStack: NavPathStack | undefined = undefined;
   private static backHandler: NavigationBackHandler | undefined = undefined;
   private static lastPopResult: Object | undefined = undefined;
+  private static nextRouteResultListenerId: number = 1;
+  private static routeResultListeners: Map<number, NavigationRouteResultListener> =
+    new Map<number, NavigationRouteResultListener>();
 
   static registerPathStack(pathStack: NavPathStack): void {
     NavigationHelper.pathStack = pathStack;
@@ -50,6 +54,26 @@ export class NavigationHelper {
     NavigationHelper.popPathStack(options);
   }
 
+  static subscribeRouteResult(listener: NavigationRouteResultListener): number {
+    const listenerId = NavigationHelper.nextRouteResultListenerId++;
+    NavigationHelper.routeResultListeners.set(listenerId, listener);
+    return listenerId;
+  }
+
+  static unsubscribeRouteResult(listenerId: number): void {
+    NavigationHelper.routeResultListeners.delete(listenerId);
+  }
+
+  static recordPopResult(result: Object | undefined): void {
+    NavigationHelper.lastPopResult = result;
+    NavigationHelper.routeResultListeners.forEach((listener: NavigationRouteResultListener) => {
+      try {
+        listener(result);
+      } catch (_) {
+      }
+    });
+  }
+
   static registerBackHandler(handler: NavigationBackHandler): void {
     NavigationHelper.backHandler = handler;
   }
@@ -80,7 +104,7 @@ export class NavigationHelper {
     try {
       NavigationHelper.lastPopResult = undefined;
       pathStack.pushPathByName(options.url, NavigationHelper.toObjectParams(options.params), (popInfo: PopInfo) => {
-        NavigationHelper.lastPopResult = popInfo.result;
+        NavigationHelper.recordPopResult(popInfo.result);
       });
       return true;
     } catch (_) {
@@ -98,7 +122,7 @@ export class NavigationHelper {
       pathStack.clear(false);
       if (options.url.length > 0 && options.url !== 'pages/Index') {
         pathStack.pushPathByName(options.url, NavigationHelper.toObjectParams(options.params), (popInfo: PopInfo) => {
-          NavigationHelper.lastPopResult = popInfo.result;
+          NavigationHelper.recordPopResult(popInfo.result);
         }, false);
       }
       return true;
@@ -116,8 +140,10 @@ export class NavigationHelper {
       if (pathStack.size() <= 0) {
         return false;
       }
-      if (options?.params !== undefined) {
-        pathStack.pop(NavigationHelper.toObjectParams(options.params));
+      const result = options?.params === undefined ? undefined : NavigationHelper.toObjectParams(options.params);
+      if (result !== undefined) {
+        pathStack.pop(result);
+        NavigationHelper.recordPopResult(result);
       } else {
         pathStack.pop();
       }

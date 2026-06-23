@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { NavigationHelper } from '../main/ets/navigation/NavigationHelper';
+import { NavigationRouteParams } from '../main/ets/navigation/RouteContract';
 import { RouteName } from '../main/ets/navigation/RouteName';
 
 function routeNames(): string[] {
@@ -42,6 +43,26 @@ export default function localUnitTest() {
       NavigationHelper.unregisterBackHandler(handler);
       expect(NavigationHelper.handleBackPressed()).assertFalse();
       expect(handledCount).assertEqual(1);
+    });
+
+    it('NavPathStack 返回结果会通知来源页监听', 0, () => {
+      let receivedCount = 0;
+      let receivedRefreshAt = 0;
+      const listenerId = NavigationHelper.subscribeRouteResult((result: Object | undefined) => {
+        const params = result as NavigationRouteParams | undefined;
+        receivedCount += 1;
+        receivedRefreshAt = params?.refreshAt ?? 0;
+      });
+      const firstResult: NavigationRouteParams = { refreshAt: 18, itemId: 'item-1' };
+      const ignoredResult: NavigationRouteParams = { refreshAt: 19, itemId: 'item-2' };
+
+      NavigationHelper.recordPopResult(firstResult);
+      NavigationHelper.unsubscribeRouteResult(listenerId);
+      NavigationHelper.recordPopResult(ignoredResult);
+      NavigationHelper.recordPopResult(undefined);
+
+      expect(receivedCount).assertEqual(1);
+      expect(receivedRefreshAt).assertEqual(18);
     });
   });
 }

@@ -40,6 +40,7 @@ struct Index {
   @State private showExpirySection: boolean = true;
   @State private showStockSection: boolean = true;
   private dataRefreshListenerId: number = 0;
+  private routeResultListenerId: number = 0;
   private summaryLoadId: number = 0;
   private lastRouteRefreshAt: number = 0;
   private lastHandledDataRevision: number = -1;
@@ -49,6 +50,7 @@ struct Index {
   aboutToAppear(): void {
     NavigationHelper.registerPathStack(this.pathStack);
     this.subscribeDataRefresh();
+    this.subscribeRouteResultRefresh();
     this.refreshSummaryForCurrentRevision(true);
     this.openQuickAddIfRequested();
   }
@@ -57,6 +59,10 @@ struct Index {
     if (this.dataRefreshListenerId > 0) {
       AppEventBus.unsubscribeDataChanged(this.dataRefreshListenerId);
       this.dataRefreshListenerId = 0;
+    }
+    if (this.routeResultListenerId > 0) {
+      NavigationHelper.unsubscribeRouteResult(this.routeResultListenerId);
+      this.routeResultListenerId = 0;
     }
     NavigationHelper.unregisterPathStack(this.pathStack);
   }
@@ -76,9 +82,13 @@ struct Index {
     this.refreshForRevisionChange(false);
   }
 
-  private handleRouteRefreshParams(): boolean {
+  private onRouteResult(result: Object | undefined): void {
+    this.handleRouteRefreshParams(result as RouteRefreshParams | undefined);
+  }
+
+  private handleRouteRefreshParams(routeParams?: RouteRefreshParams): boolean {
     try {
-      const params = NavigationHelper.getParams() as RouteRefreshParams | undefined;
+      const params = routeParams ?? (NavigationHelper.getParams() as RouteRefreshParams | undefined);
       const refreshAt = getUnhandledRouteRefreshAt(params, this.lastRouteRefreshAt);
       if (refreshAt > 0) {
         this.lastRouteRefreshAt = refreshAt;
@@ -95,6 +105,13 @@ struct Index {
       return;
     }
     this.dataRefreshListenerId = AppEventBus.subscribeDataChanged(() => this.refreshForRevisionChange(false));
+  }
+
+  private subscribeRouteResultRefresh(): void {
+    if (this.routeResultListenerId > 0) {
+      return;
+    }
+    this.routeResultListenerId = NavigationHelper.subscribeRouteResult((result: Object | undefined) => this.onRouteResult(result));
   }
 
   private refreshForRevisionChange(showLoading: boolean = false): boolean {

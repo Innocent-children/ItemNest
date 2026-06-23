@@ -31,11 +31,15 @@ export class HomeSummaryService {
   }
 
   async getSummary(now: Date = new Date()): Promise<Result<HomeSummary>> {
+    const recentResult = await this.repository.listRecent(10);
+    if (!recentResult.ok) {
+      return failure<HomeSummary>(recentResult.getError());
+    }
     const itemsResult = await this.repository.listAll();
     if (!itemsResult.ok) {
       return failure<HomeSummary>(itemsResult.getError());
     }
-    const recentItems: ItemSummary[] = [];
+    const recentItems = this.toSummaries(recentResult.getData(), now);
     const dueSoonItems: ItemSummary[] = [];
     const outOfStockItems: ItemSummary[] = [];
     let dueSoonCount = 0;
@@ -44,9 +48,6 @@ export class HomeSummaryService {
     for (let index = 0; index < items.length; index++) {
       const item = items[index];
       const summary = this.toSummary(item, now);
-      if (recentItems.length < 10) {
-        recentItems.push(summary);
-      }
       if (summary.expiryStatus === ExpiryStatus.DUE_SOON) {
         dueSoonCount++;
         if (dueSoonItems.length < 10) {
@@ -61,6 +62,14 @@ export class HomeSummaryService {
       }
     }
     return success(new HomeSummary(recentItems, dueSoonItems, outOfStockItems, dueSoonCount, outOfStockCount));
+  }
+
+  private toSummaries(items: Item[], now: Date): ItemSummary[] {
+    const summaries: ItemSummary[] = [];
+    for (let index = 0; index < items.length; index++) {
+      summaries.push(this.toSummary(items[index], now));
+    }
+    return summaries;
   }
 
   private toSummary(item: Item, now: Date): ItemSummary {
