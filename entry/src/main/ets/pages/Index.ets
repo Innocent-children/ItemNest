@@ -11,6 +11,7 @@ import { getUnhandledRouteRefreshAt } from '../navigation/RefreshContract';
 import { RouteRefreshParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
+import { shouldShowRecentSection } from '../service/HomeSectionVisibility';
 import { BatchFormPage } from './BatchFormPage';
 import { BatchListPage } from './BatchListPage';
 import { CategoryManagementPage } from './CategoryManagementPage';
@@ -171,7 +172,7 @@ struct Index {
             if (this.locationPaths.length > 0) {
               this.locationShortcutSection()
             }
-            if (this.showRecentSection) {
+            if (shouldShowRecentSection(this.showRecentSection, this.recentItems.length)) {
               this.summarySection('最近添加', '刚记录的物品', this.recentItems, '暂无物品', RouteName.ITEM_FORM, RouteName.HOME)
             }
             if (this.showExpirySection) {

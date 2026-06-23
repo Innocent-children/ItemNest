@@ -2,6 +2,7 @@ import appEventBusFlowTest from './AppEventBusFlow.test';
 import abilityTest from './Ability.test';
 import dataFailureMappingTest from './DataFailureMapping.test';
 import homeSummaryFlowTest from './HomeSummaryFlow.test';
+import homeSectionVisibilityTest from './HomeSectionVisibility.test';
 import refreshContractTest from './RefreshContract.test';
 
 export default function testsuite() {
@@ -9,5 +10,6 @@ export default function testsuite() {
   appEventBusFlowTest();
   dataFailureMappingTest();
   homeSummaryFlowTest();
+  homeSectionVisibilityTest();
   refreshContractTest();
 }
