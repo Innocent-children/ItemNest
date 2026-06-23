@@ -48,10 +48,32 @@ hvigorw.bat assembleApp --no-daemon
 - 已新增 `entry/src/test/ets/test/AppEventBus.test.ets` 与
   `entry/src/ohosTest/ets/test/AppEventBusFlow.test.ets` 并接入对应测试套，覆盖数据 revision 递增、
   订阅/取消订阅和偏好 revision 独立性。
+- `entry/src/ohosTest/ets/test/Ability.test.ets` 已不再是模板 `assertContain` 用例，现覆盖 Navigation
+  路由契约、返回刷新参数和缺少关键路由标识的拒绝路径。
+- `entry/src/test/LocalUnit.test.ets` 已不再是模板 `assertContain` 用例，现覆盖首页根入口和业务路由名唯一性。
+- `ItemFormPage` 与 `BatchFormPage` 已通过 `NavigationHelper` 注册 `NavDestination.onBackPressed`
+  返回处理器，系统返回会走未保存草稿确认逻辑；Local/ohosTest 契约测试覆盖 handler 注册与释放。
+- `NavigationHelper.pushUrl/replaceUrl` 已注册官方 `onPop` 回调，`NavigationHelper.back({ params })`
+  的 `pop(result)` 会成为来源页可读取的刷新参数；物品保存、批次保存和物品删除均返回 `refreshAt`。
+- `RefreshContract.test.ets` 已接入 Local Test 和 ohosTest 测试套，覆盖物品新增/编辑/删除、批次变更
+  的返回刷新参数，以及重复或无效 `refreshAt` 不重复触发来源页刷新。
+- `DataFailureMapping.test.ets` 已接入 Local Test 和 ohosTest 测试套，覆盖数据库读/初始化/写入错误归一化；
+  当前已验证测试包可编译，设备运行仍待连接目标后执行。
 - 已确认 ohosTest 测试包可编译：
   `env DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw assembleHap --mode module -p module=entry@ohosTest -p product=default -p buildMode=test --no-daemon`
 - 当前命令只证明测试包通过 ArkTS 编译，不等于已在设备上执行用例。`entry/src/test/` 和
   `entry/src/ohosTest/` 的测试仍需通过 DevEco Studio 测试入口或后续确认的 `aa test`/Hypium 流程实际执行。
+- 已确认本机 `hdc` 路径：
+  `/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc`
+- 当前执行 `hdc list targets` 返回 `Connect server failed`，说明本机没有可用 HDC 连接或可用真机/模拟器。
+  本机无法完成 T100 的设备执行证明。
+- 设备连接、签名配置完成后，使用以下命令执行测试：
+  1. `env DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw --no-daemon assembleApp`
+  2. `env DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk /Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw assembleHap --mode module -p module=entry@ohosTest -p product=default -p buildMode=test --no-daemon`
+  3. `/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc install -r entry/build/default/outputs/default/app/entry-default.hap`
+  4. `/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc install -r entry/build/default/outputs/ohosTest/entry-ohosTest-unsigned.hap`
+  5. `/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc shell aa test -b com.imotong.itemtrace -m entry_test -s unittest OpenHarmonyTestRunner -s timeout 15000`
+  若安装失败，优先检查当前机器调试签名；当前根 `build-profile.json5` 已移除无效 Windows 签名材料。
 - 当前构建剩余警告为混淆配置建议、无本机签名配置，以及 DevEco 打包工具内部 `sun.misc.Unsafe`
   终端弃用提示；没有 ArkTS 编译错误或 Router 旧接口弃用警告。真机安装仍需单独配置签名。
 

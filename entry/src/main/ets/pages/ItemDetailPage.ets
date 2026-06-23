@@ -7,6 +7,7 @@ import { AppEventBus } from '../common/AppEventBus';
 import { ExpiryStatus } from '../model/ExpiryStatus';
 import { Item } from '../model/Item';
 import { ReminderRecordStatus } from '../model/ReminderRecord';
+import { buildItemRefreshParams, getUnhandledRouteRefreshAt } from '../navigation/RefreshContract';
 import { ItemFormRouteParams, requireItemId, RouteRefreshParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
@@ -68,8 +69,8 @@ export struct ItemDetailPage {
   private handleRouteRefreshParams(): boolean {
     try {
       const params = NavigationHelper.getParams() as RouteRefreshParams | undefined;
-      const refreshAt = params?.refreshAt ?? 0;
-      if (refreshAt > 0 && refreshAt !== this.lastRouteRefreshAt) {
+      const refreshAt = getUnhandledRouteRefreshAt(params, this.lastRouteRefreshAt);
+      if (refreshAt > 0) {
         this.lastRouteRefreshAt = refreshAt;
         this.loadDetailForCurrentRevision(false);
         return true;
@@ -354,8 +355,11 @@ export struct ItemDetailPage {
     const result = await AppServices.get().deleteItem.delete(this.itemId, true);
     if (result.ok) {
       this.showToast('物品已删除');
-      AppEventBus.notifyDataChanged();
-      NavigationHelper.back();
+      const refreshAt = AppEventBus.notifyDataChanged();
+      NavigationHelper.back({
+        url: RouteName.ITEM_LIST,
+        params: buildItemRefreshParams(refreshAt, this.itemId)
+      });
       return;
     }
     this.deleting = false;

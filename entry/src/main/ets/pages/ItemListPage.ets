@@ -7,6 +7,7 @@ import { MainEntryBar } from '../components/MainEntryBar';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { ItemSortMode } from '../model/UserPreferences';
+import { getUnhandledRouteRefreshAt } from '../navigation/RefreshContract';
 import { ItemListRouteParams, RouteRefreshParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppEventBus } from '../common/AppEventBus';
@@ -44,8 +45,8 @@ export struct ItemListPage {
   private handleRouteRefreshParams(): boolean {
     try {
       const params = NavigationHelper.getParams() as RouteRefreshParams | undefined;
-      const refreshAt = params?.refreshAt ?? 0;
-      if (refreshAt > 0 && refreshAt !== this.lastRouteRefreshAt) {
+      const refreshAt = getUnhandledRouteRefreshAt(params, this.lastRouteRefreshAt);
+      if (refreshAt > 0) {
         this.lastRouteRefreshAt = refreshAt;
         this.loadItemsForCurrentRevision(false);
         return true;

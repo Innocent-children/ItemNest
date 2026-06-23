@@ -1,33 +1,47 @@
-import { describe, beforeAll, beforeEach, afterEach, afterAll, it, expect } from '@ohos/hypium';
+import { describe, it, expect } from '@ohos/hypium';
+import { NavigationHelper } from '../main/ets/navigation/NavigationHelper';
+import { RouteName } from '../main/ets/navigation/RouteName';
+
+function routeNames(): string[] {
+  return [
+    RouteName.HOME,
+    RouteName.ITEM_LIST,
+    RouteName.ITEM_DETAIL,
+    RouteName.ITEM_FORM,
+    RouteName.SEARCH,
+    RouteName.SETTINGS,
+    RouteName.BATCH_LIST,
+    RouteName.BATCH_FORM,
+    RouteName.LENDING,
+    RouteName.LOCATION_MANAGEMENT,
+    RouteName.CATEGORY_MANAGEMENT
+  ];
+}
 
 export default function localUnitTest() {
-  describe('localUnitTest', () => {
-    // Defines a test suite. Two parameters are supported: test suite name and test suite function.
-    beforeAll(() => {
-      // Presets an action, which is performed only once before all test cases of the test suite start.
-      // This API supports only one parameter: preset action function.
+  describe('Local navigation contract', () => {
+    it('首页保留唯一 main_pages 根入口', 0, () => {
+      expect(RouteName.HOME).assertEqual('pages/Index');
     });
-    beforeEach(() => {
-      // Presets an action, which is performed before each unit test case starts.
-      // The number of execution times is the same as the number of test cases defined by **it**.
-      // This API supports only one parameter: preset action function.
+
+    it('业务路由名称保持唯一', 0, () => {
+      const names = routeNames();
+      const uniqueNames = new Set<string>(names);
+      expect(uniqueNames.size).assertEqual(names.length);
     });
-    afterEach(() => {
-      // Presets a clear action, which is performed after each unit test case ends.
-      // The number of execution times is the same as the number of test cases defined by **it**.
-      // This API supports only one parameter: clear action function.
-    });
-    afterAll(() => {
-      // Presets a clear action, which is performed after all test cases of the test suite end.
-      // This API supports only one parameter: clear action function.
-    });
-    it('assertContain', 0, () => {
-      // Defines a test case. This API supports three parameters: test case name, filter parameter, and test case function.
-      let a = 'abc';
-      let b = 'b';
-      // Defines a variety of assertion methods, which are used to declare expected boolean conditions.
-      expect(a).assertContain(b);
-      expect(a).assertEqual(a);
+
+    it('NavDestination 返回处理器可注册和释放', 0, () => {
+      let handledCount = 0;
+      const handler = (): boolean => {
+        handledCount += 1;
+        return true;
+      };
+
+      NavigationHelper.registerBackHandler(handler);
+      expect(NavigationHelper.handleBackPressed()).assertTrue();
+      NavigationHelper.unregisterBackHandler(handler);
+      expect(NavigationHelper.handleBackPressed()).assertFalse();
+      expect(handledCount).assertEqual(1);
     });
   });
 }

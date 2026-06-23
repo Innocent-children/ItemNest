@@ -7,6 +7,7 @@ import { MainEntryBar } from '../components/MainEntryBar';
 import { AppEventBus } from '../common/AppEventBus';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
+import { getUnhandledRouteRefreshAt } from '../navigation/RefreshContract';
 import { RouteRefreshParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
@@ -78,8 +79,8 @@ struct Index {
   private handleRouteRefreshParams(): boolean {
     try {
       const params = NavigationHelper.getParams() as RouteRefreshParams | undefined;
-      const refreshAt = params?.refreshAt ?? 0;
-      if (refreshAt > 0 && refreshAt !== this.lastRouteRefreshAt) {
+      const refreshAt = getUnhandledRouteRefreshAt(params, this.lastRouteRefreshAt);
+      if (refreshAt > 0) {
         this.lastRouteRefreshAt = refreshAt;
         this.refreshSummaryForCurrentRevision(false);
         return true;
@@ -205,6 +206,7 @@ struct Index {
       }
     }
     .hideTitleBar(true)
+    .onBackPressed(() => NavigationHelper.handleBackPressed())
   }
 
   @Builder

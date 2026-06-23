@@ -4,7 +4,9 @@ import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
 import { Batch, BatchDraft } from '../model/Batch';
 import { ITEM_UNIT_OPTIONS, ItemUnit } from '../model/Item';
+import { buildBatchRefreshParams } from '../navigation/RefreshContract';
 import { BatchRouteParams, requireBatchId, requireItemId } from '../navigation/RouteContract';
+import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
 
 @Component
@@ -25,8 +27,10 @@ export struct BatchFormPage {
   private batchId: string = '';
   private editMode: boolean = false;
   private initialDraftSignature: string = '';
+  private backHandler: () => boolean = () => this.handleNavigationBack();
 
   aboutToAppear(): void {
+    NavigationHelper.registerBackHandler(this.backHandler);
     const params = NavigationHelper.getParams() as BatchRouteParams | undefined;
     const itemIdResult = requireItemId(params);
     if (!itemIdResult.ok) {
@@ -49,6 +53,10 @@ export struct BatchFormPage {
     }
     this.batchId = batchIdResult.getData();
     this.loadBatch();
+  }
+
+  aboutToDisappear(): void {
+    NavigationHelper.unregisterBackHandler(this.backHandler);
   }
 
   build() {
@@ -166,6 +174,10 @@ export struct BatchFormPage {
   }
 
   onBackPress(): boolean {
+    return this.handleNavigationBack();
+  }
+
+  private handleNavigationBack(): boolean {
     this.requestClose();
     return true;
   }
@@ -213,9 +225,12 @@ export struct BatchFormPage {
     const draft = this.createDraft();
     const result = this.editMode ? await AppServices.get().batches.update(this.batchId, draft) : await AppServices.get().batches.create(draft);
     if (result.ok) {
-      AppEventBus.notifyDataChanged();
+      const refreshAt = AppEventBus.notifyDataChanged();
       this.showToast(this.editMode ? '批次已更新' : '批次已保存');
-      NavigationHelper.back();
+      NavigationHelper.back({
+        url: RouteName.BATCH_LIST,
+        params: buildBatchRefreshParams(refreshAt, this.itemId, result.getData().id)
+      });
     } else {
       this.errorMessage = result.getError().message;
     }

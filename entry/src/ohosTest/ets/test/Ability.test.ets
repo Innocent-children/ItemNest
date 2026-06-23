@@ -1,35 +1,59 @@
-import { hilog } from '@kit.PerformanceAnalysisKit';
-import { describe, beforeAll, beforeEach, afterEach, afterAll, it, expect } from '@ohos/hypium';
+import { describe, it, expect } from '@ohos/hypium';
+import { ItemQuery } from '../../../main/ets/model/ItemQuery';
+import { NavigationHelper } from '../../../main/ets/navigation/NavigationHelper';
+import { BatchRouteParams, NavigationRouteParams, requireBatchId, requireItemId } from '../../../main/ets/navigation/RouteContract';
+import { RouteName } from '../../../main/ets/navigation/RouteName';
 
 export default function abilityTest() {
-  describe('ActsAbilityTest', () => {
-    // Defines a test suite. Two parameters are supported: test suite name and test suite function.
-    beforeAll(() => {
-      // Presets an action, which is performed only once before all test cases of the test suite start.
-      // This API supports only one parameter: preset action function.
-    })
-    beforeEach(() => {
-      // Presets an action, which is performed before each unit test case starts.
-      // The number of execution times is the same as the number of test cases defined by **it**.
-      // This API supports only one parameter: preset action function.
-    })
-    afterEach(() => {
-      // Presets a clear action, which is performed after each unit test case ends.
-      // The number of execution times is the same as the number of test cases defined by **it**.
-      // This API supports only one parameter: clear action function.
-    })
-    afterAll(() => {
-      // Presets a clear action, which is performed after all test cases of the test suite end.
-      // This API supports only one parameter: clear action function.
-    })
-    it('assertContain', 0, () => {
-      // Defines a test case. This API supports three parameters: test case name, filter parameter, and test case function.
-      hilog.info(0x0000, 'testTag', '%{public}s', 'it begin');
-      let a = 'abc';
-      let b = 'b';
-      // Defines a variety of assertion methods, which are used to declare expected boolean conditions.
-      expect(a).assertContain(b);
-      expect(a).assertEqual(a);
-    })
-  })
+  describe('Navigation route contract flow', () => {
+    it('主入口和业务目的页使用稳定的 Navigation 路由名', 0, () => {
+      expect(RouteName.HOME).assertEqual('pages/Index');
+      expect(RouteName.ITEM_FORM).assertEqual('pages/ItemFormPage');
+      expect(RouteName.ITEM_DETAIL).assertEqual('pages/ItemDetailPage');
+      expect(RouteName.BATCH_FORM).assertEqual('pages/BatchFormPage');
+    });
+
+    it('返回刷新参数保留 revision、来源和查询条件', 0, () => {
+      const params: NavigationRouteParams = {
+        itemId: 'item-1',
+        batchId: 'batch-1',
+        mode: 'edit',
+        returnTo: RouteName.ITEM_DETAIL,
+        refreshAt: 12,
+        query: new ItemQuery('药', '卧室 / 药箱', '药品')
+      };
+      const batchParams: BatchRouteParams = {
+        itemId: params.itemId,
+        batchId: params.batchId,
+        mode: 'edit'
+      };
+
+      expect(requireItemId({ itemId: params.itemId }).ok).assertTrue();
+      expect(requireBatchId(batchParams).ok).assertTrue();
+      expect(params.returnTo).assertEqual(RouteName.ITEM_DETAIL);
+      expect(params.refreshAt).assertEqual(12);
+      expect(params.query?.normalized().name).assertEqual('药');
+    });
+
+    it('缺少关键标识时拒绝打开依赖 itemId 或 batchId 的页面', 0, () => {
+      expect(requireItemId(undefined).ok).assertFalse();
+      expect(requireItemId({ itemId: ' ' }).ok).assertFalse();
+      expect(requireBatchId({ itemId: 'item-1' }).ok).assertFalse();
+      expect(requireBatchId({ itemId: 'item-1', batchId: ' ' }).ok).assertFalse();
+    });
+
+    it('NavDestination 返回处理器可拦截并释放', 0, () => {
+      let handledCount = 0;
+      const handler = (): boolean => {
+        handledCount += 1;
+        return true;
+      };
+
+      NavigationHelper.registerBackHandler(handler);
+      expect(NavigationHelper.handleBackPressed()).assertTrue();
+      NavigationHelper.unregisterBackHandler(handler);
+      expect(NavigationHelper.handleBackPressed()).assertFalse();
+      expect(handledCount).assertEqual(1);
+    });
+  });
 }

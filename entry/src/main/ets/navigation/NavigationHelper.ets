@@ -8,11 +8,15 @@ export interface NavigationOptions {
   params?: NavigationRouteParams;
 }
 
+type NavigationBackHandler = () => boolean;
+
 /**
  * 统一封装应用内导航。当前实现基于官方推荐的 Navigation/NavPathStack。
  */
 export class NavigationHelper {
   private static pathStack: NavPathStack | undefined = undefined;
+  private static backHandler: NavigationBackHandler | undefined = undefined;
+  private static lastPopResult: Object | undefined = undefined;
 
   static registerPathStack(pathStack: NavPathStack): void {
     NavigationHelper.pathStack = pathStack;
@@ -39,11 +43,33 @@ export class NavigationHelper {
   }
 
   static getParams(): Object | undefined {
-    return NavigationHelper.getPathStackParams();
+    return NavigationHelper.lastPopResult ?? NavigationHelper.getPathStackParams();
   }
 
   static back(options?: NavigationOptions): void {
     NavigationHelper.popPathStack(options);
+  }
+
+  static registerBackHandler(handler: NavigationBackHandler): void {
+    NavigationHelper.backHandler = handler;
+  }
+
+  static unregisterBackHandler(handler: NavigationBackHandler): void {
+    if (NavigationHelper.backHandler === handler) {
+      NavigationHelper.backHandler = undefined;
+    }
+  }
+
+  static handleBackPressed(): boolean {
+    const handler = NavigationHelper.backHandler;
+    if (handler === undefined) {
+      return false;
+    }
+    try {
+      return handler();
+    } catch (_) {
+      return false;
+    }
   }
 
   private static pushWithPathStack(options: NavigationOptions): boolean {
@@ -52,7 +78,10 @@ export class NavigationHelper {
       return false;
     }
     try {
-      pathStack.pushPathByName(options.url, NavigationHelper.toObjectParams(options.params));
+      NavigationHelper.lastPopResult = undefined;
+      pathStack.pushPathByName(options.url, NavigationHelper.toObjectParams(options.params), (popInfo: PopInfo) => {
+        NavigationHelper.lastPopResult = popInfo.result;
+      });
       return true;
     } catch (_) {
       return false;
@@ -65,9 +94,12 @@ export class NavigationHelper {
       return false;
     }
     try {
+      NavigationHelper.lastPopResult = undefined;
       pathStack.clear(false);
       if (options.url.length > 0 && options.url !== 'pages/Index') {
-        pathStack.pushPathByName(options.url, NavigationHelper.toObjectParams(options.params), false);
+        pathStack.pushPathByName(options.url, NavigationHelper.toObjectParams(options.params), (popInfo: PopInfo) => {
+          NavigationHelper.lastPopResult = popInfo.result;
+        }, false);
       }
       return true;
     } catch (_) {

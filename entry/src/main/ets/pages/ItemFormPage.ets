@@ -8,6 +8,7 @@ import { CATEGORY_OPTIONS, CategoryRecord } from '../model/Category';
 import { Item, ItemDraft, ItemUnit } from '../model/Item';
 import { AssetSource } from '../model/ItemAsset';
 import { LocationRecord } from '../model/Location';
+import { buildItemRefreshParams } from '../navigation/RefreshContract';
 import { ItemFormRouteParams, requireItemId } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppEventBus } from '../common/AppEventBus';
@@ -46,8 +47,10 @@ export struct ItemFormPage {
   @State private showPhotoSection: boolean = false;
   private initialDraftSignature: string = '';
   private returnToRoute: string = RouteName.HOME;
+  private backHandler: () => boolean = () => this.handleNavigationBack();
 
   aboutToAppear(): void {
+    NavigationHelper.registerBackHandler(this.backHandler);
     this.readRoute();
     this.loadManagedLocations();
     this.loadCategoryOptions();
@@ -55,6 +58,10 @@ export struct ItemFormPage {
       this.markClean();
       this.loadDefaultReminderDays();
     }
+  }
+
+  aboutToDisappear(): void {
+    NavigationHelper.unregisterBackHandler(this.backHandler);
   }
 
   build() {
@@ -546,10 +553,7 @@ export struct ItemFormPage {
     const refreshAt = AppEventBus.notifyDataChanged();
     NavigationHelper.back({
       url: this.returnToRoute,
-      params: {
-        refreshAt: refreshAt,
-        itemId: this.itemId
-      }
+      params: buildItemRefreshParams(refreshAt, this.itemId)
     });
   }
 
@@ -587,6 +591,10 @@ export struct ItemFormPage {
   }
 
   onBackPress(): boolean {
+    return this.handleNavigationBack();
+  }
+
+  private handleNavigationBack(): boolean {
     this.requestClose();
     return true;
   }

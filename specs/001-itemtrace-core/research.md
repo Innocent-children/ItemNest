@@ -253,8 +253,34 @@ SDK 声明存在，不等同于已经配置权限或可以直接写入业务代�
   项目当前根 `oh-package.json5` 使用 `@ohos/hypium` 1.0.25。已新增 `AppEventBus` 本地单测并接入
   `entry/src/test/List.test.ets`，同时新增 `entry/src/ohosTest/ets/test/AppEventBusFlow.test.ets` 并接入
   `entry/src/ohosTest/ets/test/List.test.ets`，覆盖刷新链路共同依赖的数据修订号和监听释放机制。
+- 已新增 `entry/src/main/ets/navigation/RefreshContract.ets`，将来源页返回刷新参数的构造和去重消费规则集中管理；
+  `Index.ets`、`ItemListPage.ets`、`ItemDetailPage.ets` 使用 `getUnhandledRouteRefreshAt` 避免重复刷新，
+  `ItemFormPage`、`BatchFormPage`、`ItemDetailPage` 使用统一构造函数返回 `refreshAt/itemId/batchId`。
+  Local Test 与 ohosTest 均接入 `RefreshContract.test.ets`，覆盖新增/编辑/删除、批次变更和重复 `refreshAt`
+  降级规则；测试包 ArkTS 编译通过。
 - 本机 `hvigorw --no-daemon tasks` 未直接列出测试运行任务。已确认不能把 `ohosTest` 当作 product，
   也不能把 `ohosTest` 关联到 product；可用的测试包编译命令是
   `hvigorw assembleHap --mode module -p module=entry@ohosTest -p product=default -p buildMode=test --no-daemon`。
   该命令已通过并执行 `OhosTestCompileArkTS`，但尚未在设备上运行测试用例；后续必须通过 DevEco Studio
-  测试入口或确认的 `aa test`/Hypium 流程执行后才能把 T098/T100 标为完成。
+  测试入口或确认的 `aa test`/Hypium 流程执行后才能把 T100 标为完成。
+- 已确认本机 `hdc` 位于 `/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc`。
+  最新执行 `hdc list targets` 返回 `Connect server failed`，当前没有可用 HDC 连接或已连接真机/模拟器，因此无法在本轮执行 `aa test`。
+  当前 bundle 为 `com.imotong.itemtrace`，测试模块为 `entry_test`；设备就绪后应安装主 HAP 与测试 HAP，
+  再执行 `hdc shell aa test -b com.imotong.itemtrace -m entry_test -s unittest OpenHarmonyTestRunner -s timeout 15000`。
+  真机安装前仍需为当前机器配置调试签名，否则无签名 HAP 可能无法安装。
+- 原 `entry/src/ohosTest/ets/test/Ability.test.ets` 曾是 DevEco 模板断言，不能作为验收证据。已替换为
+  Navigation 路由契约测试，覆盖稳定路由名、返回刷新参数和缺少关键路由标识的错误路径；测试包编译通过。
+- 原 `entry/src/test/LocalUnit.test.ets` 也曾是模板断言，已替换为本地 Navigation 路由契约测试，覆盖
+  首页根入口和业务路由名唯一性；本地测试套不再包含 DevEco 示例 `assertContain` 用例。
+- 华为 Navigation 文档说明 `navDestination` builder 中应以 `NavDestination` 管理目的页，并在示例中通过
+  `NavDestination.onBackPressed` 处理返回。迁移到 `Navigation` 后，普通业务组件内的 `onBackPress`
+  不能再作为唯一系统返回入口。已在 `NavigationHelper` 增加返回处理器注册/释放机制，`Index.ets`
+  在 `NavDestination.onBackPressed` 中统一转发；`ItemFormPage` 与 `BatchFormPage` 注册自己的草稿
+  关闭确认逻辑，避免系统返回绕过未保存修改确认。
+- 本机 SDK `navigation.d.ts` 确认 `pushPathByName(name, param, onPop, animated?)` 和 `pop(result)` 是配套
+  返回结果模型。此前代码虽然调用 `pop(result)`，但 `pushUrl` 未注册 `onPop`，来源页无法通过官方返回结果
+  获得 `refreshAt`。已改为在 `NavigationHelper.pushUrl/replaceUrl` 自动注册 `onPop`，并让 `getParams()`
+  对返回来源页优先暴露最近一次 `pop(result)`；批次保存和物品删除也补齐 `refreshAt/itemId/batchId` 返回参数。
+- 为 T099 的失败路径补充了可编译测试：`DataFailureMapping.test.ets` 覆盖数据库读/初始化/写入错误通过
+  `toAppError` 归一化为用户可展示 AppError，并验证已归一化的 AppError 不被覆盖。该测试已接入 Local
+  Test 与 ohosTest 测试套，并通过 `entry@ohosTest` ArkTS 编译；设备侧实际执行仍由 T100 跟踪。
