@@ -16,7 +16,7 @@ type NavigationRouteResultListener = (result: Object | undefined) => void;
  */
 export class NavigationHelper {
   private static pathStack: NavPathStack | undefined = undefined;
-  private static backHandler: NavigationBackHandler | undefined = undefined;
+  private static backHandlers: NavigationBackHandler[] = [];
   private static lastPopResult: Object | undefined = undefined;
   private static nextRouteResultListenerId: number = 1;
   private static routeResultListeners: Map<number, NavigationRouteResultListener> =
@@ -32,18 +32,12 @@ export class NavigationHelper {
     }
   }
 
-  static pushUrl(options: NavigationOptions): Promise<void> {
-    if (NavigationHelper.pushWithPathStack(options)) {
-      return Promise.resolve();
-    }
-    return Promise.reject(new Error('Navigation stack is not ready'));
+  static pushUrl(options: NavigationOptions): Promise<boolean> {
+    return Promise.resolve(NavigationHelper.pushWithPathStack(options));
   }
 
-  static replaceUrl(options: NavigationOptions): Promise<void> {
-    if (NavigationHelper.replaceWithPathStack(options)) {
-      return Promise.resolve();
-    }
-    return Promise.reject(new Error('Navigation stack is not ready'));
+  static replaceUrl(options: NavigationOptions): Promise<boolean> {
+    return Promise.resolve(NavigationHelper.replaceWithPathStack(options));
   }
 
   static getParams(): Object | undefined {
@@ -75,24 +69,31 @@ export class NavigationHelper {
   }
 
   static registerBackHandler(handler: NavigationBackHandler): void {
-    NavigationHelper.backHandler = handler;
+    NavigationHelper.removeBackHandler(handler);
+    NavigationHelper.backHandlers.push(handler);
   }
 
   static unregisterBackHandler(handler: NavigationBackHandler): void {
-    if (NavigationHelper.backHandler === handler) {
-      NavigationHelper.backHandler = undefined;
-    }
+    NavigationHelper.removeBackHandler(handler);
   }
 
   static handleBackPressed(): boolean {
-    const handler = NavigationHelper.backHandler;
-    if (handler === undefined) {
+    if (NavigationHelper.backHandlers.length === 0) {
       return false;
     }
+    const handler = NavigationHelper.backHandlers[NavigationHelper.backHandlers.length - 1];
     try {
       return handler();
     } catch (_) {
       return false;
+    }
+  }
+
+  private static removeBackHandler(handler: NavigationBackHandler): void {
+    for (let index = NavigationHelper.backHandlers.length - 1; index >= 0; index--) {
+      if (NavigationHelper.backHandlers[index] === handler) {
+        NavigationHelper.backHandlers.splice(index, 1);
+      }
     }
   }
 
@@ -119,11 +120,11 @@ export class NavigationHelper {
     }
     try {
       NavigationHelper.lastPopResult = undefined;
-      pathStack.clear(false);
+      pathStack.clear(true);
       if (options.url.length > 0 && options.url !== 'pages/Index') {
         pathStack.pushPathByName(options.url, NavigationHelper.toObjectParams(options.params), (popInfo: PopInfo) => {
           NavigationHelper.recordPopResult(popInfo.result);
-        }, false);
+        }, true);
       }
       return true;
     } catch (_) {
@@ -143,7 +144,6 @@ export class NavigationHelper {
       const result = options?.params === undefined ? undefined : NavigationHelper.toObjectParams(options.params);
       if (result !== undefined) {
         pathStack.pop(result);
-        NavigationHelper.recordPopResult(result);
       } else {
         pathStack.pop();
       }

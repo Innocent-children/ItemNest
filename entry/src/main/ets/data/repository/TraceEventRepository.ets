@@ -6,7 +6,13 @@ import { RdbDatabase } from '../rdb/RdbDatabase';
 import { TRACE_EVENT_TABLE } from '../rdb/TraceEventSchema';
 import { ResultSetReader } from '../rdb/ResultSetReader';
 
-export class TraceEventRepository {
+export interface TraceEventRepositoryPort {
+  append(event: TraceEvent): Promise<Result<TraceEvent>>;
+  listByItemId(itemId: string): Promise<Result<TraceEvent[]>>;
+  listAll(): Promise<Result<TraceEvent[]>>;
+}
+
+export class TraceEventRepository implements TraceEventRepositoryPort {
   private readonly database: RdbDatabase;
 
   constructor(database: RdbDatabase) {

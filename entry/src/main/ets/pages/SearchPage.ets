@@ -5,6 +5,7 @@ import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
 import { MainEntryBar } from '../components/MainEntryBar';
 import { AppEventBus } from '../common/AppEventBus';
+import { SearchRequestCoordinator } from '../common/SearchRequestCoordinator';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { SearchHistory } from '../model/SearchHistory';
@@ -25,10 +26,12 @@ export struct SearchPage {
   @State private items: ItemSummary[] = [];
   @State private suggestions: string[] = [];
   @State private history: SearchHistory[] = [];
-  @State private loading: boolean = true;
+  @State private filterLoading: boolean = false;
+  @State private searchLoading: boolean = false;
   @State private searched: boolean = false;
-  @State private errorMessage: string = '';
-  private searchRequestId: number = 0;
+  @State private filterErrorMessage: string = '';
+  @State private searchErrorMessage: string = '';
+  private requestCoordinator: SearchRequestCoordinator = new SearchRequestCoordinator();
   private inputSearchVersion: number = 0;
   private lastHandledDataRevision: number = -1;
 
@@ -103,6 +106,9 @@ export struct SearchPage {
               .borderRadius($r('app.float.radius_control'))
               .onChange((value: string) => {
                 this.name = value;
+                this.requestCoordinator.invalidateSearchResults();
+                this.searchLoading = false;
+                this.searchErrorMessage = '';
                 this.loadSuggestions();
                 this.scheduleSearch();
               })
@@ -169,11 +175,21 @@ export struct SearchPage {
           .borderRadius($r('app.float.radius_card'))
           .backgroundColor($r('app.color.surface_card'))
 
-          if (this.loading) {
+          if (this.filterLoading) {
             LoadingState({ text: '正在读取筛选条件…' })
-          } else if (this.errorMessage.length > 0) {
-            ErrorState({ message: this.errorMessage })
-            Button('重试')
+          } else if (this.filterErrorMessage.length > 0) {
+            ErrorState({ message: this.filterErrorMessage })
+            Button('重试加载筛选条件')
+              .fontColor($r('app.color.brand_on_primary'))
+              .backgroundColor($r('app.color.brand_primary'))
+              .onClick(() => this.loadFilterOptions(true))
+          }
+
+          if (this.searchLoading) {
+            LoadingState({ text: '正在查询物品…' })
+          } else if (this.searchErrorMessage.length > 0) {
+            ErrorState({ message: this.searchErrorMessage })
+            Button('重试搜索')
               .fontColor($r('app.color.brand_on_primary'))
               .backgroundColor($r('app.color.brand_primary'))
               .onClick(() => this.search(true, false))
@@ -231,6 +247,8 @@ export struct SearchPage {
               .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
               .onClick(() => {
                 this.name = suggestion;
+                this.inputSearchVersion++;
+                this.requestCoordinator.invalidateSuggestions();
                 this.search(false, false);
               })
           }, (suggestion: string) => suggestion)
@@ -318,104 +336,140 @@ export struct SearchPage {
   }
 
   private async loadFilterOptions(showLoading: boolean = true): Promise<void> {
+    const requestId = this.requestCoordinator.beginFilterOptions();
     if (showLoading) {
-      this.loading = true;
+      this.filterLoading = true;
+      this.filterErrorMessage = '';
     }
-    const result = await AppServices.get().searchItems.getFilterOptions();
-    if (!result.ok) {
-      if (showLoading || this.locationPaths.length + this.categories.length === 0) {
-        this.errorMessage = result.getError().message;
+    try {
+      const result = await AppServices.get().searchItems.getFilterOptions();
+      if (!this.requestCoordinator.isCurrentFilterOptions(requestId)) {
+        return;
       }
-      this.loading = false;
-      return;
+      if (!result.ok) {
+        if (showLoading || this.locationPaths.length + this.categories.length === 0) {
+          this.filterErrorMessage = result.getError().message;
+        }
+        return;
+      }
+      this.filterErrorMessage = '';
+      this.locationPaths = result.getData().locationPaths;
+      this.categories = result.getData().categories;
+    } catch (_) {
+      if (this.requestCoordinator.isCurrentFilterOptions(requestId) &&
+        (showLoading || this.locationPaths.length + this.categories.length === 0)) {
+        this.filterErrorMessage = '读取筛选条件失败，请重试';
+      }
+    } finally {
+      if (this.requestCoordinator.isCurrentFilterOptions(requestId)) {
+        this.filterLoading = false;
+      }
     }
-    this.errorMessage = '';
-    this.locationPaths = result.getData().locationPaths;
-    this.categories = result.getData().categories;
-    this.loading = false;
   }
 
   private async search(showLoading: boolean = true, recordHistory: boolean = true): Promise<void> {
     const query = this.currentQuery();
     if (query.isEmpty()) {
-      this.searchRequestId++;
+      this.requestCoordinator.invalidateSearchResults();
       this.items = [];
       this.searched = false;
-      this.errorMessage = '';
-      this.loading = false;
+      this.searchErrorMessage = '';
+      this.searchLoading = false;
       return;
     }
+    const requestId = this.requestCoordinator.beginSearch();
     this.searched = true;
-    if (showLoading) {
-      this.loading = true;
-      this.errorMessage = '';
-    }
-    const requestId = ++this.searchRequestId;
+    this.searchLoading = showLoading;
+    this.searchErrorMessage = '';
     try {
       const result = await AppServices.get().searchItems.search(query);
-      if (requestId !== this.searchRequestId) {
+      if (!this.requestCoordinator.isCurrentSearch(requestId)) {
         return;
       }
       if (result.ok) {
         this.items = result.getData().items;
         this.searched = true;
-        this.errorMessage = '';
+        this.searchErrorMessage = '';
         if (recordHistory) {
           await AppServices.get().searchSuggestions.recordSearch(query);
+          if (!this.requestCoordinator.isCurrentSearch(requestId)) {
+            return;
+          }
           await this.loadSuggestions();
         }
       } else {
         if (showLoading || this.items.length === 0) {
-          this.errorMessage = result.getError().message;
+          this.searchErrorMessage = result.getError().message;
         }
       }
     } catch (_) {
-      if (requestId === this.searchRequestId && (showLoading || this.items.length === 0)) {
-        this.errorMessage = '查询物品失败，请重试';
+      if (this.requestCoordinator.isCurrentSearch(requestId) && (showLoading || this.items.length === 0)) {
+        this.searchErrorMessage = '查询物品失败，请重试';
       }
     } finally {
-      if (requestId === this.searchRequestId) {
-        this.loading = false;
+      if (this.requestCoordinator.isCurrentSearch(requestId)) {
+        this.searchLoading = false;
       }
     }
   }
 
   private async refreshResults(showLoading: boolean = false): Promise<void> {
-    if (showLoading) {
-      this.loading = true;
-      this.errorMessage = '';
+    const query = this.currentQuery();
+    if (query.isEmpty()) {
+      this.requestCoordinator.invalidateSearchResults();
+      this.items = [];
+      this.searched = false;
+      this.searchErrorMessage = '';
+      this.searchLoading = false;
+      return;
     }
+    const requestId = this.requestCoordinator.beginRefresh();
+    this.searchLoading = showLoading;
+    this.searchErrorMessage = '';
     try {
-      const result = await AppServices.get().searchItems.search(this.currentQuery());
+      const result = await AppServices.get().searchItems.search(query);
+      if (!this.requestCoordinator.isCurrentRefresh(requestId)) {
+        return;
+      }
       if (result.ok) {
         this.items = result.getData().items;
-        this.errorMessage = '';
+        this.searchErrorMessage = '';
       } else {
         if (showLoading || this.items.length === 0) {
-          this.errorMessage = result.getError().message;
+          this.searchErrorMessage = result.getError().message;
         }
       }
     } catch (_) {
-      if (showLoading || this.items.length === 0) {
-        this.errorMessage = '查询物品失败，请重试';
+      if (this.requestCoordinator.isCurrentRefresh(requestId) && (showLoading || this.items.length === 0)) {
+        this.searchErrorMessage = '查询物品失败，请重试';
       }
     } finally {
-      this.loading = false;
+      if (this.requestCoordinator.isCurrentRefresh(requestId)) {
+        this.searchLoading = false;
+      }
     }
   }
 
   private clearQuery(): void {
+    this.inputSearchVersion++;
+    this.requestCoordinator.invalidateQueryRequests();
     this.name = '';
     this.selectedLocation = '';
     this.selectedCategory = '';
     this.items = [];
+    this.suggestions = [];
     this.searched = false;
-    this.errorMessage = '';
+    this.searchLoading = false;
+    this.searchErrorMessage = '';
+    this.loadSuggestions();
   }
 
   private clearCondition(type: string): void {
     if (type === 'name') {
+      this.inputSearchVersion++;
+      this.requestCoordinator.invalidateSuggestions();
       this.name = '';
+      this.suggestions = [];
       this.loadSuggestions();
     } else if (type === 'location') {
       this.selectedLocation = '';
@@ -434,10 +488,18 @@ export struct SearchPage {
   }
 
   private async loadSuggestions(): Promise<void> {
-    const result = await AppServices.get().searchSuggestions.getSuggestions(this.name);
-    if (result.ok) {
-      this.suggestions = result.getData().suggestions;
-      this.history = result.getData().history;
+    const input = this.name;
+    const requestId = this.requestCoordinator.beginSuggestion();
+    try {
+      const result = await AppServices.get().searchSuggestions.getSuggestions(input);
+      if (!this.requestCoordinator.isCurrentSuggestion(requestId) || input !== this.name) {
+        return;
+      }
+      if (result.ok) {
+        this.suggestions = result.getData().suggestions;
+        this.history = result.getData().history;
+      }
+    } catch (_) {
     }
   }
 
@@ -451,15 +513,22 @@ export struct SearchPage {
   }
 
   private async clearHistory(): Promise<void> {
-    const result = await AppServices.get().searchSuggestions.clearHistory();
-    if (result.ok) {
-      this.history = [];
-    } else {
-      this.errorMessage = result.getError().message;
+    this.requestCoordinator.invalidateSuggestions();
+    try {
+      const result = await AppServices.get().searchSuggestions.clearHistory();
+      if (result.ok) {
+        this.history = [];
+      } else {
+        this.searchErrorMessage = result.getError().message;
+      }
+    } catch (_) {
+      this.searchErrorMessage = '清除搜索历史失败，请重试';
     }
   }
 
   private applyHistory(record: SearchHistory): void {
+    this.inputSearchVersion++;
+    this.requestCoordinator.invalidateSuggestions();
     this.name = record.queryText ?? '';
     this.selectedLocation = record.locationPath ?? '';
     this.selectedCategory = record.category ?? '';

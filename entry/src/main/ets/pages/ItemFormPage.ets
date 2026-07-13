@@ -16,6 +16,7 @@ import { AppServices } from '../service/AppServices';
 
 @Component
 export struct ItemFormPage {
+  @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private name: string = '';
@@ -31,6 +32,8 @@ export struct ItemFormPage {
   @State private errorMessage: string = '';
   @State private loading: boolean = false;
   @State private saving: boolean = false;
+  @State private savePressed: boolean = false;
+  @State private batchManagePressed: boolean = false;
   @State private editMode: boolean = false;
   @State private itemId: string = '';
   @State private pendingPhotoUri: string = '';
@@ -45,9 +48,14 @@ export struct ItemFormPage {
   @State private showExpirySection: boolean = false;
   @State private showNotesSection: boolean = false;
   @State private showPhotoSection: boolean = false;
+  private loadedQuantityText: string = '1';
+  private loadedUnit: ItemUnit = ItemUnit.PIECE;
+  private loadedExpirationDate: string = '';
   private initialDraftSignature: string = '';
   private returnToRoute: string = RouteName.HOME;
   private backHandler: () => boolean = () => this.handleNavigationBack();
+  private existingLoaded: boolean = false;
+  private managedFieldsRequestId: number = 0;
 
   aboutToAppear(): void {
     NavigationHelper.registerBackHandler(this.backHandler);
@@ -62,6 +70,12 @@ export struct ItemFormPage {
 
   aboutToDisappear(): void {
     NavigationHelper.unregisterBackHandler(this.backHandler);
+  }
+
+  private onDataRevisionChanged(): void {
+    if (this.editMode && this.existingLoaded && this.itemId.length > 0 && !this.saving) {
+      this.refreshManagedBatchFields();
+    }
   }
 
   build() {
@@ -102,7 +116,12 @@ export struct ItemFormPage {
                 this.categorySection()
               }
 
-              this.sectionToggle('到期与提醒', '设置保质期和提前提醒', this.showExpirySection, 'expiry')
+              this.sectionToggle(
+                '到期与提醒',
+                this.editMode ? '到期日由批次汇总；提前提醒仍可编辑' : '设置保质期和提前提醒',
+                this.showExpirySection,
+                'expiry'
+              )
               if (this.showExpirySection) {
                 this.expirySection()
               }
@@ -160,18 +179,57 @@ export struct ItemFormPage {
   @Builder
   private coreSection() {
     Column({ space: $r('app.float.space_4') }) {
-      this.fieldTitle('基础信息', '名称必填；数量和单位默认即可保存。')
+      this.fieldTitle('基础信息', this.editMode ? '名称可编辑；库存信息由批次统一管理。' : '名称必填；数量和单位默认即可保存。')
       TextInput({ text: this.name, placeholder: '例如：感冒药' })
         .maxLength(80)
         .backgroundColor($r('app.color.surface_app'))
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
         .onChange((value: string) => this.name = value)
-      QuantityInput({ quantityText: $quantityText, unit: $unit, errorMessage: $quantityError })
+      QuantityInput({
+        quantityText: $quantityText,
+        unit: $unit,
+        errorMessage: $quantityError,
+        inputEnabled: !this.editMode
+      })
+      if (this.editMode) {
+        this.batchSourceNotice()
+      }
     }
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+  }
+
+  @Builder
+  private batchSourceNotice() {
+    Column({ space: $r('app.float.space_3') }) {
+      Text('数量/单位/到期日请在批次管理中修改')
+        .fontSize($r('app.float.font_body'))
+        .fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.text_primary'))
+      Button('进入批次管理')
+        .width('100%')
+        .fontColor($r('app.color.brand_primary'))
+        .backgroundColor($r('app.color.surface_app'))
+        .border({ width: 1, color: $r('app.color.border_subtle') })
+        .borderRadius($r('app.float.radius_control'))
+        .enabled(!this.saving && this.itemId.length > 0)
+        .scale({ x: this.batchManagePressed ? 0.98 : 1, y: this.batchManagePressed ? 0.98 : 1 })
+        .animation({ duration: 120, curve: Curve.EaseOut })
+        .onTouch((event: TouchEvent) => {
+          if (event.type === TouchType.Down) {
+            this.batchManagePressed = true;
+          } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+            this.batchManagePressed = false;
+          }
+        })
+        .onClick(() => this.openBatchManagement())
+    }
+    .width('100%')
+    .padding($r('app.float.space_3'))
+    .borderRadius($r('app.float.radius_control'))
+    .backgroundColor($r('app.color.surface_accent'))
   }
 
   @Builder
@@ -233,6 +291,15 @@ export struct ItemFormPage {
         .backgroundColor($r('app.color.brand_primary'))
         .borderRadius($r('app.float.radius_control'))
         .enabled(!this.saving)
+        .scale({ x: this.savePressed ? 0.98 : 1, y: this.savePressed ? 0.98 : 1 })
+        .animation({ duration: 120, curve: Curve.EaseOut })
+        .onTouch((event: TouchEvent) => {
+          if (event.type === TouchType.Down) {
+            this.savePressed = true;
+          } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+            this.savePressed = false;
+          }
+        })
         .onClick(() => this.save())
     }
     .width('100%')
@@ -280,7 +347,7 @@ export struct ItemFormPage {
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent'))
           .borderRadius($r('app.float.radius_control'))
-          .enabled(this.expirationDate.length > 0)
+          .enabled(!this.editMode && this.expirationDate.length > 0)
           .onClick(() => this.expirationDate = '')
       }
       .width('100%')
@@ -288,6 +355,7 @@ export struct ItemFormPage {
       .borderRadius($r('app.float.radius_control'))
       .backgroundColor($r('app.color.surface_app'))
       CalendarPicker({ selected: this.expirationPickerDate() })
+        .enabled(!this.editMode)
         .onChange((date: Date) => this.expirationDate = this.formatDate(date))
       Flex({ wrap: FlexWrap.Wrap }) {
         this.expirationShortcut('今天', 0)
@@ -334,6 +402,7 @@ export struct ItemFormPage {
       .backgroundColor($r('app.color.surface_accent'))
       .fontSize($r('app.float.font_caption'))
       .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+      .enabled(!this.editMode)
       .onClick(() => {
         if (offsetDays < 0) {
           this.expirationDate = '';
@@ -436,6 +505,7 @@ export struct ItemFormPage {
     const result = await AppServices.get().detailItem.getDetail(this.itemId);
     if (result.ok) {
       this.applyItem(result.getData());
+      this.existingLoaded = true;
       this.markClean();
     } else {
       this.errorMessage = result.getError().message;
@@ -469,11 +539,14 @@ export struct ItemFormPage {
 
   private applyItem(item: Item): void {
     this.name = item.name;
-    this.quantityText = item.quantity.toString();
-    this.unit = item.unit;
+    this.loadedQuantityText = item.quantity.toString();
+    this.loadedUnit = item.unit;
+    this.loadedExpirationDate = item.expirationDate ?? '';
+    this.quantityText = this.loadedQuantityText;
+    this.unit = this.loadedUnit;
     this.locationPath = item.locationPath ?? '';
     this.categoryValue = item.category ?? '';
-    this.expirationDate = item.expirationDate ?? '';
+    this.expirationDate = this.loadedExpirationDate;
     this.reminderDaysText = item.reminderDays === undefined ? '' : item.reminderDays.toString();
     this.notes = item.notes ?? '';
     this.existingPhotoLocalId = item.photoLocalId ?? '';
@@ -514,15 +587,23 @@ export struct ItemFormPage {
   }
 
   private async save(): Promise<void> {
+    this.savePressed = false;
     this.errorMessage = '';
     if (this.quantityError.length > 0) {
       this.errorMessage = this.quantityError;
       return;
     }
-    const draft = this.createDraft();
     this.saving = true;
     try {
       if (this.editMode) {
+        this.managedFieldsRequestId++;
+        const latestResult = await AppServices.get().detailItem.getDetail(this.itemId);
+        if (!latestResult.ok) {
+          this.errorMessage = latestResult.getError().message;
+          return;
+        }
+        this.applyManagedBatchFields(latestResult.getData());
+        const draft = this.createDraft();
         const result = await AppServices.get().updateItem.update(this.itemId, draft);
         if (result.ok) {
           this.itemId = result.getData().id;
@@ -532,6 +613,7 @@ export struct ItemFormPage {
         }
         this.errorMessage = result.getError().message;
       } else {
+        const draft = this.createDraft();
         const result = await AppServices.get().createItem.create(draft);
         if (result.ok) {
           this.itemId = result.getData().id;
@@ -546,6 +628,44 @@ export struct ItemFormPage {
     } finally {
       this.saving = false;
     }
+  }
+
+  private async openBatchManagement(): Promise<void> {
+    if (this.itemId.length === 0 || this.saving) {
+      return;
+    }
+    const opened = await NavigationHelper.pushUrl({ url: RouteName.BATCH_LIST, params: { itemId: this.itemId } });
+    if (!opened) {
+      this.errorMessage = '批次管理暂时无法打开，请重试';
+    }
+  }
+
+  private async refreshManagedBatchFields(): Promise<void> {
+    const requestId = ++this.managedFieldsRequestId;
+    try {
+      const result = await AppServices.get().detailItem.getDetail(this.itemId);
+      if (requestId !== this.managedFieldsRequestId) {
+        return;
+      }
+      if (!result.ok) {
+        this.errorMessage = result.getError().message;
+        return;
+      }
+      this.applyManagedBatchFields(result.getData());
+    } catch (_) {
+      if (requestId === this.managedFieldsRequestId) {
+        this.errorMessage = '刷新批次汇总失败，请重试';
+      }
+    }
+  }
+
+  private applyManagedBatchFields(item: Item): void {
+    this.loadedQuantityText = item.quantity.toString();
+    this.loadedUnit = item.unit;
+    this.loadedExpirationDate = item.expirationDate ?? '';
+    this.quantityText = this.loadedQuantityText;
+    this.unit = this.loadedUnit;
+    this.expirationDate = this.loadedExpirationDate;
   }
 
   private finishSave(notice?: string): void {
@@ -568,15 +688,16 @@ export struct ItemFormPage {
   }
 
   private createDraft(): ItemDraft {
-    const quantity = this.quantityText.trim().length === 0 ? undefined : Number(this.quantityText);
+    const quantityText = this.editMode ? this.loadedQuantityText : this.quantityText;
+    const quantity = quantityText.trim().length === 0 ? undefined : Number(quantityText);
     const reminderDays = this.reminderDaysText.trim().length === 0 ? undefined : Number(this.reminderDaysText);
     return {
       name: this.name,
       quantity: quantity,
-      unit: this.unit,
+      unit: this.editMode ? this.loadedUnit : this.unit,
       locationPath: this.locationPath,
       category: this.categoryValue.length === 0 ? undefined : this.categoryValue,
-      expirationDate: this.expirationDate,
+      expirationDate: this.editMode ? this.loadedExpirationDate : this.expirationDate,
       reminderDays: reminderDays,
       notes: this.notes
     };
@@ -600,6 +721,9 @@ export struct ItemFormPage {
   }
 
   private requestClose(): void {
+    if (this.saving) {
+      return;
+    }
     if (this.hasUnsavedChanges()) {
       this.showDiscardConfirm = true;
       return;
@@ -629,11 +753,11 @@ export struct ItemFormPage {
   private currentDraftSignature(): string {
     return JSON.stringify({
       name: this.name,
-      quantityText: this.quantityText,
-      unit: this.unit,
+      quantityText: this.editMode ? '' : this.quantityText,
+      unit: this.editMode ? '' : this.unit,
       locationPath: this.locationPath,
       categoryValue: this.categoryValue,
-      expirationDate: this.expirationDate,
+      expirationDate: this.editMode ? '' : this.expirationDate,
       reminderDaysText: this.reminderDaysText,
       notes: this.notes,
       scanText: this.scanText,

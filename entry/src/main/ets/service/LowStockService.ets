@@ -3,22 +3,28 @@ import { failure, Result, success } from '../common/Result';
 import { Item } from '../model/Item';
 import { LowStockItem, StockThreshold } from '../model/StockThreshold';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
-import { StockThresholdRepository } from '../data/repository/StockThresholdRepository';
+import { StockThresholdRepositoryPort } from '../data/repository/StockThresholdRepository';
 
 export class LowStockService {
-  private readonly thresholds: StockThresholdRepository;
+  private readonly thresholds: StockThresholdRepositoryPort;
   private readonly items: ItemRepositoryPort;
   private readonly clock: () => number;
 
-  constructor(thresholds: StockThresholdRepository, items: ItemRepositoryPort, clock: () => number = () => Date.now()) {
+  constructor(thresholds: StockThresholdRepositoryPort, items: ItemRepositoryPort, clock: () => number = () => Date.now()) {
     this.thresholds = thresholds;
     this.items = items;
     this.clock = clock;
   }
 
+  async getThreshold(itemId: string): Promise<Result<StockThreshold | undefined>> {
+    return this.thresholds.getByItemId(itemId);
+  }
+
   async saveThreshold(itemId: string, threshold: number, enabled: boolean): Promise<Result<StockThreshold>> {
-    if (!Number.isFinite(threshold) || threshold < 0) {
-      return failure<StockThreshold>(new AppError(AppErrorCode.VALIDATION, '低库存阈值必须是非负数'));
+    const scaled = threshold * 100;
+    const hasAtMostTwoDecimals = Math.abs(Math.round(scaled) - scaled) < 1e-9;
+    if (!Number.isFinite(threshold) || threshold < 0 || !hasAtMostTwoDecimals) {
+      return failure<StockThreshold>(new AppError(AppErrorCode.VALIDATION, '低库存阈值必须是最多两位小数的非负数'));
     }
     const itemResult = await this.items.getById(itemId);
     if (!itemResult.ok) {

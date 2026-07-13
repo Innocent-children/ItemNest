@@ -6,7 +6,13 @@ import { RdbDatabase } from '../rdb/RdbDatabase';
 import { STOCK_THRESHOLD_TABLE } from '../rdb/StockThresholdSchema';
 import { ResultSetReader } from '../rdb/ResultSetReader';
 
-export class StockThresholdRepository {
+export interface StockThresholdRepositoryPort {
+  save(threshold: StockThreshold): Promise<Result<StockThreshold>>;
+  getByItemId(itemId: string): Promise<Result<StockThreshold | undefined>>;
+  listEnabled(): Promise<Result<StockThreshold[]>>;
+}
+
+export class StockThresholdRepository implements StockThresholdRepositoryPort {
   private readonly database: RdbDatabase;
 
   constructor(database: RdbDatabase) {

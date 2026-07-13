@@ -11,11 +11,11 @@ function createItem(index: number): Item {
   return {
     id: `item-${index}`,
     name: index === 49 ? '目标药品' : `测试物品${index}`,
-    quantity: index === 1 ? 0 : 1,
+    quantity: index < 12 ? 0 : 1,
     unit: ItemUnit.PIECE,
     locationPath: index === 49 ? '卧室 / 药箱' : '客厅 / 收纳箱',
     category: index === 49 ? '药品' : '生活用品',
-    expirationDate: index === 2 ? '2026-06-20' : undefined,
+    expirationDate: index < 12 ? '2026-06-20' : undefined,
     photoState: PhotoState.NONE,
     createdAt: index,
     updatedAt: index
@@ -49,8 +49,10 @@ export default function itemSearchAndSummaryTest() {
       expect(summary.ok).assertTrue();
       if (summary.ok) {
         expect(summary.getData().recentItems.length).assertEqual(10);
-        expect(summary.getData().dueSoonItems.length).assertEqual(1);
-        expect(summary.getData().outOfStockItems.length).assertEqual(1);
+        expect(summary.getData().dueSoonItems.length).assertEqual(10);
+        expect(summary.getData().outOfStockItems.length).assertEqual(10);
+        expect(summary.getData().dueSoonCount).assertEqual(12);
+        expect(summary.getData().outOfStockCount).assertEqual(12);
       }
     });
 

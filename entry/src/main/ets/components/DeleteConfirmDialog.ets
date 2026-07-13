@@ -38,14 +38,19 @@ export struct DeleteConfirmDialog {
           }
         }
         .width('88%')
+        .constraintSize({ maxWidth: 480 })
         .padding($r('app.float.space_6'))
         .borderRadius($r('app.float.radius_card'))
         .backgroundColor($r('app.color.surface_card'))
+        .transition(TransitionEffect.OPACITY
+          .combine(TransitionEffect.scale({ x: 0.96, y: 0.96 }))
+          .animation({ duration: 200, curve: Curve.EaseOut }))
       }
       .width('100%')
       .height('100%')
       .justifyContent(FlexAlign.Center)
       .backgroundColor('#66000000')
+      .transition(TransitionEffect.opacity(0).animation({ duration: 180, curve: Curve.EaseOut }))
     }
   }
 }

@@ -4,6 +4,7 @@ import { RouteName } from '../navigation/RouteName';
 @Component
 export struct MainEntryBar {
   @Prop activeRoute: string = RouteName.HOME;
+  @State private addPressed: boolean = false;
 
   build() {
     Row({ space: $r('app.float.space_2') }) {
@@ -42,6 +43,15 @@ export struct MainEntryBar {
       .borderRadius(24)
       .width(48)
       .height(40)
+      .scale({ x: this.addPressed ? 0.96 : 1, y: this.addPressed ? 0.96 : 1 })
+      .animation({ duration: 120, curve: Curve.EaseOut })
+      .onTouch((event: TouchEvent) => {
+        if (event.type === TouchType.Down) {
+          this.addPressed = true;
+        } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+          this.addPressed = false;
+        }
+      })
       .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create', returnTo: this.activeRoute } }))
   }
 }

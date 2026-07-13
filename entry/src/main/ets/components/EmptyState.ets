@@ -33,6 +33,9 @@ export struct EmptyState {
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
     .alignItems(HorizontalAlign.Center)
+    .transition(TransitionEffect.OPACITY
+      .combine(TransitionEffect.translate({ y: 8 }))
+      .animation({ duration: 220, curve: Curve.EaseOut }))
   }
 
   private openAction(): void {

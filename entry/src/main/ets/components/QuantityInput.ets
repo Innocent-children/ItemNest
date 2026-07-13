@@ -5,6 +5,7 @@ export struct QuantityInput {
   @Link quantityText: string;
   @Link unit: ItemUnit;
   @Link errorMessage: string;
+  @Prop inputEnabled: boolean = true;
 
   build() {
     Column({ space: $r('app.float.space_2') }) {
@@ -13,10 +14,11 @@ export struct QuantityInput {
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
       TextInput({ text: this.quantityText, placeholder: '默认 1' })
-        .type(InputType.Number)
+        .type(InputType.NUMBER_DECIMAL)
         .backgroundColor($r('app.color.surface_app'))
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
+        .enabled(this.inputEnabled)
         .onChange((value: string) => {
           this.quantityText = value;
           this.errorMessage = this.validateQuantity(value);
@@ -27,12 +29,14 @@ export struct QuantityInput {
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent'))
           .borderRadius($r('app.float.radius_control'))
+          .enabled(this.inputEnabled)
           .onClick(() => this.adjustQuantity(-1))
         Button('+')
           .layoutWeight(1)
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent'))
           .borderRadius($r('app.float.radius_control'))
+          .enabled(this.inputEnabled)
           .onClick(() => this.adjustQuantity(1))
         Button('置 0')
           .layoutWeight(1)
@@ -40,6 +44,7 @@ export struct QuantityInput {
           .backgroundColor($r('app.color.surface_app'))
           .border({ width: 1, color: $r('app.color.border_subtle') })
           .borderRadius($r('app.float.radius_control'))
+          .enabled(this.inputEnabled)
           .onClick(() => this.setQuantity('0'))
       }
       .width('100%')
@@ -51,6 +56,7 @@ export struct QuantityInput {
             .backgroundColor(this.unit === option ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
             .fontSize($r('app.float.font_caption'))
             .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+            .enabled(this.inputEnabled)
             .onClick(() => this.unit = option)
         }, (option: ItemUnit) => option)
       }

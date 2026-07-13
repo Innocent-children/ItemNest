@@ -2,17 +2,21 @@ import { AppError, AppErrorCode } from '../common/AppError';
 import { ItemValidator } from '../common/ItemValidator';
 import { failure, Result } from '../common/Result';
 import { Item, ItemDraft } from '../model/Item';
+import { BatchRepositoryPort } from '../data/repository/BatchRepository';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
 
 export class ItemUpdateService {
   private readonly repository: ItemRepositoryPort;
   private readonly validator: ItemValidator;
   private readonly clock: () => number;
+  private readonly batches?: BatchRepositoryPort;
 
-  constructor(repository: ItemRepositoryPort, validator: ItemValidator, clock: () => number = () => Date.now()) {
+  constructor(repository: ItemRepositoryPort, validator: ItemValidator, clock: () => number = () => Date.now(),
+    batches?: BatchRepositoryPort) {
     this.repository = repository;
     this.validator = validator;
     this.clock = clock;
+    this.batches = batches;
   }
 
   async update(itemId: string, draft: ItemDraft): Promise<Result<Item>> {
@@ -28,6 +32,21 @@ export class ItemUpdateService {
       return failure<Item>(new AppError(AppErrorCode.NOT_FOUND, '物品不存在或已删除'));
     }
     const existing = existingResult.getData() as Item;
+    if (this.batches !== undefined) {
+      const batchResult = await this.batches.listByItemId(itemId);
+      if (!batchResult.ok) {
+        return failure<Item>(batchResult.getError());
+      }
+      const data = validated.getData();
+      const aggregateChanged = data.quantity !== existing.quantity || data.unit !== existing.unit ||
+        data.expirationDate !== existing.expirationDate;
+      if (batchResult.getData().length > 0 && aggregateChanged) {
+        return failure<Item>(new AppError(
+          AppErrorCode.VALIDATION,
+          '物品已有批次，请在批次管理中修改数量、单位和到期日'
+        ));
+      }
+    }
     const updatedItem: Item = {
       id: existing.id,
       name: validated.getData().name,

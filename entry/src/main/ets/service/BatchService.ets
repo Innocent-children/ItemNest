@@ -1,7 +1,8 @@
 import { AppError, AppErrorCode } from '../common/AppError';
+import { ItemValidator } from '../common/ItemValidator';
 import { failure, Result, success } from '../common/Result';
 import { Batch, BatchDraft, createBatchId } from '../model/Batch';
-import { Item, isItemUnit, ItemUnit } from '../model/Item';
+import { isItemUnit, ItemUnit } from '../model/Item';
 import { normalizeLocationPath } from '../model/LocationPath';
 import { BatchRepositoryPort } from '../data/repository/BatchRepository';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
@@ -10,6 +11,8 @@ export class BatchService {
   private readonly batches: BatchRepositoryPort;
   private readonly items: ItemRepositoryPort;
   private readonly clock: () => number;
+  private readonly itemValidator: ItemValidator = new ItemValidator();
+  private deleteQueue: Promise<void> = Promise.resolve();
 
   constructor(batches: BatchRepositoryPort, items: ItemRepositoryPort, clock: () => number = () => Date.now()) {
     this.batches = batches;
@@ -26,10 +29,11 @@ export class BatchService {
     if (!itemResult.ok) {
       return failure<Batch>(itemResult.getError());
     }
-    if (itemResult.getData() === undefined) {
+    const item = itemResult.getData();
+    if (item === undefined) {
       return failure<Batch>(new AppError(AppErrorCode.NOT_FOUND, '物品不存在或已删除'));
     }
-    const validated = this.validateDraft(draft);
+    const validated = this.validateDraft(draft, item.unit);
     if (!validated.ok) {
       return failure<Batch>(validated.getError());
     }
@@ -46,15 +50,7 @@ export class BatchService {
       createdAt: now,
       updatedAt: now
     };
-    const created = await this.batches.create(batch);
-    if (!created.ok) {
-      return created;
-    }
-    const refreshed = await this.refreshItemRollup(batch.itemId);
-    if (!refreshed.ok) {
-      return failure<Batch>(refreshed.getError());
-    }
-    return created;
+    return this.batches.create(batch);
   }
 
   async update(batchId: string, draft: BatchDraft): Promise<Result<Batch>> {
@@ -66,6 +62,14 @@ export class BatchService {
     if (existing === undefined) {
       return failure<Batch>(new AppError(AppErrorCode.NOT_FOUND, '批次不存在或已删除'));
     }
+    const itemResult = await this.items.getById(existing.itemId);
+    if (!itemResult.ok) {
+      return failure<Batch>(itemResult.getError());
+    }
+    const item = itemResult.getData();
+    if (item === undefined) {
+      return failure<Batch>(new AppError(AppErrorCode.NOT_FOUND, '物品不存在或已删除'));
+    }
     const validated = this.validateDraft({
       itemId: existing.itemId,
       quantity: draft.quantity,
@@ -73,7 +77,7 @@ export class BatchService {
       expirationDate: draft.expirationDate,
       locationPath: draft.locationPath,
       notes: draft.notes
-    });
+    }, item.unit);
     if (!validated.ok) {
       return failure<Batch>(validated.getError());
     }
@@ -89,18 +93,14 @@ export class BatchService {
       createdAt: existing.createdAt,
       updatedAt: this.clock()
     };
-    const updated = await this.batches.update(batch);
-    if (!updated.ok) {
-      return updated;
-    }
-    const refreshed = await this.refreshItemRollup(batch.itemId);
-    if (!refreshed.ok) {
-      return failure<Batch>(refreshed.getError());
-    }
-    return updated;
+    return this.batches.update(batch);
   }
 
   async delete(batchId: string): Promise<Result<void>> {
+    return this.runExclusiveDelete(() => this.deleteInternal(batchId));
+  }
+
+  private async deleteInternal(batchId: string): Promise<Result<void>> {
     const existingResult = await this.batches.getById(batchId);
     if (!existingResult.ok) {
       return failure<void>(existingResult.getError());
@@ -109,59 +109,34 @@ export class BatchService {
     if (existing === undefined) {
       return failure<void>(new AppError(AppErrorCode.NOT_FOUND, '批次不存在或已删除'));
     }
-    const deleted = await this.batches.deleteConfirmed(batchId);
-    if (!deleted.ok) {
-      return deleted;
+    const itemBatchesResult = await this.batches.listByItemId(existing.itemId);
+    if (!itemBatchesResult.ok) {
+      return failure<void>(itemBatchesResult.getError());
     }
-    return this.refreshItemRollup(existing.itemId);
+    if (itemBatchesResult.getData().length <= 1) {
+      return failure<void>(new AppError(
+        AppErrorCode.VALIDATION,
+        '至少保留一个批次；如需清空库存，请将最后一个批次数量改为 0'
+      ));
+    }
+    return this.batches.deleteConfirmed(batchId);
   }
 
-  private async refreshItemRollup(itemId: string): Promise<Result<void>> {
-    const itemResult = await this.items.getById(itemId);
-    if (!itemResult.ok) {
-      return failure<void>(itemResult.getError());
+  private async runExclusiveDelete(operation: () => Promise<Result<void>>): Promise<Result<void>> {
+    const previous = this.deleteQueue;
+    let release: () => void = () => {};
+    this.deleteQueue = new Promise<void>((resolve: () => void) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
     }
-    const item = itemResult.getData();
-    if (item === undefined) {
-      return failure<void>(new AppError(AppErrorCode.NOT_FOUND, '物品不存在或已删除'));
-    }
-    const batchResult = await this.batches.listByItemId(itemId);
-    if (!batchResult.ok) {
-      return failure<void>(batchResult.getError());
-    }
-    const batches = batchResult.getData();
-    let quantity = 0;
-    let earliestExpiration: string | undefined = undefined;
-    for (let index = 0; index < batches.length; index++) {
-      quantity += batches[index].quantity;
-      const expiration = batches[index].expirationDate;
-      if (expiration !== undefined && (earliestExpiration === undefined || expiration < earliestExpiration)) {
-        earliestExpiration = expiration;
-      }
-    }
-    const updatedItem: Item = {
-      id: item.id,
-      name: item.name,
-      quantity: Math.round(quantity * 100) / 100,
-      unit: item.unit,
-      locationPath: item.locationPath,
-      category: item.category,
-      expirationDate: earliestExpiration,
-      reminderDays: item.reminderDays,
-      notes: item.notes,
-      photoState: item.photoState,
-      photoLocalId: item.photoLocalId,
-      createdAt: item.createdAt,
-      updatedAt: this.clock()
-    };
-    const updated = await this.items.update(updatedItem);
-    if (!updated.ok) {
-      return failure<void>(updated.getError());
-    }
-    return success<void>(undefined);
   }
 
-  private validateDraft(draft: BatchDraft): Result<Batch> {
+  private validateDraft(draft: BatchDraft, expectedUnit: ItemUnit): Result<Batch> {
     const itemId = draft.itemId.trim();
     if (itemId.length === 0) {
       return failure<Batch>(new AppError(AppErrorCode.VALIDATION, '缺少物品标识'));
@@ -171,13 +146,17 @@ export class BatchService {
     if (!Number.isFinite(quantity) || quantity < 0 || Math.abs(Math.round(scaled) - scaled) >= 1e-9) {
       return failure<Batch>(new AppError(AppErrorCode.VALIDATION, '批次数量必须是最多两位小数的非负数'));
     }
-    const unit = draft.unit ?? ItemUnit.PIECE;
+    const unit = draft.unit ?? expectedUnit;
     if (!isItemUnit(unit)) {
       return failure<Batch>(new AppError(AppErrorCode.VALIDATION, '请选择有效的批次单位'));
     }
+    if (unit !== expectedUnit) {
+      return failure<Batch>(new AppError(AppErrorCode.VALIDATION, `批次单位必须与物品单位一致（${expectedUnit}）`));
+    }
     const expiration = draft.expirationDate?.trim() ?? '';
-    if (expiration.length > 0 && !/^\d{4}-\d{2}-\d{2}$/.test(expiration)) {
-      return failure<Batch>(new AppError(AppErrorCode.VALIDATION, '批次到期日期格式应为 YYYY-MM-DD'));
+    const expirationResult = this.itemValidator.validateExpirationDate(expiration);
+    if (!expirationResult.ok) {
+      return failure<Batch>(new AppError(AppErrorCode.VALIDATION, `批次${expirationResult.getError().message}`));
     }
     const notes = draft.notes?.trim() ?? '';
     if (notes.length > 500) {
@@ -188,7 +167,7 @@ export class BatchService {
       itemId: itemId,
       quantity: quantity,
       unit: unit,
-      expirationDate: expiration.length === 0 ? undefined : expiration,
+      expirationDate: expirationResult.getData(),
       locationPath: normalizeLocationPath(draft.locationPath),
       notes: notes.length === 0 ? undefined : notes,
       createdAt: 0,

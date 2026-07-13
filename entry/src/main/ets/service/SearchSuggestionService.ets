@@ -3,7 +3,7 @@ import { Item } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { createSearchHistoryId, SearchHistory } from '../model/SearchHistory';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
-import { SearchHistoryRepository } from '../data/repository/SearchHistoryRepository';
+import { SearchHistoryRepositoryPort } from '../data/repository/SearchHistoryRepository';
 
 export class SearchSuggestionResult {
   readonly suggestions: string[];
@@ -16,11 +16,11 @@ export class SearchSuggestionResult {
 }
 
 export class SearchSuggestionService {
-  private readonly history: SearchHistoryRepository;
+  private readonly history: SearchHistoryRepositoryPort;
   private readonly items: ItemRepositoryPort;
   private readonly clock: () => number;
 
-  constructor(history: SearchHistoryRepository, items: ItemRepositoryPort, clock: () => number = () => Date.now()) {
+  constructor(history: SearchHistoryRepositoryPort, items: ItemRepositoryPort, clock: () => number = () => Date.now()) {
     this.history = history;
     this.items = items;
     this.clock = clock;

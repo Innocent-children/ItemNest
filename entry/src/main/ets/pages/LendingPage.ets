@@ -12,7 +12,11 @@ export struct LendingPage {
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private loading: boolean = true;
-  @State private errorMessage: string = '';
+  @State private contentLoaded: boolean = false;
+  @State private submitting: boolean = false;
+  @State private loadError: string = '';
+  @State private actionError: string = '';
+  @State private pressedAction: string = '';
   @State private quantityText: string = '1';
   @State private counterpart: string = '';
   @State private note: string = '';
@@ -25,7 +29,7 @@ export struct LendingPage {
     const params = NavigationHelper.getParams() as BatchRouteParams | undefined;
     const itemIdResult = requireItemId(params);
     if (!itemIdResult.ok) {
-      this.errorMessage = itemIdResult.getError().message;
+      this.loadError = itemIdResult.getError().message;
       this.loading = false;
       return;
     }
@@ -70,8 +74,8 @@ export struct LendingPage {
 
       if (this.loading) {
         LoadingState({ text: '正在读取借还记录…' })
-      } else if (this.errorMessage.length > 0) {
-        ErrorState({ message: this.errorMessage })
+      } else if (!this.contentLoaded && this.loadError.length > 0) {
+        ErrorState({ message: this.loadError })
       } else {
         Scroll() {
           Column({ space: $r('app.float.space_4') }) {
@@ -84,7 +88,7 @@ export struct LendingPage {
               .borderRadius($r('app.float.radius_card'))
 
             TextInput({ text: this.quantityText, placeholder: '数量' })
-              .type(InputType.Number)
+              .type(InputType.NUMBER_DECIMAL)
               .backgroundColor($r('app.color.surface_card'))
               .border({ width: 1, color: $r('app.color.border_subtle') })
               .borderRadius($r('app.float.radius_control'))
@@ -106,15 +110,41 @@ export struct LendingPage {
                 .fontColor($r('app.color.brand_on_primary'))
                 .backgroundColor($r('app.color.brand_primary'))
                 .borderRadius($r('app.float.radius_control'))
+                .enabled(!this.submitting)
+                .scale({ x: this.pressedAction === 'borrow' ? 0.98 : 1, y: this.pressedAction === 'borrow' ? 0.98 : 1 })
+                .animation({ duration: 120, curve: Curve.EaseOut })
+                .onTouch((event: TouchEvent) => {
+                  if (event.type === TouchType.Down) {
+                    this.pressedAction = 'borrow';
+                  } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+                    this.pressedAction = '';
+                  }
+                })
                 .onClick(() => this.borrow())
               Button('归还')
                 .layoutWeight(1)
                 .fontColor($r('app.color.brand_primary'))
                 .backgroundColor($r('app.color.surface_accent'))
                 .borderRadius($r('app.float.radius_control'))
+                .enabled(!this.submitting)
+                .scale({ x: this.pressedAction === 'return' ? 0.98 : 1, y: this.pressedAction === 'return' ? 0.98 : 1 })
+                .animation({ duration: 120, curve: Curve.EaseOut })
+                .onTouch((event: TouchEvent) => {
+                  if (event.type === TouchType.Down) {
+                    this.pressedAction = 'return';
+                  } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+                    this.pressedAction = '';
+                  }
+                })
                 .onClick(() => this.returnItem())
             }
             .width('100%')
+
+            if (this.actionError.length > 0) {
+              ErrorState({ message: this.actionError })
+            } else if (this.loadError.length > 0) {
+              ErrorState({ message: this.loadError })
+            }
 
             Text('操作记录')
               .fontSize($r('app.float.font_section'))
@@ -151,45 +181,71 @@ export struct LendingPage {
   private async loadState(showLoading: boolean = true): Promise<void> {
     if (showLoading) {
       this.loading = true;
-      this.errorMessage = '';
+      this.loadError = '';
     }
-    const state = await AppServices.get().lending.getState(this.itemId);
-    const events = await AppServices.get().lending.getEvents(this.itemId);
-    if (!state.ok) {
-      if (showLoading || this.events.length === 0) {
-        this.errorMessage = state.getError().message;
+    try {
+      const state = await AppServices.get().lending.getState(this.itemId);
+      const events = await AppServices.get().lending.getEvents(this.itemId);
+      if (!state.ok) {
+        this.loadError = state.getError().message;
+      } else if (!events.ok) {
+        this.loadError = events.getError().message;
+      } else {
+        this.borrowedQuantity = state.getData().borrowedQuantity;
+        this.events = events.getData();
+        this.contentLoaded = true;
+        this.loadError = '';
       }
-    } else if (!events.ok) {
-      if (showLoading || this.events.length === 0) {
-        this.errorMessage = events.getError().message;
-      }
-    } else {
-      this.borrowedQuantity = state.getData().borrowedQuantity;
-      this.events = events.getData();
-      this.errorMessage = '';
+    } catch (_) {
+      this.loadError = '读取借还记录失败，请稍后重试';
+    } finally {
+      this.loading = false;
     }
-    this.loading = false;
   }
 
   private async borrow(): Promise<void> {
-    const result = await AppServices.get().lending.borrow(this.itemId, Number(this.quantityText), this.counterpart, undefined, this.note);
-    if (result.ok) {
+    if (this.submitting) {
+      return;
+    }
+    this.submitting = true;
+    this.pressedAction = '';
+    this.actionError = '';
+    try {
+      const result = await AppServices.get().lending.borrow(this.itemId, Number(this.quantityText), this.counterpart, undefined, this.note);
+      if (!result.ok) {
+        this.actionError = result.getError().message;
+        return;
+      }
       this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadState(false);
       this.showToast('借出已记录');
-    } else {
-      this.errorMessage = result.getError().message;
+    } catch (_) {
+      this.actionError = '借出失败，请稍后重试';
+    } finally {
+      this.submitting = false;
     }
   }
 
   private async returnItem(): Promise<void> {
-    const result = await AppServices.get().lending.returnItem(this.itemId, Number(this.quantityText), undefined, this.note);
-    if (result.ok) {
+    if (this.submitting) {
+      return;
+    }
+    this.submitting = true;
+    this.pressedAction = '';
+    this.actionError = '';
+    try {
+      const result = await AppServices.get().lending.returnItem(this.itemId, Number(this.quantityText), undefined, this.note);
+      if (!result.ok) {
+        this.actionError = result.getError().message;
+        return;
+      }
       this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadState(false);
       this.showToast('归还已记录');
-    } else {
-      this.errorMessage = result.getError().message;
+    } catch (_) {
+      this.actionError = '归还失败，请稍后重试';
+    } finally {
+      this.submitting = false;
     }
   }
 

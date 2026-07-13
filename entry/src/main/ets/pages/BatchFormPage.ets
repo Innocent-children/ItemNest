@@ -3,7 +3,7 @@ import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
 import { Batch, BatchDraft } from '../model/Batch';
-import { ITEM_UNIT_OPTIONS, ItemUnit } from '../model/Item';
+import { ItemUnit } from '../model/Item';
 import { buildBatchRefreshParams } from '../navigation/RefreshContract';
 import { BatchRouteParams, requireBatchId, requireItemId } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
@@ -14,7 +14,9 @@ export struct BatchFormPage {
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private loading: boolean = true;
+  @State private formReady: boolean = false;
   @State private saving: boolean = false;
+  @State private savePressed: boolean = false;
   @State private errorMessage: string = '';
   @State private quantityText: string = '1';
   @State private unit: ItemUnit = ItemUnit.PIECE;
@@ -40,19 +42,16 @@ export struct BatchFormPage {
     }
     this.itemId = itemIdResult.getData();
     this.editMode = params?.mode === 'edit';
-    if (!this.editMode) {
-      this.loading = false;
-      this.markClean();
-      return;
+    if (this.editMode) {
+      const batchIdResult = requireBatchId(params);
+      if (!batchIdResult.ok) {
+        this.errorMessage = batchIdResult.getError().message;
+        this.loading = false;
+        return;
+      }
+      this.batchId = batchIdResult.getData();
     }
-    const batchIdResult = requireBatchId(params);
-    if (!batchIdResult.ok) {
-      this.errorMessage = batchIdResult.getError().message;
-      this.loading = false;
-      return;
-    }
-    this.batchId = batchIdResult.getData();
-    this.loadBatch();
+    this.loadForm();
   }
 
   aboutToDisappear(): void {
@@ -85,22 +84,31 @@ export struct BatchFormPage {
           Scroll() {
             Column({ space: $r('app.float.space_4') }) {
             TextInput({ text: this.quantityText, placeholder: '数量' })
-              .type(InputType.Number)
+              .type(InputType.NUMBER_DECIMAL)
               .backgroundColor($r('app.color.surface_card'))
               .border({ width: 1, color: $r('app.color.border_subtle') })
               .borderRadius($r('app.float.radius_control'))
               .onChange((value: string) => this.quantityText = value)
-            Flex({ wrap: FlexWrap.Wrap }) {
-              ForEach(ITEM_UNIT_OPTIONS, (unit: ItemUnit) => {
-                Button(unit)
-                  .type(ButtonType.Capsule)
-                  .fontColor(this.unit === unit ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
-                  .backgroundColor(this.unit === unit ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
-                  .fontSize($r('app.float.font_caption'))
-                  .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-                  .onClick(() => this.unit = unit)
-              }, (unit: ItemUnit) => unit)
+            Column({ space: $r('app.float.space_1') }) {
+              Row() {
+                Text('单位')
+                  .fontSize($r('app.float.font_body'))
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor($r('app.color.text_primary'))
+                  .layoutWeight(1)
+                Text(this.unit)
+                  .fontSize($r('app.float.font_body'))
+                  .fontColor($r('app.color.brand_primary'))
+              }
+              .width('100%')
+              Text('批次单位继承物品单位，不可单独修改')
+                .fontSize($r('app.float.font_caption'))
+                .fontColor($r('app.color.text_secondary'))
             }
+            .width('100%')
+            .padding($r('app.float.space_3'))
+            .backgroundColor($r('app.color.surface_accent'))
+            .borderRadius($r('app.float.radius_control'))
             TextInput({ text: this.expirationDate, placeholder: '到期日期 YYYY-MM-DD，可选' })
               .backgroundColor($r('app.color.surface_card'))
               .border({ width: 1, color: $r('app.color.border_subtle') })
@@ -127,7 +135,16 @@ export struct BatchFormPage {
               .fontColor($r('app.color.brand_on_primary'))
               .backgroundColor($r('app.color.brand_primary'))
               .borderRadius($r('app.float.radius_control'))
-              .enabled(!this.saving)
+              .enabled(!this.saving && this.formReady)
+              .scale({ x: this.savePressed ? 0.98 : 1, y: this.savePressed ? 0.98 : 1 })
+              .animation({ duration: 120, curve: Curve.EaseOut })
+              .onTouch((event: TouchEvent) => {
+                if (event.type === TouchType.Down) {
+                  this.savePressed = true;
+                } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+                  this.savePressed = false;
+                }
+              })
               .onClick(() => this.save())
           }
             .width('100%')
@@ -153,24 +170,37 @@ export struct BatchFormPage {
     .height('100%')
   }
 
-  private async loadBatch(): Promise<void> {
-    const result = await AppServices.get().batches.listByItemId(this.itemId);
-    if (result.ok) {
-      const batch = this.findBatch(result.getData(), this.batchId);
-      if (batch !== undefined) {
+  private async loadForm(): Promise<void> {
+    try {
+      const itemResult = await AppServices.get().detailItem.getDetail(this.itemId);
+      if (!itemResult.ok) {
+        this.errorMessage = itemResult.getError().message;
+        return;
+      }
+      this.unit = itemResult.getData().unit;
+      if (this.editMode) {
+        const result = await AppServices.get().batches.listByItemId(this.itemId);
+        if (!result.ok) {
+          this.errorMessage = result.getError().message;
+          return;
+        }
+        const batch = this.findBatch(result.getData(), this.batchId);
+        if (batch === undefined) {
+          this.errorMessage = '批次不存在或已删除';
+          return;
+        }
         this.quantityText = batch.quantity.toString();
-        this.unit = batch.unit;
         this.expirationDate = batch.expirationDate ?? '';
         this.locationPath = batch.locationPath ?? '';
         this.notes = batch.notes ?? '';
-        this.markClean();
-      } else {
-        this.errorMessage = '批次不存在或已删除';
       }
-    } else {
-      this.errorMessage = result.getError().message;
+      this.formReady = true;
+      this.markClean();
+    } catch (_) {
+      this.errorMessage = '读取批次信息失败，请稍后重试';
+    } finally {
+      this.loading = false;
     }
-    this.loading = false;
   }
 
   onBackPress(): boolean {
@@ -183,6 +213,9 @@ export struct BatchFormPage {
   }
 
   private requestClose(): void {
+    if (this.saving) {
+      return;
+    }
     if (this.hasUnsavedChanges()) {
       this.showDiscardConfirm = true;
       return;
@@ -220,21 +253,30 @@ export struct BatchFormPage {
   }
 
   private async save(): Promise<void> {
+    if (this.saving || !this.formReady) {
+      return;
+    }
+    this.savePressed = false;
     this.saving = true;
     this.errorMessage = '';
-    const draft = this.createDraft();
-    const result = this.editMode ? await AppServices.get().batches.update(this.batchId, draft) : await AppServices.get().batches.create(draft);
-    if (result.ok) {
-      const refreshAt = AppEventBus.notifyDataChanged();
-      this.showToast(this.editMode ? '批次已更新' : '批次已保存');
-      NavigationHelper.back({
-        url: RouteName.BATCH_LIST,
-        params: buildBatchRefreshParams(refreshAt, this.itemId, result.getData().id)
-      });
-    } else {
-      this.errorMessage = result.getError().message;
+    try {
+      const draft = this.createDraft();
+      const result = this.editMode ? await AppServices.get().batches.update(this.batchId, draft) : await AppServices.get().batches.create(draft);
+      if (result.ok) {
+        const refreshAt = AppEventBus.notifyDataChanged();
+        this.showToast(this.editMode ? '批次已更新' : '批次已保存');
+        NavigationHelper.back({
+          url: RouteName.BATCH_LIST,
+          params: buildBatchRefreshParams(refreshAt, this.itemId, result.getData().id)
+        });
+      } else {
+        this.errorMessage = result.getError().message;
+      }
+    } catch (_) {
+      this.errorMessage = '保存批次失败，请稍后重试';
+    } finally {
+      this.saving = false;
     }
-    this.saving = false;
   }
 
   private showToast(message: string): void {

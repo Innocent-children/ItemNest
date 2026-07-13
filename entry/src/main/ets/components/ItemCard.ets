@@ -64,6 +64,7 @@ export struct ItemCard {
     .backgroundColor(this.pressed ? $r('app.color.surface_accent') : $r('app.color.surface_card'))
     .border({ width: 1, color: $r('app.color.border_subtle') })
     .scale({ x: this.pressed ? 0.99 : 1, y: this.pressed ? 0.99 : 1 })
+    .animation({ duration: 120, curve: Curve.EaseOut })
     .onTouch((event: TouchEvent) => {
       if (event.type === TouchType.Down) {
         this.pressed = true;

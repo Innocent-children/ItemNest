@@ -91,7 +91,7 @@ export class AppServices {
     this.createItem = new ItemCreateService(repository, validator);
     this.listItems = listItems;
     this.detailItem = new ItemDetailService(repository);
-    this.updateItem = new ItemUpdateService(repository, validator);
+    this.updateItem = new ItemUpdateService(repository, validator, () => Date.now(), batchRepository);
     const preferenceService = new PreferenceService(new PreferenceRepository(context));
     const reminderRepository = new ReminderRepository(new ReminderDao(database));
     const reminderService = new ReminderService(reminderRepository, preferenceService, new SystemReminderAdapter(), repository);
@@ -109,7 +109,7 @@ export class AppServices {
     this.lowStock = new LowStockService(new StockThresholdRepository(database), repository);
     this.lowStockReminder = new LowStockReminderService();
     this.lending = new LendingService(traceRepository, repository);
-    this.locations = new LocationService(locationRepository, repository);
+    this.locations = new LocationService(locationRepository, repository, () => Date.now(), batchRepository);
     this.categories = new CategoryService(categoryRepository);
     this.exportData = new ExportService(repository, batchRepository, locationRepository, categoryRepository, traceRepository);
     this.importData = new ImportService();
@@ -120,7 +120,7 @@ export class AppServices {
 
   static configure(context: Context): void {
     if (AppServices.instance === undefined) {
-      AppServices.instance = new AppServices(context);
+      AppServices.instance = new AppServices(context.getApplicationContext());
     }
   }
 

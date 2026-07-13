@@ -1,160 +1,165 @@
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
-at specs/001-itemtrace-core/plan.md
-<!-- SPECKIT END -->
-
 # AGENTS.md
 
-## 角色与目标
+本文件适用于整个 `ItemTrace` 仓库。默认使用中文沟通、说明和 UI 文案；ArkTS 标识符与文件名使用英文。
 
-你是本项目的 HarmonyOS 原生应用开发 Agent。项目名称为 **ItemTrace**，目标是开发一个 HarmonyOS 6.1 物品追踪管理 App，用于记录物品名称、存放位置、件数、保质期、到期提醒、注意事项、图片、条码/二维码等信息。
+## 开始工作前
 
-本项目必须充分使用 HarmonyOS 原生能力，但不得为了“炫技”牺牲可运行性、隐私和用户体验。
+1. 非简单任务先读取根目录 `AGENT_MEMORY.md`；若不存在则按用户约定创建，并在每个计划步骤完成后更新。除非用户明确要求，不提交该文件。
+2. 先运行 `git status --short --branch`。保留已有修改、删除和未跟踪文件，不恢复、不覆盖、不顺手清理用户改动。
+3. 修改前阅读相关源码、配置和测试。复杂业务变更再阅读 `specs/001-itemtrace-core/` 下对应的规格、数据模型和契约。
+4. 源码、`module.json5` 和 build profile 用于判断当前实现与 SDK 配置；当前用户请求定义本次目标，适用的 `spec.md` 和 contracts 是需求约束。三者冲突时先报告差异，不要静默用源码覆盖需求。早期 `plan.md`、`tasks.md`、`Architecture.md` 只作历史参考。
+5. 未经用户要求，不创建分支、提交、推送、修改 Git 历史或恢复已删除的 `.agents/`、`.specify/`、`.codebase-memory/`。
 
-## 基本语言与输出要求
+## 项目定位
 
-- 所有需求、设计、计划、任务、总结默认使用中文。
-- ArkTS 代码、目录名、类名、接口名、变量名使用英文。
-- UI 文案默认中文，可预留 i18n 资源能力。
-- 不要使用 Android/Kotlin/Java 原生方案替代 HarmonyOS ArkTS 原生方案。
-- 不要把 WebView/H5 当作主应用实现方式。
+ItemTrace 是一个面向 HarmonyOS 手机和平板的本地优先个人物品管理应用，不是物流或快递追踪系统。它帮助用户回答：物品放在哪里、还有多少、何时到期、是否借出。
 
-## Spec Kit 工作流
+用户当前可达的主要能力：
 
-复杂功能必须遵循 Spec Kit 流程：
+- 物品新增、查看、编辑、确认删除，记录名称、数量/单位、位置、分类、到期日、提醒天数、备注和本地照片，并在详情页设置低库存阈值。
+- 首页展示最近添加、即将到期、数量为 0 的待补货物品，以及常用位置快捷入口。
+- 按名称搜索，按位置和分类筛选；搜索页记录本地查询历史，物品详情会以去重方式记录最近查看。
+- 管理物品批次；批次数量总和与最早到期日回写到父物品。
+- 记录借出/归还事件；借还记录不会自动扣减主物品库存。
+- 管理树形位置、预置/自定义分类、主题、首页分区、排序和提醒偏好。
+- 使用系统提醒、Photo Picker、应用私有图片存储，以及仅展示汇总计数的桌面服务卡片。
 
-1. `$speckit-constitution`
-2. `$speckit-specify`
-3. `$speckit-clarify`
-4. `$speckit-plan`
-5. `$speckit-tasks`
-6. `$speckit-analyze`
-7. `$speckit-implement`
+本项目默认无账号、无后端、无云同步、无广告和第三方统计，也没有网络权限。物品、家庭位置、到期信息、备注和照片都按敏感本地数据处理。
 
-禁止在没有读完 specification、plan、tasks 的情况下直接开始编码。
+## 当前明确边界
 
-## HarmonyOS 技术约束
+- 扫码尚不可用：`UnavailableScanAdapter` 只返回降级提示，表单支持手工输入文本并追加到备注。不要把扫码描述成已实现能力。
+- 首页“待补货”只表示 `quantity === 0`。物品详情页可设置低库存阈值并显示应用内状态，但目前不会发布独立系统低库存提醒。
+- 导出/备份服务可以生成 JSON 字符串，但没有可达 UI，也不会自行写入本地文件。
+- 导入/恢复目前只做格式校验、预览和用户确认，不会把数据写入 RDB。
+- `EntryBackupAbility.ets` 是占位实现，未在模块清单注册，且 `backup_config.json` 明确关闭系统备份恢复。
+- 根构建配置没有签名。无签名可完成本地编译，但真机安装和设备测试前必须配置本机调试签名；不得提交证书、密码或本机签名路径。
 
-优先采用：
+## 技术事实
 
-- HarmonyOS 6.1 原生工程结构
-- ArkTS
-- ArkUI 声明式 UI
-- Stage Model / UIAbility
-- RDB Store 作为核心结构化本地数据库
-- Preferences 保存轻量用户偏好
-- Reminder/Notification 能力实现到期提醒
-- Photo Picker / Camera Picker 记录物品照片
-- Service Widget/Form Kit 展示“即将过期”“快速新增”“快速搜索”等高频入口
-- 多设备自适应布局，至少考虑手机与平板
-- 必要时使用 Scan Kit 或系统扫码能力支持条码/二维码入库
-- Share Kit 或系统分享能力支持导入/导出或分享物品清单
+- HarmonyOS `6.1.1(24)`，ArkTS、ArkUI 声明式 UI、Stage Model、`UIAbility`。
+- 单一业务模块 `entry`，Bundle 为 `com.imotong.itemtrace`，支持 `phone`、`tablet`。
+- 根/模块构建由 Hvigor 管理；项目模型版本 `6.1.1`。仓库不包含 `hvigorw` wrapper。
+- 业务数据使用 ArkData RDB：`itemtrace.db`，当前 `DATABASE_VERSION = 10`。
+- 轻量设置使用 Preferences；用户图片复制到 `context.filesDir/itemtrace-assets/`，RDB 只存元数据和本地 Asset ID。
+- 原生能力来自 HarmonyOS SDK：AbilityKit、ArkData、ArkUI、BackgroundTasksKit、CoreFileKit、FormKit、MediaLibraryKit 等。
+- 唯一声明的运行权限是 `ohos.permission.PUBLISH_AGENT_REMINDER`。
+- 测试依赖为 `@ohos/hypium` `1.0.25` 和 `@ohos/hamock` `1.0.0`；没有第三方业务运行依赖。
 
-禁止：
+## 目录地图
 
-- 未确认 SDK 支持前编造 HarmonyOS API、包名、权限名或配置项。
-- 未确认用户同意前引入云同步、账号登录、广告、第三方统计 SDK。
-- 未确认前把照片、物品名称、位置、保质期上传到服务端。
-- 为了提醒功能滥用后台常驻任务。
+- `AppScope/`：应用级 Bundle、名称和图标资源。
+- `entry/src/main/ets/entryability/EntryAbility.ets`：Ability 生命周期、`AppServices` 初始化、主题、安全区和卡片快速新增入口。
+- `entry/src/main/ets/pages/Index.ets`：唯一注册到 `main_pages.json` 的根页面、全局 `NavPathStack` 和首页。
+- `entry/src/main/ets/pages/`：ArkUI 页面；负责页面状态和调用应用服务，不直接访问 RDB。
+- `entry/src/main/ets/components/`：无数据库访问的可复用组件。
+- `entry/src/main/ets/model/`：领域模型和派生状态。
+- `entry/src/main/ets/common/`：`Result<T>`、`AppError`、校验、事件总线和导入校验。
+- `entry/src/main/ets/service/`：应用用例；`AppServices.ets` 是依赖装配入口。
+- `entry/src/main/ets/service/adapter/`：提醒、选图、扫码等系统能力边界。
+- `entry/src/main/ets/data/rdb/`：数据库打开、事务、版本迁移和表结构。
+- `entry/src/main/ets/data/dao/`：需要独立 DAO 的参数化持久化和行映射。
+- `entry/src/main/ets/data/repository/`：领域数据访问边界；部分简单实体直接在 Repository 内封装 RDB，因此不要强制所有实体新增 DAO。
+- `entry/src/main/ets/navigation/`：路由名、参数、返回结果和刷新契约。
+- `entry/src/main/ets/forms/`：桌面服务卡片 Ability 和卡片 UI。
+- `entry/src/main/resources/`：模块字符串、亮/暗主题颜色、尺寸、媒体和 profile。
+- `entry/src/test/`：本地 Hypium 测试；总入口为 `entry/src/test/List.test.ets`。
+- `entry/src/ohosTest/`：设备测试；总入口为 `entry/src/ohosTest/ets/test/List.test.ets`，测试模块名为 `entry_test`。
+- `specs/001-itemtrace-core/`：需求、计划、数据模型、系统边界、导航和导入导出契约。
+- `.hvigor/`、`.idea/`、`oh_modules/`、`build/`、`entry/build/`、`.test/`：本地生成内容，不手工编辑或提交。
+- `error/`：历史崩溃诊断文件；不要在回复、日志或提交中泄露其中可能包含的本机信息。
 
-## 隐私与数据原则
+## 架构与依赖方向
 
-ItemTrace 默认是 **本地优先、隐私优先** 的 App。
+主链路保持：
 
-- MVP 不需要登录。
-- MVP 不需要后端服务。
-- 所有物品、位置、图片索引、提醒规则默认保存在本地。
-- 如后续加入云同步，必须作为单独功能规格重新设计。
-- 敏感信息包括：物品清单、家庭空间位置、药品/食品信息、照片、备注。
-- 数据删除必须有确认，不允许误删。
-- 重要数据结构变更必须包含迁移方案。
+`ArkUI Page -> AppServices -> Use-case Service -> Repository -> DAO/RDB`
 
-## 业务范围
+系统能力链路保持：
 
-核心对象：
+`Page -> AppServices -> Service/Adapter -> HarmonyOS Kit`
 
-- 物品 Item
-- 位置 Location
-- 分类 Category
-- 批次 Batch
-- 提醒 Reminder
-- 图片 Asset
-- 标签 Tag
-- 操作记录 TraceEvent
+执行规则：
 
-MVP 必须支持：
+- 页面不得导入 `data/dao`、`data/rdb`，不得直接实例化 Repository，也不得绕过 Service/Adapter 实现领域业务或持久化。Ability、Form 以及窗口/主题等 UI 胶水代码可在自身边界直接调用对应 Kit。
+- 新用例放在 `service/`，依赖从构造器注入，并在 `AppServices` 集中装配。时间相关逻辑继续注入 `clock`，便于确定性测试。
+- 可复用组件只依赖展示模型、回调和导航契约，不访问数据库。
+- 持久化和系统失败跨层返回 `Result<T>`；页面必须先检查 `result.ok`。新增错误使用 `AppErrorCode` 和可操作的中文提示，不向 UI 泄露原始堆栈、SQL、私有路径或敏感字段。
+- 新增/编辑主记录成功后，照片或提醒同步失败只提示用户，不回滚已经保存的主记录。当前删除流程必须先成功取消已知提醒，图片清理则是删除后的尽力操作；新增系统能力仍须覆盖取消、拒绝、不可用和失败降级。
 
-- 新增物品
-- 编辑物品
-- 删除/归档物品
-- 设置位置
-- 设置数量和单位
-- 设置保质期或到期日
-- 设置提前提醒
-- 搜索物品
-- 按位置/分类/状态筛选
-- 查看即将过期物品
-- 添加注意事项
-- 添加物品照片
+## 导航、状态与 UI 约定
 
-## 体验原则
+- `main_pages.json` 只保留 `pages/Index`；业务页由 `Navigation`/`NavPathStack` 承载。
+- 新增页面时同步更新 `RouteName.ets`、`RouteContract.ets`、`Index.navDestinationBuilder` 和路由测试；使用 `NavigationHelper`，不要另建平行导航机制。
+- 路由参数传稳定 ID、查询或显式结果，不传完整可变 `Item`。返回刷新使用 `refreshAt` 契约。
+- 成功修改会影响其他页面列表、摘要或详情的共享业务数据后，调用 `AppEventBus.notifyDataChanged()`；偏好变更调用 `notifyPreferencesChanged()`。订阅必须在页面退出时释放。
+- 页面沿用 loading/error/empty/content 状态，并在异步加载中防止旧请求覆盖新状态。
+- 到期状态必须有文字，不只依赖颜色；位置路径的展示优先级高于分类；删除必须明确确认。
+- 颜色新增或改名时同步维护 `resources/base/element/color.json` 与 `resources/dark/element/color.json`；尺寸优先复用 `float.json`。保持沉浸式安全区、手机和平板可读性。
+- 当前用户文案主要为中文内联，不要声称已经完成国际化。
 
-- 新增物品必须足够快，允许先填最少字段后补充。
-- “在哪里”比“分类是什么”更重要，位置路径必须在列表中清晰展示。
-- 首页必须优先展示：快速搜索、最近添加、即将过期、低库存/待处理。
-- 到期提醒不能只依赖 App 内页面，必须尽量使用系统提醒/通知能力。
-- 空状态必须引导用户快速创建第一个位置和物品。
-- 对老人或家庭场景友好：字体清晰、信息层级简单、操作不绕。
+## 数据与领域约定
 
-## 分阶段交付原则
+- `Item` 名称去除首尾空白后为 1–80 字符；数量为非负、最多两位小数，默认 `1`；单位默认“个”；提醒天数为 0–365；备注最多 500 字符。
+- 到期日使用本地 `YYYY-MM-DD`。`ExpiryStatus` 和 `StockStatus` 是运行时派生值，不写入数据库。
+- 名称搜索是部分匹配；位置和分类是精确筛选；组合条件取交集。
+- 批次变更后必须保持父 `Item` 的数量汇总和最早到期日一致；已有批次的物品应在批次管理中修改数量、单位和到期日，并始终保留至少一个批次。借出/归还是追加式 `TraceEvent`，不要静默改变其现有库存语义。
+- 照片选择 URI 只能是临时输入；保存时复制到应用私有目录，不能长期持久化外部 URI，也不能进入导出 JSON。
+- 桌面卡片只展示临期/今日提醒计数，不得暴露物品名称、位置、备注或照片。
+- 当前多表关系不依赖数据库级外键；Schema v10 使用事务内触发器维护批次汇总并清理 Item 关联记录，系统提醒和图片文件等外部副作用仍由服务层处理顺序与失败恢复。
+- 修改 Schema 时递增 `DATABASE_VERSION`，按版本追加向前迁移，在事务中执行并保留失败回滚；同步更新 `specs/001-itemtrace-core/data-model.md` 和相关迁移测试。查询得到的 ResultSet 必须在 `finally` 中关闭。
+- 新增网络、云同步、账号、统计、后台常驻任务或权限属于产品级变更，先取得用户确认并补充隐私与拒绝降级设计。
 
-每个阶段都必须可运行、可验证。
+## 编码与变更规则
 
-### 阶段 1：本地核心闭环
+- 遵循现有 ArkTS 风格：2 空格缩进、单引号、分号、显式类型、英文标识符；不要用伪代码或未核验 API 冒充实现。
+- 权威输入校验由 Service 或其调用的 `common` 校验器承担；页面可以即时提示，但不能作为唯一校验。DAO/Repository 不显示 UI，页面不拼 SQL。
+- 保持变更小而聚焦。新增依赖、修改锁文件、增加权限或改变公开数据格式前先征得用户同意。
+- 新增模型、页面、权限、系统 Kit 或导入导出字段时，同步相应规格/契约、测试和降级说明。
+- 不手工编辑 `oh-package-lock.json5`，不提交签名、`.env`、设备标识、数据库、用户图片或构建产物。
 
-- ArkUI 页面骨架
-- RDB 数据模型
-- 位置管理
-- 物品 CRUD
-- 搜索/筛选
-- 到期日计算
-- 简单提醒能力
-- 基础测试或可验证步骤
+## 构建与验证
 
-### 阶段 2：HarmonyOS 特性增强
+前置条件：安装支持 HarmonyOS `6.1.1(24)` 的 DevEco Studio，并将 `$devecoHome` 指向安装目录。不要把本机绝对路径写入仓库。
 
-- 拍照/相册选图
-- 系统提醒/通知完善
-- 服务卡片
-- 多设备自适应布局
-- 扫码录入
-- 分享/导出
+```powershell
+$devecoHome = '<DevEco Studio 安装目录>'
+$env:DEVECO_SDK_HOME = "$devecoHome\sdk"
+$env:NODE_HOME = "$devecoHome\tools\node"
+$hvigorw = "$devecoHome\tools\hvigor\bin\hvigorw.bat"
 
-### 阶段 3：高级管理能力
+& $hvigorw tasks
+& $hvigorw test --mode module `
+  -p module=entry@default `
+  -p product=default `
+  -p buildMode=test `
+  --no-daemon
+& $hvigorw assembleApp --no-daemon
+```
 
-- 批次管理
-- 低库存提醒
-- 借出/归还记录
-- 统计视图
-- 数据备份/恢复
-- 可选云同步设计，但不默认实现
+编译 `ohosTest` HAP：
 
-## 开发执行规则
+```powershell
+& $hvigorw assembleHap --mode module `
+  -p module=entry@ohosTest `
+  -p product=default `
+  -p buildMode=test `
+  --no-daemon
+```
 
-- 修改前先阅读相关文件。
-- 每次只实现当前任务，不擅自扩大范围。
-- 每次新增模型必须同步更新数据模型文档。
-- 每次新增页面必须说明路由入口和状态管理方式。
-- 每次新增权限必须说明用途、触发时机、拒绝后的降级体验。
-- 每次使用 HarmonyOS Kit 前必须确认当前 SDK 可用。
-- 完成后必须运行可用的构建、检查或测试命令。
-- 构建失败不能忽略，必须修复或明确说明原因。
+注意：本地 `test` 任务在测试断言失败时也可能返回退出码 0，必须同时检查控制台中的 `ERROR:`、case 汇总和 `entry/.test/` 报告。测试 HAP 编译成功不等于 `ohosTest` 已在设备执行；设备测试仍需要调试签名和已连接的 phone/tablet。
 
-## Codex 特别要求
+测试规则：
 
-- 不要在没有用户要求时生成大量无关样板代码。
-- 不要用伪代码冒充已实现代码。
-- 不要编造 DevEco Studio、ohpm、hvigor 命令执行结果。
-- 不要删除用户已有文件，除非任务明确要求。
-- 如果项目结构与本文件描述不一致，先说明差异，再提出最小修改方案。
+- 先运行最窄的相关测试，再构建 `assembleApp`；涉及 RDB、Ability、Form、权限或设备行为时补充/执行 `ohosTest` 和手工设备验证。
+- 新增本地测试文件后，必须在 `entry/src/test/List.test.ets` 中 import 并调用其默认 suite；设备测试同理更新 `entry/src/ohosTest/ets/test/List.test.ets`。
+- 本地测试优先覆盖验证、Service、派生状态、迁移和路由契约；系统授权、RDB 真机行为、卡片和关键布局放入 `ohosTest`。
+- `code-linter.json5` 只覆盖生产 `.ets`，测试与 mock 被忽略。使用 DevEco Studio Code Linter；仓库目前没有已核验的独立 lint/formatter CLI。
+- 最终至少运行 `git diff --check`，并复核本次涉及文件的 scoped diff、未跟踪内容以及必要时的 staged diff；不要为了查看差异擅自 stage 文件。无法运行的命令要报告原因，不能把“能编译”写成“功能已在设备验证”。
+
+## 完成标准
+
+- 行为、数据迁移、路由、权限和降级路径与当前架构一致。
+- 相关测试已注册并尽可能执行；构建、lint、设备测试的执行状态区分清楚。
+- Diff 不包含无关修改、生成文件、秘密、本机配置或用户原有改动。
+- `AGENT_MEMORY.md` 在非简单任务结束前已更新，但除非用户明确要求不纳入提交。

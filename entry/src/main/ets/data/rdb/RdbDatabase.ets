@@ -11,6 +11,7 @@ import { createTraceEventSchema } from './TraceEventSchema';
 import { createLocationSchema } from './LocationSchema';
 import { createCategorySchema } from './CategorySchema';
 import { createSearchHistorySchema } from './SearchHistorySchema';
+import { createInventoryIntegritySchema } from './InventoryIntegritySchema';
 
 export async function migrateToLatest(store: relationalStore.RdbStore): Promise<void> {
   const currentVersion = store.version;
@@ -50,6 +51,9 @@ export async function migrateToLatest(store: relationalStore.RdbStore): Promise<
     }
     if (currentVersion < 9) {
       await createSearchHistorySchema(transaction);
+    }
+    if (currentVersion < 10) {
+      await createInventoryIntegritySchema(transaction);
     }
     await transaction.execute(`PRAGMA user_version = ${DATABASE_VERSION}`);
     await transaction.commit();
@@ -129,16 +133,23 @@ export class RdbDatabase {
   }
 
   private async openAndInitialize(): Promise<Result<relationalStore.RdbStore>> {
+    let openedStore: relationalStore.RdbStore | undefined = undefined;
     try {
       const config: relationalStore.StoreConfig = {
         name: DATABASE_NAME,
         securityLevel: relationalStore.SecurityLevel.S3
       };
-      const store = await relationalStore.getRdbStore(this.context, config);
-      await migrateToLatest(store);
-      this.store = store;
-      return success(store);
+      openedStore = await relationalStore.getRdbStore(this.context, config);
+      await migrateToLatest(openedStore);
+      this.store = openedStore;
+      return success(openedStore);
     } catch (error) {
+      if (openedStore !== undefined) {
+        try {
+          openedStore.close();
+        } catch (_) {
+        }
+      }
       return failure<relationalStore.RdbStore>(toAppError(error, AppErrorCode.DATABASE_INIT, '数据库初始化失败，请重试'));
     }
   }

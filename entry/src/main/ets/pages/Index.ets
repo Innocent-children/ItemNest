@@ -36,12 +36,15 @@ struct Index {
   @State private recentItems: ItemSummary[] = [];
   @State private dueSoonItems: ItemSummary[] = [];
   @State private outOfStockItems: ItemSummary[] = [];
+  @State private dueSoonCount: number = 0;
+  @State private outOfStockCount: number = 0;
   @State private locationPaths: string[] = [];
   @State private showRecentSection: boolean = true;
   @State private showExpirySection: boolean = true;
   @State private showStockSection: boolean = true;
   private dataRefreshListenerId: number = 0;
   private routeResultListenerId: number = 0;
+  private quickAddOpening: boolean = false;
   private summaryLoadId: number = 0;
   private lastRouteRefreshAt: number = 0;
   private lastHandledDataRevision: number = -1;
@@ -132,11 +135,25 @@ struct Index {
   }
 
   private openQuickAddIfRequested(): void {
-    if (this.quickAddRequest.length === 0) {
+    if (this.quickAddRequest.length === 0 || this.quickAddOpening) {
       return;
     }
-    AppStorage.setOrCreate('itemtrace.quickAddRequest', '');
-    NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create', returnTo: RouteName.HOME } });
+    const request = this.quickAddRequest;
+    this.quickAddOpening = true;
+    NavigationHelper.pushUrl({
+      url: RouteName.ITEM_FORM,
+      params: { mode: 'create', returnTo: RouteName.HOME }
+    }).then((opened: boolean) => {
+      this.quickAddOpening = false;
+      if (!opened) {
+        return;
+      }
+      if (this.quickAddRequest === request) {
+        AppStorage.setOrCreate<string>('itemtrace.quickAddRequest', '');
+      } else {
+        this.openQuickAddIfRequested();
+      }
+    });
   }
 
   build() {
@@ -172,7 +189,7 @@ struct Index {
             if (this.locationPaths.length > 0) {
               this.locationShortcutSection()
             }
-            if (shouldShowRecentSection(this.showRecentSection, this.recentItems.length)) {
+            if (shouldShowRecentSection(this.showRecentSection)) {
               this.summarySection('最近添加', '刚记录的物品', this.recentItems, '暂无物品', RouteName.ITEM_FORM, RouteName.HOME)
             }
             if (this.showExpirySection) {
@@ -284,8 +301,8 @@ struct Index {
   private overview() {
     Row({ space: $r('app.float.space_2') }) {
       this.metricCard('最近添加', this.recentItems.length, $r('app.color.surface_accent'), $r('app.color.brand_primary'))
-      this.metricCard('即将到期', this.dueSoonItems.length, $r('app.color.status_warning_soft'), $r('app.color.status_warning'))
-      this.metricCard('待补货', this.outOfStockItems.length, $r('app.color.status_danger_soft'), $r('app.color.status_danger'))
+      this.metricCard('即将到期', this.dueSoonCount, $r('app.color.status_warning_soft'), $r('app.color.status_warning'))
+      this.metricCard('待补货', this.outOfStockCount, $r('app.color.status_danger_soft'), $r('app.color.status_danger'))
     }
     .width('100%')
   }
@@ -297,6 +314,7 @@ struct Index {
         .fontSize($r('app.float.font_title'))
         .fontWeight(FontWeight.Bold)
         .fontColor(textColor)
+        .contentTransition(new NumericTextTransition())
       Text(label)
         .fontSize($r('app.float.font_caption'))
         .fontColor(textColor)
@@ -411,9 +429,14 @@ struct Index {
         return;
       }
       this.errorMessage = '';
-      this.recentItems = result.getData().recentItems;
-      this.dueSoonItems = result.getData().dueSoonItems;
-      this.outOfStockItems = result.getData().outOfStockItems;
+      const summary = result.getData();
+      this.recentItems = summary.recentItems;
+      this.dueSoonItems = summary.dueSoonItems;
+      this.outOfStockItems = summary.outOfStockItems;
+      this.getUIContext().animateTo({ duration: 240, curve: Curve.EaseOut }, () => {
+        this.dueSoonCount = summary.dueSoonCount;
+        this.outOfStockCount = summary.outOfStockCount;
+      });
       await this.loadLocationShortcuts(loadId);
     } catch (_) {
       if (loadId === this.summaryLoadId && (showLoading || this.recentItems.length + this.dueSoonItems.length + this.outOfStockItems.length === 0)) {

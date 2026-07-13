@@ -11,6 +11,7 @@ import { getUnhandledRouteRefreshAt } from '../navigation/RefreshContract';
 import { ItemListRouteParams, RouteRefreshParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppEventBus } from '../common/AppEventBus';
+import { LatestRequestCoordinator } from '../common/LatestRequestCoordinator';
 import { AppServices } from '../service/AppServices';
 
 @Component
@@ -26,6 +27,7 @@ export struct ItemListPage {
   private lastRouteRefreshAt: number = 0;
   private lastHandledDataRevision: number = -1;
   private lastHandledPreferenceRevision: number = -1;
+  private loadRequestCoordinator: LatestRequestCoordinator = new LatestRequestCoordinator();
 
   aboutToAppear(): void {
     this.readQuery();
@@ -171,15 +173,24 @@ export struct ItemListPage {
   }
 
   private async loadItems(showLoading: boolean = true): Promise<void> {
+    const requestId = this.loadRequestCoordinator.begin();
+    const query = new ItemQuery(this.query.name, this.query.locationPath, this.query.category);
     if (showLoading) {
       this.loading = true;
       this.errorMessage = '';
     }
     try {
-      if (this.query.isEmpty()) {
+      if (query.isEmpty()) {
         const result = await AppServices.get().listItems.listAll();
+        if (!this.loadRequestCoordinator.isCurrent(requestId)) {
+          return;
+        }
         if (result.ok) {
-          this.items = await this.applyDefaultSort(result.getData());
+          const sortedItems = await this.applyDefaultSort(result.getData());
+          if (!this.loadRequestCoordinator.isCurrent(requestId)) {
+            return;
+          }
+          this.items = sortedItems;
           this.errorMessage = '';
         } else {
           if (showLoading || this.items.length === 0) {
@@ -187,9 +198,16 @@ export struct ItemListPage {
           }
         }
       } else {
-        const result = await AppServices.get().searchItems.search(this.query);
+        const result = await AppServices.get().searchItems.search(query);
+        if (!this.loadRequestCoordinator.isCurrent(requestId)) {
+          return;
+        }
         if (result.ok) {
-          this.items = await this.applyDefaultSort(result.getData().items);
+          const sortedItems = await this.applyDefaultSort(result.getData().items);
+          if (!this.loadRequestCoordinator.isCurrent(requestId)) {
+            return;
+          }
+          this.items = sortedItems;
           this.errorMessage = '';
         } else {
           if (showLoading || this.items.length === 0) {
@@ -198,11 +216,13 @@ export struct ItemListPage {
         }
       }
     } catch (_) {
-      if (showLoading || this.items.length === 0) {
+      if (this.loadRequestCoordinator.isCurrent(requestId) && (showLoading || this.items.length === 0)) {
         this.errorMessage = '数据库初始化失败，请重试';
       }
     } finally {
-      this.loading = false;
+      if (this.loadRequestCoordinator.isCurrent(requestId)) {
+        this.loading = false;
+      }
     }
   }
 

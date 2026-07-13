@@ -3,16 +3,12 @@ import { shouldShowRecentSection } from '../../../main/ets/service/HomeSectionVi
 
 export default function homeSectionVisibilityTest() {
   describe('Home section visibility', () => {
-    it('偏好关闭但存在最近添加物品时仍显示最近添加栏', 0, () => {
-      expect(shouldShowRecentSection(false, 1)).assertTrue();
+    it('偏好关闭时隐藏最近添加栏', 0, () => {
+      expect(shouldShowRecentSection(false)).assertFalse();
     });
 
-    it('偏好关闭且没有最近添加物品时隐藏最近添加栏', 0, () => {
-      expect(shouldShowRecentSection(false, 0)).assertFalse();
-    });
-
-    it('偏好开启时即使为空也显示最近添加栏', 0, () => {
-      expect(shouldShowRecentSection(true, 0)).assertTrue();
+    it('偏好开启时显示最近添加栏', 0, () => {
+      expect(shouldShowRecentSection(true)).assertTrue();
     });
   });
 }

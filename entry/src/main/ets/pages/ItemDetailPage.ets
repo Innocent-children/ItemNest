@@ -4,9 +4,11 @@ import { ErrorState } from '../components/ErrorState';
 import { ExpiryStatusTag } from '../components/ExpiryStatusTag';
 import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
+import { LatestRequestCoordinator } from '../common/LatestRequestCoordinator';
 import { ExpiryStatus } from '../model/ExpiryStatus';
 import { Item } from '../model/Item';
 import { ReminderRecordStatus } from '../model/ReminderRecord';
+import { StockThreshold } from '../model/StockThreshold';
 import { buildItemRefreshParams, getUnhandledRouteRefreshAt } from '../navigation/RefreshContract';
 import { ItemFormRouteParams, requireItemId, RouteRefreshParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
@@ -20,6 +22,7 @@ export struct ItemDetailPage {
   @State private loading: boolean = true;
   @State private deleting: boolean = false;
   @State private errorMessage: string = '';
+  @State private actionError: string = '';
   @State private item: Item | undefined = undefined;
   @State private expiryStatus: ExpiryStatus = ExpiryStatus.NO_EXPIRY_DATE;
   @State private reminderMessage: string = '';
@@ -28,11 +31,18 @@ export struct ItemDetailPage {
   @State private removingPhoto: boolean = false;
   @State private batchCount: number = 0;
   @State private borrowedQuantity: number = 0;
+  @State private stockThreshold: StockThreshold | undefined = undefined;
+  @State private thresholdText: string = '0';
+  @State private thresholdEnabled: boolean = false;
+  @State private thresholdSaving: boolean = false;
+  @State private thresholdLoadError: string = '';
   @State private showDeleteConfirm: boolean = false;
   @State @Watch('handleDeleteRequest') private deleteRequested: boolean = false;
   private itemId: string = '';
   private lastRouteRefreshAt: number = 0;
   private lastHandledDataRevision: number = -1;
+  private loadRequestCoordinator: LatestRequestCoordinator = new LatestRequestCoordinator();
+  private viewRecorded: boolean = false;
 
   aboutToAppear(): void {
     const params = NavigationHelper.getParams() as ItemFormRouteParams | undefined;
@@ -191,7 +201,12 @@ export struct ItemDetailPage {
         .borderRadius($r('app.float.radius_card'))
         .backgroundColor($r('app.color.surface_card'))
 
+        if (this.actionError.length > 0) {
+          this.actionErrorPanel()
+        }
+
         this.managementSection(item)
+        this.lowStockSection(item)
         this.locationSection(item)
         this.expirySection(item)
         this.notesSection(item)
@@ -206,6 +221,86 @@ export struct ItemDetailPage {
       .alignItems(HorizontalAlign.Start)
     }
     .layoutWeight(1)
+  }
+
+  @Builder
+  private actionErrorPanel() {
+    Row({ space: $r('app.float.space_3') }) {
+      Text(this.actionError)
+        .fontSize($r('app.float.font_body'))
+        .fontColor($r('app.color.status_danger'))
+        .layoutWeight(1)
+      Button('关闭')
+        .fontColor($r('app.color.status_danger'))
+        .backgroundColor($r('app.color.status_danger_soft'))
+        .borderRadius($r('app.float.radius_control'))
+        .onClick(() => this.actionError = '')
+    }
+    .width('100%')
+    .padding($r('app.float.space_3'))
+    .borderRadius($r('app.float.radius_control'))
+    .backgroundColor($r('app.color.status_danger_soft'))
+  }
+
+  @Builder
+  private lowStockSection(item: Item) {
+    Column({ space: $r('app.float.space_3') }) {
+      Text('低库存提醒')
+        .fontSize($r('app.float.font_section'))
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('app.color.text_primary'))
+      Text('库存低于阈值时，在应用内标记为需要补货。')
+        .fontSize($r('app.float.font_caption'))
+        .fontColor($r('app.color.text_secondary'))
+      if (this.thresholdLoadError.length > 0) {
+        Text(this.thresholdLoadError)
+          .fontSize($r('app.float.font_body'))
+          .fontColor($r('app.color.status_danger'))
+          .width('100%')
+        Button('重试读取阈值')
+          .width('100%')
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent'))
+          .borderRadius($r('app.float.radius_control'))
+          .onClick(() => this.loadDetailForCurrentRevision(false))
+      } else {
+        Text('提醒阈值')
+          .fontSize($r('app.float.font_body'))
+          .fontColor($r('app.color.text_primary'))
+        TextInput({ text: this.thresholdText, placeholder: '例如：2' })
+          .type(InputType.NUMBER_DECIMAL)
+          .backgroundColor($r('app.color.surface_app'))
+          .border({ width: 1, color: $r('app.color.border_subtle') })
+          .borderRadius($r('app.float.radius_control'))
+          .enabled(!this.thresholdSaving)
+          .onChange((value: string) => this.thresholdText = value)
+        Row() {
+          Text('启用低库存提醒')
+            .fontSize($r('app.float.font_body'))
+            .fontColor($r('app.color.text_primary'))
+            .layoutWeight(1)
+          Toggle({ type: ToggleType.Switch, isOn: this.thresholdEnabled })
+            .enabled(!this.thresholdSaving)
+            .onChange((value: boolean) => this.thresholdEnabled = value)
+        }
+        .width('100%')
+        Text(this.lowStockStatusText(item))
+          .fontSize($r('app.float.font_caption'))
+          .fontColor(this.isBelowLowStockThreshold(item) ? $r('app.color.status_danger') : $r('app.color.text_secondary'))
+          .width('100%')
+        Button(this.thresholdSaving ? '正在保存…' : '保存低库存设置')
+          .width('100%')
+          .fontColor($r('app.color.brand_on_primary'))
+          .backgroundColor($r('app.color.brand_primary'))
+          .borderRadius($r('app.float.radius_control'))
+          .enabled(!this.thresholdSaving)
+          .onClick(() => this.saveLowStockThreshold(item))
+      }
+    }
+    .width('100%')
+    .padding($r('app.float.space_4'))
+    .borderRadius($r('app.float.radius_card'))
+    .backgroundColor($r('app.color.surface_card'))
   }
 
   @Builder
@@ -319,12 +414,16 @@ export struct ItemDetailPage {
   }
 
   private async loadDetail(showLoading: boolean = true): Promise<void> {
+    const requestId = this.loadRequestCoordinator.begin();
     if (showLoading) {
       this.loading = true;
       this.errorMessage = '';
     }
     try {
       const result = await AppServices.get().detailItem.getDetail(this.itemId);
+      if (!this.loadRequestCoordinator.isCurrent(requestId)) {
+        return;
+      }
       if (!result.ok) {
         if (showLoading || this.item === undefined) {
           this.errorMessage = result.getError().message;
@@ -332,17 +431,28 @@ export struct ItemDetailPage {
         return;
       }
       this.errorMessage = '';
-      this.item = result.getData();
-      this.expiryStatus = AppServices.get().listItems.toSummary(result.getData()).expiryStatus;
-      await this.loadReminderState(result.getData());
-      await this.loadPhotoPath(result.getData());
-      await this.loadManagementState(result.getData());
+      const item = result.getData();
+      this.item = item;
+      this.recordViewedItemOnce(item);
+      this.expiryStatus = AppServices.get().listItems.toSummary(item).expiryStatus;
+      await this.loadReminderState(item, requestId);
+      if (!this.loadRequestCoordinator.isCurrent(requestId)) {
+        return;
+      }
+      await this.loadPhotoPath(item, requestId);
+      if (!this.loadRequestCoordinator.isCurrent(requestId)) {
+        return;
+      }
+      await this.loadManagementState(item, requestId);
+      await this.loadLowStockThreshold(item, requestId);
     } catch (_) {
-      if (showLoading || this.item === undefined) {
+      if (this.loadRequestCoordinator.isCurrent(requestId) && (showLoading || this.item === undefined)) {
         this.errorMessage = '读取物品失败，请重试';
       }
     } finally {
-      this.loading = false;
+      if (this.loadRequestCoordinator.isCurrent(requestId)) {
+        this.loading = false;
+      }
     }
   }
 
@@ -351,24 +461,38 @@ export struct ItemDetailPage {
   }
 
   private async deleteItem(): Promise<void> {
-    this.deleting = true;
-    const result = await AppServices.get().deleteItem.delete(this.itemId, true);
-    if (result.ok) {
-      this.showToast('物品已删除');
-      const refreshAt = AppEventBus.notifyDataChanged();
-      NavigationHelper.back({
-        url: RouteName.ITEM_LIST,
-        params: buildItemRefreshParams(refreshAt, this.itemId)
-      });
+    if (this.deleting) {
       return;
     }
-    this.deleting = false;
-    this.showDeleteConfirm = false;
-    this.errorMessage = result.getError().message;
+    this.deleting = true;
+    this.actionError = '';
+    try {
+      const result = await AppServices.get().deleteItem.delete(this.itemId, true);
+      if (result.ok) {
+        this.showDeleteConfirm = false;
+        this.showToast('物品已删除');
+        const refreshAt = AppEventBus.notifyDataChanged();
+        NavigationHelper.back({
+          url: RouteName.ITEM_LIST,
+          params: buildItemRefreshParams(refreshAt, this.itemId)
+        });
+        return;
+      }
+      this.showDeleteConfirm = false;
+      this.actionError = result.getError().message;
+    } catch (_) {
+      this.showDeleteConfirm = false;
+      this.actionError = '删除物品失败，请重试';
+    } finally {
+      this.deleting = false;
+    }
   }
 
-  private async loadReminderState(item: Item): Promise<void> {
+  private async loadReminderState(item: Item, requestId?: number): Promise<void> {
     const result = await AppServices.get().reminders.getRecord(item.id);
+    if (!this.canApplyLoadResult(requestId)) {
+      return;
+    }
     if (!result.ok) {
       this.reminderMessage = '提醒状态暂时无法读取';
       return;
@@ -394,21 +518,31 @@ export struct ItemDetailPage {
   }
 
   private async retryReminder(): Promise<void> {
-    if (this.item === undefined) {
+    if (this.item === undefined || this.reminderRetrying) {
       return;
     }
+    const item = this.item;
     this.reminderRetrying = true;
-    const result = await AppServices.get().reminders.reconcile(this.item);
-    if (!result.ok) {
-      this.reminderMessage = `系统提醒创建失败：${result.getError().message}`;
-    } else {
-      await this.loadReminderState(this.item);
+    this.actionError = '';
+    try {
+      const result = await AppServices.get().reminders.reconcile(item);
+      if (!result.ok) {
+        this.actionError = result.getError().message;
+        return;
+      }
+      await this.loadReminderState(item);
+    } catch (_) {
+      this.actionError = '重试创建提醒失败，请稍后再试';
+    } finally {
+      this.reminderRetrying = false;
     }
-    this.reminderRetrying = false;
   }
 
-  private async loadPhotoPath(item: Item): Promise<void> {
+  private async loadPhotoPath(item: Item, requestId?: number): Promise<void> {
     const result = await AppServices.get().photos.getLocalPath(item);
+    if (!this.canApplyLoadResult(requestId)) {
+      return;
+    }
     if (result.ok) {
       this.photoPath = result.getData() ?? '';
     } else {
@@ -475,32 +609,131 @@ export struct ItemDetailPage {
     .onClick(() => NavigationHelper.pushUrl({ url: route, params: { itemId: itemId } }))
   }
 
-  private async loadManagementState(item: Item): Promise<void> {
+  private async loadManagementState(item: Item, requestId?: number): Promise<void> {
     const batchResult = await AppServices.get().batches.listByItemId(item.id);
+    if (!this.canApplyLoadResult(requestId)) {
+      return;
+    }
     if (batchResult.ok) {
       this.batchCount = batchResult.getData().length;
     }
     const lendingResult = await AppServices.get().lending.getState(item.id);
+    if (!this.canApplyLoadResult(requestId)) {
+      return;
+    }
     if (lendingResult.ok) {
       this.borrowedQuantity = lendingResult.getData().borrowedQuantity;
     }
   }
 
-  private async removePhoto(): Promise<void> {
-    if (this.item === undefined) {
+  private recordViewedItemOnce(item: Item): void {
+    if (this.viewRecorded) {
       return;
     }
-    this.removingPhoto = true;
-    const result = await AppServices.get().photos.remove(this.item);
-    if (result.ok) {
-      this.item = result.getData();
-      this.photoPath = '';
-      AppEventBus.notifyDataChanged();
-      this.showToast('照片已移除');
-    } else {
-      this.errorMessage = result.getError().message;
+    this.viewRecorded = true;
+    AppServices.get().searchSuggestions.recordViewedItem(item);
+  }
+
+  private async loadLowStockThreshold(item: Item, requestId: number): Promise<void> {
+    if (!this.loadRequestCoordinator.isCurrent(requestId)) {
+      return;
     }
-    this.removingPhoto = false;
+    this.thresholdLoadError = '';
+    try {
+      const result = await AppServices.get().lowStock.getThreshold(item.id);
+      if (!this.loadRequestCoordinator.isCurrent(requestId)) {
+        return;
+      }
+      if (!result.ok) {
+        this.thresholdLoadError = result.getError().message;
+        return;
+      }
+      const threshold = result.getData();
+      this.stockThreshold = threshold;
+      this.thresholdText = threshold === undefined ? '0' : `${threshold.threshold}`;
+      this.thresholdEnabled = threshold?.enabled ?? false;
+    } catch (_) {
+      if (this.loadRequestCoordinator.isCurrent(requestId)) {
+        this.thresholdLoadError = '读取低库存阈值失败，请重试';
+      }
+    }
+  }
+
+  private async saveLowStockThreshold(item: Item): Promise<void> {
+    if (this.thresholdSaving) {
+      return;
+    }
+    const value = this.thresholdText.trim();
+    if (value.length === 0) {
+      this.actionError = '请输入低库存阈值';
+      return;
+    }
+    this.thresholdSaving = true;
+    this.actionError = '';
+    try {
+      const result = await AppServices.get().lowStock.saveThreshold(item.id, Number(value), this.thresholdEnabled);
+      if (!result.ok) {
+        this.actionError = result.getError().message;
+        return;
+      }
+      const threshold = result.getData();
+      this.stockThreshold = threshold;
+      this.thresholdText = `${threshold.threshold}`;
+      this.thresholdEnabled = threshold.enabled;
+      this.thresholdLoadError = '';
+      AppEventBus.notifyDataChanged();
+      this.showToast('低库存设置已保存');
+    } catch (_) {
+      this.actionError = '保存低库存设置失败，请重试';
+    } finally {
+      this.thresholdSaving = false;
+    }
+  }
+
+  private lowStockStatusText(item: Item): string {
+    if (this.stockThreshold === undefined) {
+      return '尚未保存低库存阈值。';
+    }
+    if (!this.stockThreshold.enabled) {
+      return `已保存阈值 ${this.stockThreshold.threshold}${item.unit}，提醒当前停用。`;
+    }
+    if (this.isBelowLowStockThreshold(item)) {
+      return `当前库存 ${item.quantity}${item.unit}，低于阈值 ${this.stockThreshold.threshold}${item.unit}。`;
+    }
+    return `当前库存 ${item.quantity}${item.unit}，未低于阈值 ${this.stockThreshold.threshold}${item.unit}。`;
+  }
+
+  private isBelowLowStockThreshold(item: Item): boolean {
+    return this.stockThreshold !== undefined && this.stockThreshold.enabled &&
+      item.quantity < this.stockThreshold.threshold;
+  }
+
+  private canApplyLoadResult(requestId?: number): boolean {
+    return requestId === undefined || this.loadRequestCoordinator.isCurrent(requestId);
+  }
+
+  private async removePhoto(): Promise<void> {
+    if (this.item === undefined || this.removingPhoto) {
+      return;
+    }
+    const item = this.item;
+    this.removingPhoto = true;
+    this.actionError = '';
+    try {
+      const result = await AppServices.get().photos.remove(item);
+      if (result.ok) {
+        this.item = result.getData();
+        this.photoPath = '';
+        AppEventBus.notifyDataChanged();
+        this.showToast('照片已移除');
+      } else {
+        this.actionError = result.getError().message;
+      }
+    } catch (_) {
+      this.actionError = '移除照片失败，请重试';
+    } finally {
+      this.removingPhoto = false;
+    }
   }
 
   private handleDeleteRequest(): void {

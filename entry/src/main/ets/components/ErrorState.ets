@@ -14,5 +14,8 @@ export struct ErrorState {
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.status_danger_soft'))
     .alignItems(HorizontalAlign.Center)
+    .transition(TransitionEffect.OPACITY
+      .combine(TransitionEffect.translate({ y: 6 }))
+      .animation({ duration: 180, curve: Curve.EaseOut }))
   }
 }

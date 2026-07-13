@@ -82,6 +82,27 @@ function createSummaryItem(index: number): Item {
 
 export default function homeSummaryFlowTest() {
   describe('Home summary flow', () => {
+    it('摘要列表限制十条但保留临期和待补货总数', 0, async () => {
+      const repository = new HomeSummaryFakeRepository();
+      for (let index = 0; index < 12; index++) {
+        const item = createSummaryItem(index);
+        item.quantity = 0;
+        item.expirationDate = '2026-06-20';
+        repository.items.push(item);
+      }
+
+      const summary = await new HomeSummaryService(repository, new ExpiryService())
+        .getSummary(new Date(2026, 5, 20));
+
+      expect(summary.ok).assertTrue();
+      if (summary.ok) {
+        expect(summary.getData().dueSoonItems.length).assertEqual(10);
+        expect(summary.getData().outOfStockItems.length).assertEqual(10);
+        expect(summary.getData().dueSoonCount).assertEqual(12);
+        expect(summary.getData().outOfStockCount).assertEqual(12);
+      }
+    });
+
     it('新增物品后首页最近添加立即包含最新物品', 0, async () => {
       const repository = new HomeSummaryFakeRepository();
       for (let index = 0; index < 10; index++) {

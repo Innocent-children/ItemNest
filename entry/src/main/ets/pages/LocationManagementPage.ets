@@ -10,7 +10,10 @@ export struct LocationManagementPage {
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private loading: boolean = true;
-  @State private errorMessage: string = '';
+  @State private operating: boolean = false;
+  @State private loadError: string = '';
+  @State private actionError: string = '';
+  @State private pressedAction: string = '';
   @State private name: string = '';
   @State private selectedParentId: string = '';
   @State private locations: LocationRecord[] = [];
@@ -60,6 +63,7 @@ export struct LocationManagementPage {
               .backgroundColor($r('app.color.surface_card'))
               .border({ width: 1, color: $r('app.color.border_subtle') })
               .borderRadius($r('app.float.radius_control'))
+              .enabled(!this.operating)
               .onChange((value: string) => this.name = value)
             Flex({ wrap: FlexWrap.Wrap }) {
               Button('无父级')
@@ -67,6 +71,7 @@ export struct LocationManagementPage {
                 .fontColor(this.selectedParentId.length === 0 ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
                 .backgroundColor(this.selectedParentId.length === 0 ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
                 .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+                .enabled(!this.operating)
                 .onClick(() => this.selectedParentId = '')
               ForEach(this.locations, (location: LocationRecord) => {
                 if (location.active) {
@@ -76,6 +81,7 @@ export struct LocationManagementPage {
                     .backgroundColor(this.selectedParentId === location.id ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
                     .fontSize($r('app.float.font_caption'))
                     .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+                    .enabled(!this.operating)
                     .onClick(() => this.selectedParentId = this.selectedParentId === location.id ? '' : location.id)
                 }
               }, (location: LocationRecord) => location.id)
@@ -85,9 +91,15 @@ export struct LocationManagementPage {
               .fontColor($r('app.color.brand_on_primary'))
               .backgroundColor($r('app.color.brand_primary'))
               .borderRadius($r('app.float.radius_control'))
+              .enabled(!this.operating)
+              .scale({ x: this.pressedAction === 'create' ? 0.98 : 1, y: this.pressedAction === 'create' ? 0.98 : 1 })
+              .animation({ duration: 120, curve: Curve.EaseOut })
+              .onTouch((event: TouchEvent) => this.updatePressedAction(event, 'create'))
               .onClick(() => this.createLocation())
-            if (this.errorMessage.length > 0) {
-              ErrorState({ message: this.errorMessage })
+            if (this.actionError.length > 0) {
+              ErrorState({ message: this.actionError })
+            } else if (this.loadError.length > 0) {
+              ErrorState({ message: this.loadError })
             }
             ForEach(this.locations, (location: LocationRecord) => {
               Row() {
@@ -105,6 +117,13 @@ export struct LocationManagementPage {
                   .fontColor($r('app.color.brand_primary'))
                   .backgroundColor($r('app.color.surface_accent'))
                   .borderRadius($r('app.float.radius_control'))
+                  .enabled(!this.operating)
+                  .scale({
+                    x: this.pressedAction === `toggle:${location.id}` ? 0.98 : 1,
+                    y: this.pressedAction === `toggle:${location.id}` ? 0.98 : 1
+                  })
+                  .animation({ duration: 120, curve: Curve.EaseOut })
+                  .onTouch((event: TouchEvent) => this.updatePressedAction(event, `toggle:${location.id}`))
                   .onClick(() => this.toggleLocation(location))
               }
               .width('100%')
@@ -128,42 +147,78 @@ export struct LocationManagementPage {
   private async loadLocations(showLoading: boolean = true): Promise<void> {
     if (showLoading) {
       this.loading = true;
+      this.loadError = '';
     }
-    const result = await AppServices.get().locations.list();
-    if (result.ok) {
-      this.locations = result.getData();
-      this.errorMessage = '';
-    } else {
-      if (showLoading || this.locations.length === 0) {
-        this.errorMessage = result.getError().message;
+    try {
+      const result = await AppServices.get().locations.list();
+      if (result.ok) {
+        this.locations = result.getData();
+        this.loadError = '';
+      } else {
+        this.loadError = result.getError().message;
       }
+    } catch (_) {
+      this.loadError = '读取位置失败，请稍后重试';
+    } finally {
+      this.loading = false;
     }
-    this.loading = false;
   }
 
   private async createLocation(): Promise<void> {
-    const result = await AppServices.get().locations.create({
-      name: this.name,
-      parentId: this.selectedParentId.length === 0 ? undefined : this.selectedParentId
-    });
-    if (result.ok) {
+    if (this.operating) {
+      return;
+    }
+    this.operating = true;
+    this.pressedAction = '';
+    this.actionError = '';
+    try {
+      const result = await AppServices.get().locations.create({
+        name: this.name,
+        parentId: this.selectedParentId.length === 0 ? undefined : this.selectedParentId
+      });
+      if (!result.ok) {
+        this.actionError = result.getError().message;
+        return;
+      }
       this.name = '';
       this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadLocations(false);
       this.showToast('位置已新增');
-    } else {
-      this.errorMessage = result.getError().message;
+    } catch (_) {
+      this.actionError = '新增位置失败，请稍后重试';
+    } finally {
+      this.operating = false;
     }
   }
 
   private async toggleLocation(location: LocationRecord): Promise<void> {
-    const result = location.active ? await AppServices.get().locations.deactivate(location.id) : await AppServices.get().locations.activate(location.id);
-    if (result.ok) {
+    if (this.operating) {
+      return;
+    }
+    this.operating = true;
+    this.pressedAction = '';
+    this.actionError = '';
+    try {
+      const result = location.active ? await AppServices.get().locations.deactivate(location.id) : await AppServices.get().locations.activate(location.id);
+      if (!result.ok) {
+        this.actionError = result.getError().message;
+        return;
+      }
       this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadLocations(false);
       this.showToast(location.active ? '位置已停用' : '位置已启用');
-    } else {
-      this.errorMessage = result.getError().message;
+    } catch (_) {
+      this.actionError = location.active ? '停用位置失败，请稍后重试' : '启用位置失败，请稍后重试';
+    } finally {
+      this.operating = false;
+    }
+  }
+
+  private updatePressedAction(event: TouchEvent, action: string): void {
+    if (event.type === TouchType.Down) {
+      this.pressedAction = action;
+    } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+      this.pressedAction = '';
     }
   }
 

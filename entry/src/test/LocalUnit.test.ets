@@ -45,6 +45,37 @@ export default function localUnitTest() {
       expect(handledCount).assertEqual(1);
     });
 
+    it('叠加表单释放顶层处理器后恢复下层返回拦截', 0, () => {
+      let bottomCalls = 0;
+      let topCalls = 0;
+      const bottomHandler = (): boolean => {
+        bottomCalls += 1;
+        return true;
+      };
+      const topHandler = (): boolean => {
+        topCalls += 1;
+        return true;
+      };
+      NavigationHelper.registerBackHandler(bottomHandler);
+      NavigationHelper.registerBackHandler(topHandler);
+
+      expect(NavigationHelper.handleBackPressed()).assertTrue();
+      expect(topCalls).assertEqual(1);
+      expect(bottomCalls).assertEqual(0);
+      NavigationHelper.unregisterBackHandler(topHandler);
+      expect(NavigationHelper.handleBackPressed()).assertTrue();
+      expect(bottomCalls).assertEqual(1);
+      NavigationHelper.unregisterBackHandler(bottomHandler);
+    });
+
+    it('导航栈未注册时返回可处理的失败结果', 0, async () => {
+      const pushed = await NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST });
+      const replaced = await NavigationHelper.replaceUrl({ url: RouteName.SEARCH });
+
+      expect(pushed).assertFalse();
+      expect(replaced).assertFalse();
+    });
+
     it('NavPathStack 返回结果会通知来源页监听', 0, () => {
       let receivedCount = 0;
       let receivedRefreshAt = 0;

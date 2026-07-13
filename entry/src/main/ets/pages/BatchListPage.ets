@@ -4,6 +4,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
+import { LatestRequestCoordinator } from '../common/LatestRequestCoordinator';
 import { Batch } from '../model/Batch';
 import { BatchRouteParams, requireItemId } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
@@ -23,6 +24,7 @@ export struct BatchListPage {
   private itemId: string = '';
   private pendingDeleteBatchId: string = '';
   private lastHandledDataRevision: number = -1;
+  private loadRequestCoordinator: LatestRequestCoordinator = new LatestRequestCoordinator();
 
   aboutToAppear(): void {
     const params = NavigationHelper.getParams() as BatchRouteParams | undefined;
@@ -159,20 +161,32 @@ export struct BatchListPage {
   }
 
   private async loadBatches(showLoading: boolean = true): Promise<void> {
+    const requestId = this.loadRequestCoordinator.begin();
+    const itemId = this.itemId;
     if (showLoading) {
       this.loading = true;
       this.errorMessage = '';
     }
-    const result = await AppServices.get().batches.listByItemId(this.itemId);
-    if (result.ok) {
-      this.batches = result.getData();
-      this.errorMessage = '';
-    } else {
-      if (showLoading || this.batches.length === 0) {
+    try {
+      const result = await AppServices.get().batches.listByItemId(itemId);
+      if (!this.loadRequestCoordinator.isCurrent(requestId)) {
+        return;
+      }
+      if (result.ok) {
+        this.batches = result.getData();
+        this.errorMessage = '';
+      } else if (showLoading || this.batches.length === 0) {
         this.errorMessage = result.getError().message;
       }
+    } catch (_) {
+      if (this.loadRequestCoordinator.isCurrent(requestId) && (showLoading || this.batches.length === 0)) {
+        this.errorMessage = '读取批次失败，请重试';
+      }
+    } finally {
+      if (this.loadRequestCoordinator.isCurrent(requestId)) {
+        this.loading = false;
+      }
     }
-    this.loading = false;
   }
 
   private requestDeleteBatch(batchId: string): void {
@@ -184,17 +198,25 @@ export struct BatchListPage {
   }
 
   private async deleteBatch(batchId: string): Promise<void> {
-    this.deleting = true;
-    const result = await AppServices.get().batches.delete(batchId);
-    if (result.ok) {
-      this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
-      await this.loadBatches(false);
-      this.showToast('批次已删除');
-    } else {
-      this.errorMessage = result.getError().message;
+    if (this.deleting) {
+      return;
     }
-    this.pendingDeleteBatchId = '';
-    this.deleting = false;
+    this.deleting = true;
+    try {
+      const result = await AppServices.get().batches.delete(batchId);
+      if (result.ok) {
+        this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
+        await this.loadBatches(false);
+        this.showToast('批次已删除');
+      } else {
+        this.errorMessage = result.getError().message;
+      }
+    } catch (_) {
+      this.errorMessage = '删除批次失败，请重试';
+    } finally {
+      this.pendingDeleteBatchId = '';
+      this.deleting = false;
+    }
   }
 
   private handleDeleteRequest(): void {

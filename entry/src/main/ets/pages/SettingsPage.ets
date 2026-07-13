@@ -1,5 +1,6 @@
 import { ConfigurationConstant } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
+import { resourceManager } from '@kit.LocalizationKit';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { LoadingState } from '../components/LoadingState';
 import { MainEntryBar } from '../components/MainEntryBar';
@@ -244,13 +245,26 @@ export struct SettingsPage {
 
   private async load(): Promise<void> {
     this.loading = true;
-    const result = await AppServices.get().preferences.get();
-    if (result.ok) {
-      this.applyPreferences(result.getData());
-    } else {
-      this.errorMessage = result.getError().message;
+    this.errorMessage = '';
+    try {
+      const result = await AppServices.get().preferences.get();
+      if (result.ok) {
+        this.applyPreferences(result.getData());
+        if (!result.getData().reminderEnabled) {
+          const cancelledResult = await AppServices.get().reminders.cancelAllForDisabledPreference();
+          if (!cancelledResult.ok) {
+            this.errorMessage = `提醒已关闭，但${cancelledResult.getError().message}`;
+            this.persistedReminderEnabled = true;
+          }
+        }
+      } else {
+        this.errorMessage = result.getError().message;
+      }
+    } catch (_) {
+      this.errorMessage = '读取设置失败，请重试';
+    } finally {
+      this.loading = false;
     }
-    this.loading = false;
   }
 
   private applyPreferences(preferences: UserPreferences): void {
@@ -265,6 +279,9 @@ export struct SettingsPage {
   }
 
   private async save(): Promise<void> {
+    if (this.saving) {
+      return;
+    }
     this.errorMessage = '';
     const preferences: UserPreferences = {
       defaultReminderDays: Number(this.defaultReminderDays),
@@ -277,26 +294,30 @@ export struct SettingsPage {
     };
     const wasReminderEnabled = this.persistedReminderEnabled;
     this.saving = true;
-    const result = await AppServices.get().preferences.save(preferences);
-    if (result.ok) {
-      if (!this.reminderEnabled && wasReminderEnabled) {
-        const cancelledResult = await AppServices.get().reminders.cancelAllForDisabledPreference();
-        if (!cancelledResult.ok) {
-          this.errorMessage = `设置已保存，但${cancelledResult.getError().message}`;
-          this.persistedReminderEnabled = true;
-          this.saving = false;
-          return;
+    try {
+      const result = await AppServices.get().preferences.save(preferences);
+      if (result.ok) {
+        this.applyPreferences(result.getData());
+        this.applyColorMode(result.getData().themeMode);
+        await this.applySystemBarStyle(result.getData().themeMode);
+        AppEventBus.notifyPreferencesChanged();
+        if (!this.reminderEnabled && wasReminderEnabled) {
+          const cancelledResult = await AppServices.get().reminders.cancelAllForDisabledPreference();
+          if (!cancelledResult.ok) {
+            this.errorMessage = `设置已保存，但${cancelledResult.getError().message}`;
+            this.persistedReminderEnabled = true;
+            return;
+          }
         }
+        this.showSavedToast();
+      } else {
+        this.errorMessage = result.getError().message;
       }
-      this.applyPreferences(result.getData());
-      this.applyColorMode(result.getData().themeMode);
-      await this.applySystemBarStyle(result.getData().themeMode);
-      AppEventBus.notifyPreferencesChanged();
-      this.showSavedToast();
-    } else {
-      this.errorMessage = result.getError().message;
+    } catch (_) {
+      this.errorMessage = '保存设置失败，请重试';
+    } finally {
+      this.saving = false;
     }
-    this.saving = false;
   }
 
   private applyColorMode(themeMode: ThemeMode): void {
@@ -318,7 +339,10 @@ export struct SettingsPage {
       if (hostContext === undefined) {
         return;
       }
-      const useLightIcon = themeMode === ThemeMode.DARK;
+      const useLightIcon = themeMode === ThemeMode.DARK ||
+        (themeMode === ThemeMode.SYSTEM &&
+          hostContext.resourceManager.getConfigurationSync().colorMode ===
+            resourceManager.ColorMode.DARK);
       const contentColor = useLightIcon ? '#FFFFFF' : '#000000';
       const mainWindow = await window.getLastWindow(hostContext);
       await mainWindow.setWindowLayoutFullScreen(true);

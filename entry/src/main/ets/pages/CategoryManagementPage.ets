@@ -10,7 +10,10 @@ export struct CategoryManagementPage {
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private loading: boolean = true;
-  @State private errorMessage: string = '';
+  @State private operating: boolean = false;
+  @State private loadError: string = '';
+  @State private actionError: string = '';
+  @State private pressedAction: string = '';
   @State private name: string = '';
   @State private categories: CategoryRecord[] = [];
   private lastHandledDataRevision: number = -1;
@@ -59,15 +62,22 @@ export struct CategoryManagementPage {
               .backgroundColor($r('app.color.surface_card'))
               .border({ width: 1, color: $r('app.color.border_subtle') })
               .borderRadius($r('app.float.radius_control'))
+              .enabled(!this.operating)
               .onChange((value: string) => this.name = value)
             Button('新增分类')
               .width('100%')
               .fontColor($r('app.color.brand_on_primary'))
               .backgroundColor($r('app.color.brand_primary'))
               .borderRadius($r('app.float.radius_control'))
+              .enabled(!this.operating)
+              .scale({ x: this.pressedAction === 'create' ? 0.98 : 1, y: this.pressedAction === 'create' ? 0.98 : 1 })
+              .animation({ duration: 120, curve: Curve.EaseOut })
+              .onTouch((event: TouchEvent) => this.updatePressedAction(event, 'create'))
               .onClick(() => this.createCategory())
-            if (this.errorMessage.length > 0) {
-              ErrorState({ message: this.errorMessage })
+            if (this.actionError.length > 0) {
+              ErrorState({ message: this.actionError })
+            } else if (this.loadError.length > 0) {
+              ErrorState({ message: this.loadError })
             }
             ForEach(this.categories, (category: CategoryRecord) => {
               Row() {
@@ -85,6 +95,13 @@ export struct CategoryManagementPage {
                   .fontColor($r('app.color.brand_primary'))
                   .backgroundColor($r('app.color.surface_accent'))
                   .borderRadius($r('app.float.radius_control'))
+                  .enabled(!this.operating)
+                  .scale({
+                    x: this.pressedAction === `toggle:${category.id}` ? 0.98 : 1,
+                    y: this.pressedAction === `toggle:${category.id}` ? 0.98 : 1
+                  })
+                  .animation({ duration: 120, curve: Curve.EaseOut })
+                  .onTouch((event: TouchEvent) => this.updatePressedAction(event, `toggle:${category.id}`))
                   .onClick(() => this.toggleCategory(category))
               }
               .width('100%')
@@ -108,39 +125,75 @@ export struct CategoryManagementPage {
   private async loadCategories(showLoading: boolean = true): Promise<void> {
     if (showLoading) {
       this.loading = true;
+      this.loadError = '';
     }
-    const result = await AppServices.get().categories.list();
-    if (result.ok) {
-      this.categories = result.getData();
-      this.errorMessage = '';
-    } else {
-      if (showLoading || this.categories.length === 0) {
-        this.errorMessage = result.getError().message;
+    try {
+      const result = await AppServices.get().categories.list();
+      if (result.ok) {
+        this.categories = result.getData();
+        this.loadError = '';
+      } else {
+        this.loadError = result.getError().message;
       }
+    } catch (_) {
+      this.loadError = '读取分类失败，请稍后重试';
+    } finally {
+      this.loading = false;
     }
-    this.loading = false;
   }
 
   private async createCategory(): Promise<void> {
-    const result = await AppServices.get().categories.create({ name: this.name });
-    if (result.ok) {
+    if (this.operating) {
+      return;
+    }
+    this.operating = true;
+    this.pressedAction = '';
+    this.actionError = '';
+    try {
+      const result = await AppServices.get().categories.create({ name: this.name });
+      if (!result.ok) {
+        this.actionError = result.getError().message;
+        return;
+      }
       this.name = '';
       this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadCategories(false);
       this.showToast('分类已新增');
-    } else {
-      this.errorMessage = result.getError().message;
+    } catch (_) {
+      this.actionError = '新增分类失败，请稍后重试';
+    } finally {
+      this.operating = false;
     }
   }
 
   private async toggleCategory(category: CategoryRecord): Promise<void> {
-    const result = await AppServices.get().categories.setActive(category.id, !category.active);
-    if (result.ok) {
+    if (this.operating) {
+      return;
+    }
+    this.operating = true;
+    this.pressedAction = '';
+    this.actionError = '';
+    try {
+      const result = await AppServices.get().categories.setActive(category.id, !category.active);
+      if (!result.ok) {
+        this.actionError = result.getError().message;
+        return;
+      }
       this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadCategories(false);
       this.showToast(category.active ? '分类已停用' : '分类已启用');
-    } else {
-      this.errorMessage = result.getError().message;
+    } catch (_) {
+      this.actionError = category.active ? '停用分类失败，请稍后重试' : '启用分类失败，请稍后重试';
+    } finally {
+      this.operating = false;
+    }
+  }
+
+  private updatePressedAction(event: TouchEvent, action: string): void {
+    if (event.type === TouchType.Down) {
+      this.pressedAction = action;
+    } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+      this.pressedAction = '';
     }
   }
 

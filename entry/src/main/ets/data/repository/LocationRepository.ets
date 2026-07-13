@@ -6,7 +6,14 @@ import { LOCATION_TABLE } from '../rdb/LocationSchema';
 import { RdbDatabase } from '../rdb/RdbDatabase';
 import { ResultSetReader } from '../rdb/ResultSetReader';
 
-export class LocationRepository {
+export interface LocationRepositoryPort {
+  create(location: LocationRecord): Promise<Result<LocationRecord>>;
+  listAll(): Promise<Result<LocationRecord[]>>;
+  getById(locationId: string): Promise<Result<LocationRecord | undefined>>;
+  setActive(locationId: string, active: boolean, updatedAt: number): Promise<Result<void>>;
+}
+
+export class LocationRepository implements LocationRepositoryPort {
   private readonly database: RdbDatabase;
 
   constructor(database: RdbDatabase) {

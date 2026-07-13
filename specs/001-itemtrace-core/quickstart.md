@@ -94,7 +94,7 @@ hvigorw.bat assembleApp --no-daemon
 ### 场景 C：详情、编辑、删除
 
 1. 从列表打开完整物品详情，确认位置路径先于分类展示且注意事项完整可见。
-2. 修改数量和位置并保存，返回列表、搜索结果和首页确认更新一致。
+2. 修改位置等非汇总字段并保存；数量、单位或到期日通过批次管理修改，返回列表、搜索结果和首页确认汇总更新一致。
 3. 发起删除后先取消，确认记录仍在；再次确认删除，确认其从列表、搜索和首页消失，并说明不可恢复。
 
 ### 场景 D：搜索、筛选与错误
@@ -142,7 +142,7 @@ hvigorw.bat assembleApp --no-daemon
 
 ### 当前执行记录（2026-06-21）
 
-- 已实现 Phase 3 本地 RDB v9：Batch、StockThreshold、TraceEvent、Location、Category、SearchHistory。
+- 已实现 Phase 3 本地 RDB v10：Batch、StockThreshold、TraceEvent、Location、Category、SearchHistory，以及批次汇总与关联清理一致性约束。
 - 已实现批次管理页、批次表单页、借出/归还页、位置管理页、分类管理页；物品详情页提供批次与借还入口，首页提供位置与分类入口。
 - 已实现本地搜索建议与可清除历史；不会请求网络，应用搜索后才记录历史。
 - 已实现本地 JSON 导出、导入预检/确认抽象，以及备份/恢复服务抽象；当前不自动覆盖现有数据库，不导出图片二进制。

@@ -6,7 +6,15 @@ import { RdbDatabase } from '../rdb/RdbDatabase';
 import { SEARCH_HISTORY_TABLE } from '../rdb/SearchHistorySchema';
 import { ResultSetReader } from '../rdb/ResultSetReader';
 
-export class SearchHistoryRepository {
+const MAX_HISTORY_COUNT: number = 50;
+
+export interface SearchHistoryRepositoryPort {
+  add(history: SearchHistory): Promise<Result<SearchHistory>>;
+  recent(limit: number): Promise<Result<SearchHistory[]>>;
+  clear(): Promise<Result<void>>;
+}
+
+export class SearchHistoryRepository implements SearchHistoryRepositoryPort {
   private readonly database: RdbDatabase;
 
   constructor(database: RdbDatabase) {
@@ -16,10 +24,21 @@ export class SearchHistoryRepository {
   async add(history: SearchHistory): Promise<Result<SearchHistory>> {
     try {
       await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
+        if (history.viewedItemId !== undefined) {
+          const duplicatePredicates = new relationalStore.RdbPredicates(SEARCH_HISTORY_TABLE);
+          duplicatePredicates.equalTo('viewed_item_id', history.viewedItemId);
+          await store.delete(duplicatePredicates);
+        }
         const rowId = await store.insert(SEARCH_HISTORY_TABLE, this.toValues(history));
         if (rowId < 0) {
           throw new AppError(AppErrorCode.DATABASE_WRITE, '保存搜索历史失败，请重试');
         }
+        await store.execute(`
+          DELETE FROM search_history
+          WHERE id NOT IN (
+            SELECT id FROM search_history ORDER BY created_at DESC LIMIT ${MAX_HISTORY_COUNT}
+          )
+        `);
       });
       return success(history);
     } catch (error) {
@@ -31,7 +50,7 @@ export class SearchHistoryRepository {
     try {
       const predicates = new relationalStore.RdbPredicates(SEARCH_HISTORY_TABLE);
       predicates.orderByDesc('created_at');
-      predicates.limitAs(limit);
+      predicates.limitAs(Math.max(0, Math.min(limit, MAX_HISTORY_COUNT)));
       const store = await this.database.requireStore();
       const resultSet = await store.query(predicates);
       const rows: SearchHistory[] = [];

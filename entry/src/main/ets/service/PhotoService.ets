@@ -101,7 +101,10 @@ export class PhotoService {
     return success<Item>(updatedItem);
   }
 
-  async cleanupAfterItemDeleted(item: Item): Promise<Result<void>> {
+  async cleanupAfterItemDeleted(item: Item, knownLocalPath?: string): Promise<Result<void>> {
+    if (knownLocalPath !== undefined) {
+      return this.storage.remove(knownLocalPath);
+    }
     if (item.photoLocalId === undefined) {
       return success<void>(undefined);
     }
