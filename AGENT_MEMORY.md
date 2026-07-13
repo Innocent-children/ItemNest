@@ -18,8 +18,8 @@
 - [x] 统一页面交互、过渡动画、加载/空态与视觉细节。
 - [x] 运行构建、测试包、静态检查并复核全部差异。
 - [x] 核对 Git 远端、分支与完整提交范围。
-- [ ] 创建发布分支并提交全部当前改动。
-- [ ] 推送到 GitHub 并核对远端分支。
+- [x] 创建发布分支并提交全部当前改动。
+- [x] 推送到 GitHub 并核对远端分支。
 
 ## Log
 2026-07-13 21:13 — 初始化任务 — 确认项目记忆文件原先不存在并完成创建。
@@ -44,6 +44,7 @@
 2026-07-13 22:28 — 完成最终验证 — 本地 Hypium 60/60、主 APP 与 ohosTest HAP 编译、v10 SQLite 冒烟及全部空白检查通过；未发现剩余确定性高/中优先级问题。
 2026-07-13 22:30 — 启动 GitHub 发布 — 用户明确要求全部提交；本机缺少 `gh`，决定使用 Git 完成分支、提交和推送，不额外创建 PR。
 2026-07-13 22:31 — 核对发布范围 — 确认 `origin` 指向 GitHub、当前位于 `main`，全部工作树内容均纳入本次提交。
+2026-07-13 22:58 — 完成 GitHub 推送 — 创建 `codex/itemtrace-stability-polish`，主提交 `8ba4d54` 已推送并跟踪同名远端分支。
 
 ## Blockers & open questions
 - 历史混合单位批次没有可靠换算关系；v10 会阻止继续产生或修改为混合单位，但不会猜测并改写用户已有数量。
@@ -53,8 +54,8 @@
 
 ## Handoff notes
 - 项目根目录：`D:\DevEcoStudioProjects\ItemTrace`。
-- 当前分支：`main`，跟踪 `origin/main`；工作树已有大量用户删除，不要恢复。
-- 新 `AGENTS.md` 已写入工作树；索引中仍保留用户原先暂存的 `AGENTS.md` 删除，未执行任何 stage 操作。
+- 当前分支：`codex/itemtrace-stability-polish`，跟踪 `origin/codex/itemtrace-stability-polish`；用户要求全部提交，既有删除已包含在主提交 `8ba4d54`。
+- 新 `AGENTS.md` 与本文件均已纳入 Git；本机未安装 `gh`，因此没有创建 PR。
 - 本机 DevEco Studio 位于 `C:\Applications\HuaWei\DevEco Studio`；无项目内 wrapper，签名未配置。
 - 最终本地 Hypium 报告为 60/60（Failure 0 / Error 0）；`assembleApp --no-daemon` 与 ohosTest `assembleHap` 均成功。ohosTest 仅完成编译打包，未执行设备用例。
 - v10 默认批次、增删改汇总、单位保护、Trace 引用和 Item 关联清理由真实内存 SQLite 冒烟通过；关键实现见 `data/rdb/InventoryIntegritySchema.ets`。
