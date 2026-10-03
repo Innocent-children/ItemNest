@@ -32,7 +32,7 @@ import { PhotoService } from './PhotoService';
 import { SystemImageSourceAdapter } from './adapter/ImageSourceAdapter';
 import { FormSnapshotProvider } from './FormSnapshotProvider';
 import { ScanService } from './ScanService';
-import { UnavailableScanAdapter } from './adapter/ScanAdapter';
+import { SystemScanAdapter } from './adapter/ScanAdapter';
 import { BatchService } from './BatchService';
 import { BackupService } from './BackupService';
 import { CategoryService } from './CategoryService';
@@ -44,6 +44,9 @@ import { LowStockReminderService } from './LowStockReminderService';
 import { LowStockService } from './LowStockService';
 import { RestoreService } from './RestoreService';
 import { SearchSuggestionService } from './SearchSuggestionService';
+import { PortableBackupService } from './PortableBackupService';
+import { PortableFileStore } from './PortableFileStore';
+import { PhotoMaintenanceService } from './PhotoMaintenanceService';
 
 export class AppServices {
   private static instance?: AppServices;
@@ -60,6 +63,7 @@ export class AppServices {
   readonly preferences: PreferenceService;
   readonly reminders: ReminderService;
   readonly photos: PhotoService;
+  readonly photoMaintenance: PhotoMaintenanceService;
   readonly imageSource: SystemImageSourceAdapter;
   readonly formSnapshot: FormSnapshotProvider;
   readonly scan: ScanService;
@@ -72,6 +76,7 @@ export class AppServices {
   readonly exportData: ExportService;
   readonly importData: ImportService;
   readonly backup: BackupService;
+  readonly portableBackup: PortableBackupService;
   readonly restore: RestoreService;
   readonly searchSuggestions: SearchSuggestionService;
 
@@ -95,18 +100,22 @@ export class AppServices {
     const preferenceService = new PreferenceService(new PreferenceRepository(context));
     const reminderRepository = new ReminderRepository(new ReminderDao(database));
     const reminderService = new ReminderService(reminderRepository, preferenceService, new SystemReminderAdapter(), repository);
-    const photoService = new PhotoService(new AssetRepository(new AssetDao(database)), repository, new LocalAssetStorage(context));
+    const assetRepository = new AssetRepository(new AssetDao(database));
+    const assetStorage = new LocalAssetStorage(context);
+    const photoService = new PhotoService(assetRepository, repository, assetStorage);
     this.deleteItem = new ItemDeleteService(repository, reminderService, photoService);
     this.searchItems = new ItemSearchService(repository, listItems);
     this.homeSummary = new HomeSummaryService(repository, expiryService);
     this.preferences = preferenceService;
     this.reminders = reminderService;
     this.photos = photoService;
+    this.photoMaintenance = new PhotoMaintenanceService(assetRepository, repository, assetStorage);
     this.imageSource = new SystemImageSourceAdapter();
     this.formSnapshot = new FormSnapshotProvider(this.homeSummary, reminderRepository);
-    this.scan = new ScanService(new UnavailableScanAdapter());
+    this.scan = new ScanService(new SystemScanAdapter());
     this.batches = new BatchService(batchRepository, repository);
-    this.lowStock = new LowStockService(new StockThresholdRepository(database), repository);
+    const thresholdRepository = new StockThresholdRepository(database);
+    this.lowStock = new LowStockService(thresholdRepository, repository);
     this.lowStockReminder = new LowStockReminderService();
     this.lending = new LendingService(traceRepository, repository);
     this.locations = new LocationService(locationRepository, repository, () => Date.now(), batchRepository);
@@ -114,6 +123,8 @@ export class AppServices {
     this.exportData = new ExportService(repository, batchRepository, locationRepository, categoryRepository, traceRepository);
     this.importData = new ImportService();
     this.backup = new BackupService(this.exportData);
+    this.portableBackup = new PortableBackupService(this.exportData, thresholdRepository, assetRepository,
+      new PortableFileStore(context), database, reminderService);
     this.restore = new RestoreService(this.importData);
     this.searchSuggestions = new SearchSuggestionService(new SearchHistoryRepository(database), repository);
   }

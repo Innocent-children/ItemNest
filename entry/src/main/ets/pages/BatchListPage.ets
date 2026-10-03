@@ -129,7 +129,6 @@ export struct BatchListPage {
                     Text(batch.notes)
                       .fontSize($r('app.float.font_caption'))
                       .fontColor($r('app.color.text_secondary'))
-                      .maxLines(2)
                   }
                 }
                 .width('100%')

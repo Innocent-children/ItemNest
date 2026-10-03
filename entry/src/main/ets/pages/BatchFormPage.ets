@@ -11,6 +11,7 @@ import { AppServices } from '../service/AppServices';
 
 @Component
 export struct BatchFormPage {
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private loading: boolean = true;
@@ -137,7 +138,7 @@ export struct BatchFormPage {
               .borderRadius($r('app.float.radius_control'))
               .enabled(!this.saving && this.formReady)
               .scale({ x: this.savePressed ? 0.98 : 1, y: this.savePressed ? 0.98 : 1 })
-              .animation({ duration: 120, curve: Curve.EaseOut })
+              .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
               .onTouch((event: TouchEvent) => {
                 if (event.type === TouchType.Down) {
                   this.savePressed = true;

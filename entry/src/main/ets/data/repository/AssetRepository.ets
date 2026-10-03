@@ -34,6 +34,14 @@ export class AssetRepository implements AssetRepositoryPort {
     }
   }
 
+  async listAll(): Promise<Result<ItemAsset[]>> {
+    try {
+      return success(await this.dao.findAll());
+    } catch (error) {
+      return failure<ItemAsset[]>(toAppError(error, AppErrorCode.DATABASE_READ, '读取图片记录失败，请重试'));
+    }
+  }
+
   async getLatestByItemId(itemId: string): Promise<Result<ItemAsset | undefined>> {
     try {
       return success<ItemAsset | undefined>(await this.dao.findLatestByItemId(itemId));

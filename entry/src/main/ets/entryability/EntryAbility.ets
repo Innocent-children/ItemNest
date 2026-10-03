@@ -46,6 +46,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   private async loadMainContent(windowStage: window.WindowStage): Promise<void> {
+    await AppServices.get().photoMaintenance.cleanupOrphans();
     await this.applyImmersiveWindow(windowStage);
     windowStage.loadContent('pages/Index', (err) => {
       if (err.code) {
@@ -53,6 +54,9 @@ export default class EntryAbility extends UIAbility {
         return;
       }
       hilog.info(DOMAIN, 'testTag', 'Succeeded in loading the content.');
+      if (this.mainWindow !== undefined) {
+        this.updateSafeArea(this.mainWindow);
+      }
     });
   }
 

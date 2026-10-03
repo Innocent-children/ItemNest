@@ -2,7 +2,7 @@ import { relationalStore } from '@kit.ArkData';
 import { SchemaExecutor } from './SchemaExecutor';
 
 export const DATABASE_NAME: string = 'itemtrace.db';
-export const DATABASE_VERSION: number = 10;
+export const DATABASE_VERSION: number = 11;
 export const ITEM_TABLE: string = 'item';
 
 const CREATE_ITEM_TABLE: string = `
@@ -35,4 +35,9 @@ export async function createItemSchema(store: relationalStore.Transaction): Prom
   for (let index = 0; index < ITEM_INDEXES.length; index++) {
     await SchemaExecutor.execute(store, ITEM_INDEXES[index]);
   }
+}
+
+export async function addItemBarcode(store: relationalStore.Transaction): Promise<void> {
+  await SchemaExecutor.execute(store, 'ALTER TABLE item ADD COLUMN barcode TEXT');
+  await SchemaExecutor.execute(store, 'CREATE INDEX IF NOT EXISTS idx_item_barcode ON item(barcode)');
 }

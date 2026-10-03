@@ -49,9 +49,19 @@ export class StockThresholdRepository implements StockThresholdRepositoryPort {
   }
 
   async listEnabled(): Promise<Result<StockThreshold[]>> {
+    return this.listRows(true);
+  }
+
+  async listAll(): Promise<Result<StockThreshold[]>> {
+    return this.listRows(false);
+  }
+
+  private async listRows(enabledOnly: boolean): Promise<Result<StockThreshold[]>> {
     try {
       const predicates = new relationalStore.RdbPredicates(STOCK_THRESHOLD_TABLE);
-      predicates.equalTo('enabled', 1);
+      if (enabledOnly) {
+        predicates.equalTo('enabled', 1);
+      }
       const store = await this.database.requireStore();
       const resultSet = await store.query(predicates);
       const rows: StockThreshold[] = [];

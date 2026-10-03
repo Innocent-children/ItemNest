@@ -17,6 +17,9 @@ import refreshContractTest from './ets/test/RefreshContract.test';
 import reminderServiceTest from './ets/test/ReminderService.test';
 import routeContractTest from './ets/test/RouteContract.test';
 import searchRequestCoordinatorTest from './ets/test/SearchRequestCoordinator.test';
+import portableBackupValidationTest from './ets/test/PortableBackupValidation.test';
+import scanAdapterTest from './ets/test/ScanAdapter.test';
+import backupPhotoCodecTest from './ets/test/BackupPhotoCodec.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -38,4 +41,7 @@ export default function testsuite() {
   reminderServiceTest();
   routeContractTest();
   searchRequestCoordinatorTest();
+  portableBackupValidationTest();
+  scanAdapterTest();
+  backupPhotoCodecTest();
 }

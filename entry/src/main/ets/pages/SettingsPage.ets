@@ -13,6 +13,7 @@ import { AppServices } from '../service/AppServices';
 export struct SettingsPage {
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @State private defaultReminderDays: string = '7';
   @State private defaultSort: ItemSortMode = ItemSortMode.UPDATED_DESC;
   @State private showRecentSection: boolean = true;
@@ -24,6 +25,11 @@ export struct SettingsPage {
   @State private loading: boolean = false;
   @State private saving: boolean = false;
   @State private errorMessage: string = '';
+  @State private backupBusy: boolean = false;
+  @State private confirmingRestore: boolean = false;
+  @State private backupPreview: string = '';
+  @State private backupMessage: string = '';
+  private selectedBackupText: string = '';
 
   aboutToAppear(): void {
     this.load();
@@ -55,30 +61,36 @@ export struct SettingsPage {
         LoadingState({ text: '正在读取设置…' })
       } else {
         Scroll() {
-          Column({ space: $r('app.float.space_4') }) {
-            this.reminderCard()
-            this.sortCard()
-            this.homeCard()
-            this.themeCard()
-            this.managementCard()
-            if (this.errorMessage.length > 0) {
-              Text(this.errorMessage)
-                .fontSize($r('app.float.font_caption'))
-                .fontColor($r('app.color.status_danger'))
-                .padding($r('app.float.space_3'))
+          Row() {
+            Column({ space: $r('app.float.space_4') }) {
+              this.reminderCard()
+              this.sortCard()
+              this.homeCard()
+              this.themeCard()
+              this.managementCard()
+              this.backupCard()
+              if (this.errorMessage.length > 0) {
+                Text(this.errorMessage)
+                  .fontSize($r('app.float.font_caption'))
+                  .fontColor($r('app.color.status_danger'))
+                  .padding($r('app.float.space_3'))
+                  .borderRadius($r('app.float.radius_control'))
+                  .backgroundColor($r('app.color.status_danger_soft'))
+              }
+              Button(this.saving ? '正在保存…' : '保存设置')
+                .width('100%')
+                .fontColor($r('app.color.brand_on_primary'))
+                .backgroundColor($r('app.color.brand_primary'))
                 .borderRadius($r('app.float.radius_control'))
-                .backgroundColor($r('app.color.status_danger_soft'))
+                .enabled(!this.saving)
+                .onClick(() => this.save())
             }
-            Button(this.saving ? '正在保存…' : '保存设置')
-              .width('100%')
-              .fontColor($r('app.color.brand_on_primary'))
-              .backgroundColor($r('app.color.brand_primary'))
-              .borderRadius($r('app.float.radius_control'))
-              .enabled(!this.saving)
-              .onClick(() => this.save())
+            .width('100%')
+            .constraintSize({ maxWidth: 880 })
+            .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
           }
           .width('100%')
-          .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
+          .justifyContent(FlexAlign.Center)
         }
         .layoutWeight(1)
       }
@@ -206,6 +218,164 @@ export struct SettingsPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+  }
+
+  @Builder
+  private backupCard() {
+    Column({ space: $r('app.float.space_3') }) {
+      this.cardTitle('本地备份与恢复', '备份包含物品、批次、位置、分类、借还记录、库存阈值和照片；不包含系统提醒或偏好设置。')
+      Button(this.backupBusy ? '正在处理…' : '保存备份文件')
+        .width('100%')
+        .fontColor($r('app.color.brand_primary'))
+        .backgroundColor($r('app.color.surface_accent'))
+        .enabled(!this.backupBusy)
+        .onClick(() => this.saveBackupFile())
+      Button('选择备份文件并预览')
+        .width('100%')
+        .fontColor($r('app.color.brand_primary'))
+        .backgroundColor($r('app.color.surface_accent'))
+        .enabled(!this.backupBusy)
+        .onClick(() => this.selectBackupFile())
+      if (this.backupPreview.length > 0) {
+        Column({ space: $r('app.float.space_3') }) {
+          Text(this.backupPreview)
+            .fontSize($r('app.float.font_body'))
+            .fontColor($r('app.color.text_primary'))
+          Button('确认覆盖当前数据并恢复')
+            .width('100%')
+            .fontColor($r('app.color.brand_on_primary'))
+            .backgroundColor($r('app.color.status_danger'))
+            .enabled(!this.backupBusy && !this.confirmingRestore)
+            .onClick(() => this.confirmBackupRestore())
+        }
+        .width('100%')
+        .padding($r('app.float.space_3'))
+        .borderRadius($r('app.float.radius_control'))
+        .backgroundColor($r('app.color.status_warning_soft'))
+        .transition(TransitionEffect.OPACITY
+          .combine(TransitionEffect.translate({ y: 10 }))
+          .animation({ duration: this.reduceAnimation ? 0 : 240, curve: Curve.EaseOut }))
+      }
+      Button('导出最近一次恢复前的安全备份')
+        .width('100%')
+        .fontColor($r('app.color.brand_primary'))
+        .backgroundColor($r('app.color.surface_accent'))
+        .enabled(!this.backupBusy)
+        .onClick(() => this.saveSafetyBackupFile())
+      if (this.backupMessage.length > 0) {
+        Text(this.backupMessage)
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.text_secondary'))
+      }
+    }
+    .width('100%')
+    .padding($r('app.float.space_4'))
+    .borderRadius($r('app.float.radius_card'))
+    .backgroundColor($r('app.color.surface_card'))
+  }
+
+  private async saveBackupFile(): Promise<void> {
+    const context = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      this.backupMessage = '文件选择器暂不可用';
+      return;
+    }
+    this.backupBusy = true;
+    try {
+      const result = await AppServices.get().portableBackup.saveToUserFile(context);
+      this.backupMessage = result.ok ? (result.getData() ? '备份文件已保存' : '已取消保存') : result.getError().message;
+    } catch (_) {
+      this.backupMessage = '备份失败，请稍后重试';
+    } finally {
+      this.backupBusy = false;
+    }
+  }
+
+  private async selectBackupFile(): Promise<void> {
+    const context = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      this.backupMessage = '文件选择器暂不可用';
+      return;
+    }
+    this.backupBusy = true;
+    this.selectedBackupText = '';
+    this.backupPreview = '';
+    try {
+      const selected = await AppServices.get().portableBackup.selectUserFile(context);
+      if (!selected.ok) {
+        this.backupMessage = selected.getError().message;
+      } else if (selected.getData() !== undefined) {
+        const text = selected.getData() ?? '';
+        const preview = AppServices.get().portableBackup.preview(text);
+        if (preview.ok) {
+          this.selectedBackupText = text;
+          const counts = preview.getData();
+          this.backupPreview = `将覆盖当前数据：${counts.itemCount} 个物品、${counts.batchCount} 个批次、${counts.locationCount} 个位置、${counts.categoryCount} 个分类、${counts.traceEventCount} 条借还记录。`;
+          this.backupMessage = '请核对预览后再确认恢复。';
+        } else {
+          this.backupMessage = preview.getError().message;
+        }
+      }
+    } catch (_) {
+      this.backupMessage = '读取备份失败，请重试';
+    } finally {
+      this.backupBusy = false;
+    }
+  }
+
+  private async confirmBackupRestore(): Promise<void> {
+    if (this.confirmingRestore || this.backupBusy || this.selectedBackupText.length === 0) {
+      return;
+    }
+    this.confirmingRestore = true;
+    try {
+      const result = await this.getUIContext().getPromptAction().showDialog({
+        title: '确认恢复备份？',
+        message: '当前物品和照片将被备份中的内容覆盖。应用会先保存一份恢复前的安全备份。',
+        buttons: [{ text: '取消', color: '#777777' }, { text: '确认恢复', color: '#B42318' }]
+      });
+      if (result.index === 1) {
+        await this.restoreSelectedBackup();
+      }
+    } catch (_) {
+      this.backupMessage = '无法打开确认窗口，请稍后重试';
+    } finally {
+      this.confirmingRestore = false;
+    }
+  }
+
+  private async restoreSelectedBackup(): Promise<void> {
+    if (this.selectedBackupText.length === 0 || this.backupBusy) {
+      return;
+    }
+    this.backupBusy = true;
+    try {
+      const result = await AppServices.get().portableBackup.restore(this.selectedBackupText, true);
+      this.backupMessage = result.ok ? result.getData() : result.getError().message;
+    } catch (_) {
+      this.backupMessage = '恢复失败，请检查应用内安全备份后重试';
+    } finally {
+      this.selectedBackupText = '';
+      this.backupPreview = '';
+      this.backupBusy = false;
+    }
+  }
+
+  private async saveSafetyBackupFile(): Promise<void> {
+    const context = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      this.backupMessage = '文件选择器暂不可用';
+      return;
+    }
+    this.backupBusy = true;
+    try {
+      const result = await AppServices.get().portableBackup.saveSafetyBackup(context);
+      this.backupMessage = result.ok ? (result.getData() ? '安全备份已导出' : '已取消保存') : result.getError().message;
+    } catch (_) {
+      this.backupMessage = '导出安全备份失败，请重试';
+    } finally {
+      this.backupBusy = false;
+    }
   }
 
   @Builder

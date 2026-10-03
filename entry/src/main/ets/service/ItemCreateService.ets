@@ -30,6 +30,7 @@ export class ItemCreateService {
       expirationDate: validated.getData().expirationDate,
       reminderDays: validated.getData().reminderDays,
       notes: validated.getData().notes,
+      barcode: validated.getData().barcode,
       photoState: PhotoState.NONE,
       createdAt: now,
       updatedAt: now

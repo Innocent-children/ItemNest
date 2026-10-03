@@ -5,8 +5,8 @@ class QuickAddFormLinkParams {
 @Entry
 @Component
 struct ItemTraceFormCard {
-  @State dueSoonCount: string = '0';
-  @State todayReminderCount: string = '0';
+  @State dueSoonCount: string = '—';
+  @State todayReminderCount: string = '—';
 
   build() {
     FormLink({

@@ -17,7 +17,7 @@ export default class ItemTraceFormAbility extends FormExtensionAbility {
       this.ensureDataSubscription();
       this.refreshAllForms();
     }
-    return formBindingData.createFormBindingData({ dueSoonCount: '0', todayReminderCount: '0' });
+    return formBindingData.createFormBindingData({ dueSoonCount: '—', todayReminderCount: '—' });
   }
 
   onUpdateForm(formId: string): void {

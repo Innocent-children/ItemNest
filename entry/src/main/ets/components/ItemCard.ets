@@ -2,9 +2,11 @@ import { NavigationHelper } from '../navigation/NavigationHelper';
 import { ItemSummary } from '../model/Item';
 import { RouteName } from '../navigation/RouteName';
 import { ExpiryStatusTag } from './ExpiryStatusTag';
+import { expiryStatusLabel } from '../model/ExpiryStatus';
 
 @Component
 export struct ItemCard {
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @Prop item: ItemSummary;
   @State private pressed: boolean = false;
 
@@ -25,8 +27,6 @@ export struct ItemCard {
           Text(this.item.name)
             .fontSize($r('app.float.font_body'))
             .fontWeight(FontWeight.Medium)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
             .layoutWeight(1)
           ExpiryStatusTag({ status: this.item.expiryStatus })
         }
@@ -34,8 +34,6 @@ export struct ItemCard {
           Text(this.item.locationPath)
             .fontSize($r('app.float.font_caption'))
             .fontColor($r('app.color.text_secondary'))
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         Row({ space: $r('app.float.space_2') }) {
           Text(`${this.item.quantity}${this.item.unit}`)
@@ -63,8 +61,12 @@ export struct ItemCard {
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor(this.pressed ? $r('app.color.surface_accent') : $r('app.color.surface_card'))
     .border({ width: 1, color: $r('app.color.border_subtle') })
-    .scale({ x: this.pressed ? 0.99 : 1, y: this.pressed ? 0.99 : 1 })
-    .animation({ duration: 120, curve: Curve.EaseOut })
+    .accessibilityText(`${this.item.name}，${this.item.quantity}${this.item.unit}，${expiryStatusLabel(this.item.expiryStatus)}，查看详情`)
+    .scale({ x: this.pressed && !this.reduceAnimation ? 0.99 : 1, y: this.pressed && !this.reduceAnimation ? 0.99 : 1 })
+    .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
+    .transition(TransitionEffect.OPACITY
+      .combine(TransitionEffect.translate({ y: 10 }))
+      .animation({ duration: this.reduceAnimation ? 0 : 240, curve: Curve.EaseOut }))
     .onTouch((event: TouchEvent) => {
       if (event.type === TouchType.Down) {
         this.pressed = true;

@@ -27,6 +27,7 @@ export struct ItemDetailPage {
   @State private expiryStatus: ExpiryStatus = ExpiryStatus.NO_EXPIRY_DATE;
   @State private reminderMessage: string = '';
   @State private reminderRetrying: boolean = false;
+  @State private defaultReminderDays: number = 7;
   @State private photoPath: string = '';
   @State private removingPhoto: boolean = false;
   @State private batchCount: number = 0;
@@ -152,6 +153,7 @@ export struct ItemDetailPage {
         }
       }
       .width('100%')
+      .constraintSize({ maxWidth: 880 })
       .height('100%')
       .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
       .backgroundColor($r('app.color.surface_app'))
@@ -186,7 +188,6 @@ export struct ItemDetailPage {
                 .fontSize($r('app.float.font_title'))
                 .fontWeight(FontWeight.Bold)
                 .fontColor($r('app.color.text_primary'))
-                .maxLines(2)
               Text(`${item.quantity}${item.unit}`)
                 .fontSize($r('app.float.font_body'))
                 .fontWeight(FontWeight.Medium)
@@ -245,7 +246,7 @@ export struct ItemDetailPage {
   @Builder
   private lowStockSection(item: Item) {
     Column({ space: $r('app.float.space_3') }) {
-      Text('低库存提醒')
+      Text('低库存状态')
         .fontSize($r('app.float.font_section'))
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
@@ -275,7 +276,7 @@ export struct ItemDetailPage {
           .enabled(!this.thresholdSaving)
           .onChange((value: string) => this.thresholdText = value)
         Row() {
-          Text('启用低库存提醒')
+          Text('启用低库存标记')
             .fontSize($r('app.float.font_body'))
             .fontColor($r('app.color.text_primary'))
             .layoutWeight(1)
@@ -327,7 +328,7 @@ export struct ItemDetailPage {
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
       this.detailRow('到期日期', item.expirationDate ?? '未设置')
-      this.detailRow('提前提醒', item.reminderDays === undefined ? '默认提前 7 天' : `提前 ${item.reminderDays} 天`)
+      this.detailRow('提前提醒', item.reminderDays === undefined ? `默认提前 ${this.defaultReminderDays} 天` : `提前 ${item.reminderDays} 天`)
       if (this.reminderMessage.length > 0) {
         Text(this.reminderMessage)
           .fontSize($r('app.float.font_caption'))
@@ -360,6 +361,12 @@ export struct ItemDetailPage {
         .fontSize($r('app.float.font_body'))
         .fontColor(item.notes === undefined ? $r('app.color.text_secondary') : $r('app.color.text_primary'))
         .width('100%')
+      if (item.barcode !== undefined && item.barcode.length > 0) {
+        Text(`条码/二维码：${item.barcode}`)
+          .fontSize($r('app.float.font_body'))
+          .fontColor($r('app.color.text_primary'))
+          .width('100%')
+      }
     }
     .width('100%')
     .padding($r('app.float.space_4'))
@@ -433,6 +440,10 @@ export struct ItemDetailPage {
       this.errorMessage = '';
       const item = result.getData();
       this.item = item;
+      const preferences = await AppServices.get().preferences.get();
+      if (preferences.ok && this.loadRequestCoordinator.isCurrent(requestId)) {
+        this.defaultReminderDays = preferences.getData().defaultReminderDays;
+      }
       this.recordViewedItemOnce(item);
       this.expiryStatus = AppServices.get().listItems.toSummary(item).expiryStatus;
       await this.loadReminderState(item, requestId);
@@ -595,8 +606,6 @@ export struct ItemDetailPage {
       Text(description)
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
       Text('进入')
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.brand_primary'))

@@ -1,4 +1,5 @@
 import { NavigationHelper } from '../navigation/NavigationHelper';
+import { accessibility } from '@kit.AccessibilityKit';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
@@ -7,6 +8,7 @@ import { MainEntryBar } from '../components/MainEntryBar';
 import { AppEventBus } from '../common/AppEventBus';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
+import { LowStockItem } from '../model/StockThreshold';
 import { getUnhandledRouteRefreshAt } from '../navigation/RefreshContract';
 import { RouteRefreshParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
@@ -31,11 +33,13 @@ struct Index {
   @StorageLink('itemtrace.preferenceRevision') @Watch('onRevisionChanged') private preferenceRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private recentItems: ItemSummary[] = [];
   @State private dueSoonItems: ItemSummary[] = [];
   @State private outOfStockItems: ItemSummary[] = [];
+  @State private lowStockItems: LowStockItem[] = [];
   @State private dueSoonCount: number = 0;
   @State private outOfStockCount: number = 0;
   @State private locationPaths: string[] = [];
@@ -50,8 +54,16 @@ struct Index {
   private lastHandledDataRevision: number = -1;
   private lastHandledPreferenceRevision: number = -1;
   private pathStack: NavPathStack = new NavPathStack();
+  private animationReduceListener: (enabled: boolean) => void = (enabled: boolean) => {
+    this.applyAnimationPreference(enabled);
+  };
 
   aboutToAppear(): void {
+    try {
+      this.applyAnimationPreference(accessibility.isAnimationReduceEnabledSync());
+      accessibility.onAnimationReduceStateChange(this.animationReduceListener);
+    } catch (_) {
+    }
     NavigationHelper.registerPathStack(this.pathStack);
     this.subscribeDataRefresh();
     this.subscribeRouteResultRefresh();
@@ -60,6 +72,10 @@ struct Index {
   }
 
   aboutToDisappear(): void {
+    try {
+      accessibility.offAnimationReduceStateChange(this.animationReduceListener);
+    } catch (_) {
+    }
     if (this.dataRefreshListenerId > 0) {
       AppEventBus.unsubscribeDataChanged(this.dataRefreshListenerId);
       this.dataRefreshListenerId = 0;
@@ -80,6 +96,12 @@ struct Index {
 
   private onQuickAddRequested(): void {
     this.openQuickAddIfRequested();
+  }
+
+  private applyAnimationPreference(enabled: boolean): void {
+    this.reduceAnimation = enabled;
+    AppStorage.setOrCreate<boolean>('itemtrace.reduceAnimation', enabled);
+    this.pathStack.disableAnimation(enabled);
   }
 
   private onRevisionChanged(): void {
@@ -183,24 +205,32 @@ struct Index {
         .padding($r('app.float.space_4'))
       } else {
         Scroll() {
-          Column({ space: $r('app.float.space_6') }) {
-            this.hero()
-            this.overview()
-            if (this.locationPaths.length > 0) {
-              this.locationShortcutSection()
+          Row() {
+            Column({ space: $r('app.float.space_6') }) {
+              this.hero()
+              this.overview()
+              if (this.locationPaths.length > 0) {
+                this.locationShortcutSection()
+              }
+              if (shouldShowRecentSection(this.showRecentSection)) {
+                this.summarySection('最近添加', '刚记录的物品', this.recentItems, '暂无物品', RouteName.ITEM_FORM, RouteName.HOME)
+              }
+              if (this.showExpirySection) {
+                this.summarySection('即将到期', '优先处理，避免浪费', this.dueSoonItems, '暂无即将到期物品', RouteName.ITEM_LIST)
+              }
+              if (this.showStockSection) {
+                this.summarySection('待补货', '数量为 0 的物品', this.outOfStockItems, '暂无待补货物品', RouteName.ITEM_LIST)
+                if (this.lowStockItems.length > 0) {
+                  this.lowStockSection()
+                }
+              }
             }
-            if (shouldShowRecentSection(this.showRecentSection)) {
-              this.summarySection('最近添加', '刚记录的物品', this.recentItems, '暂无物品', RouteName.ITEM_FORM, RouteName.HOME)
-            }
-            if (this.showExpirySection) {
-              this.summarySection('即将到期', '优先处理，避免浪费', this.dueSoonItems, '暂无即将到期物品', RouteName.ITEM_LIST)
-            }
-            if (this.showStockSection) {
-              this.summarySection('待补货', '数量为 0 的物品', this.outOfStockItems, '暂无待补货物品', RouteName.ITEM_LIST)
-            }
+            .width('100%')
+            .constraintSize({ maxWidth: 960 })
+            .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
           }
           .width('100%')
-          .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
+          .justifyContent(FlexAlign.Center)
         }
         .layoutWeight(1)
       }
@@ -267,7 +297,6 @@ struct Index {
       Text('把位置、数量和到期日记下来；需要时，随时找到。')
         .fontSize($r('app.float.font_body'))
         .fontColor($r('app.color.text_secondary'))
-        .maxLines(2)
       Row({ space: $r('app.float.space_2') }) {
         Button('+ 记录物品')
           .layoutWeight(1)
@@ -295,6 +324,9 @@ struct Index {
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
     .border({ width: 1, color: $r('app.color.border_subtle') })
+    .transition(TransitionEffect.OPACITY
+      .combine(TransitionEffect.translate({ y: 16 }))
+      .animation({ duration: this.reduceAnimation ? 0 : 280, curve: Curve.EaseOut }))
   }
 
   @Builder
@@ -305,6 +337,9 @@ struct Index {
       this.metricCard('待补货', this.outOfStockCount, $r('app.color.status_danger_soft'), $r('app.color.status_danger'))
     }
     .width('100%')
+    .transition(TransitionEffect.OPACITY
+      .combine(TransitionEffect.translate({ y: 12 }))
+      .animation({ duration: this.reduceAnimation ? 0 : 280, curve: Curve.EaseOut }))
   }
 
   @Builder
@@ -314,7 +349,6 @@ struct Index {
         .fontSize($r('app.float.font_title'))
         .fontWeight(FontWeight.Bold)
         .fontColor(textColor)
-        .contentTransition(new NumericTextTransition())
       Text(label)
         .fontSize($r('app.float.font_caption'))
         .fontColor(textColor)
@@ -402,6 +436,39 @@ struct Index {
     .width('100%')
   }
 
+  @Builder
+  private lowStockSection() {
+    Column({ space: $r('app.float.space_3') }) {
+      Text('低库存')
+        .fontSize($r('app.float.font_section'))
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('app.color.text_primary'))
+      Text('低于你为物品设置的阈值，仅在应用内提示。')
+        .fontSize($r('app.float.font_caption'))
+        .fontColor($r('app.color.text_secondary'))
+      ForEach(this.lowStockItems, (item: LowStockItem) => {
+        Row({ space: $r('app.float.space_3') }) {
+          Text(item.name)
+            .fontSize($r('app.float.font_body'))
+            .fontColor($r('app.color.text_primary'))
+            .layoutWeight(1)
+          Text(`${item.quantity} / 阈值 ${item.threshold}`)
+            .fontSize($r('app.float.font_caption'))
+            .fontColor($r('app.color.status_danger'))
+        }
+        .width('100%')
+        .padding($r('app.float.space_3'))
+        .borderRadius($r('app.float.radius_control'))
+        .backgroundColor($r('app.color.surface_card'))
+        .transition(TransitionEffect.OPACITY
+          .combine(TransitionEffect.translate({ y: 10 }))
+          .animation({ duration: this.reduceAnimation ? 0 : 240, curve: Curve.EaseOut }))
+        .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_DETAIL, params: { itemId: item.itemId } }))
+      }, (item: LowStockItem) => item.itemId)
+    }
+    .width('100%')
+  }
+
   private async loadSummary(showLoading: boolean = true): Promise<void> {
     const loadId = ++this.summaryLoadId;
     if (showLoading) {
@@ -433,11 +500,20 @@ struct Index {
       this.recentItems = summary.recentItems;
       this.dueSoonItems = summary.dueSoonItems;
       this.outOfStockItems = summary.outOfStockItems;
-      this.getUIContext().animateTo({ duration: 240, curve: Curve.EaseOut }, () => {
+      if (this.reduceAnimation) {
         this.dueSoonCount = summary.dueSoonCount;
         this.outOfStockCount = summary.outOfStockCount;
-      });
+      } else {
+        this.getUIContext().animateTo({ duration: 240, curve: Curve.EaseOut }, () => {
+          this.dueSoonCount = summary.dueSoonCount;
+          this.outOfStockCount = summary.outOfStockCount;
+        });
+      }
       await this.loadLocationShortcuts(loadId);
+      const lowStock = await AppServices.get().lowStock.listLowStock();
+      if (loadId === this.summaryLoadId) {
+        this.lowStockItems = lowStock.ok ? lowStock.getData() : [];
+      }
     } catch (_) {
       if (loadId === this.summaryLoadId && (showLoading || this.recentItems.length + this.dueSoonItems.length + this.outOfStockItems.length === 0)) {
         this.errorMessage = '数据库初始化失败，请重试';

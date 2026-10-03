@@ -57,6 +57,7 @@ export class ItemUpdateService {
       expirationDate: validated.getData().expirationDate,
       reminderDays: validated.getData().reminderDays,
       notes: validated.getData().notes,
+      barcode: validated.getData().barcode,
       photoState: existing.photoState,
       photoLocalId: existing.photoLocalId,
       createdAt: existing.createdAt,

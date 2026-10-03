@@ -44,5 +44,16 @@ export default function itemValidatorTest() {
       }
       expect(validator.validate({ name: '备用电池', category: 'a'.repeat(41) }).ok).assertFalse();
     });
+
+    it('将条码独立于备注保存并限制长度', 0, () => {
+      const validator = new ItemValidator();
+      const result = validator.validate({ name: '备用电池', notes: '放在抽屉', barcode: '  6901234567890  ' });
+      expect(result.ok).assertTrue();
+      if (result.ok) {
+        expect(result.getData().barcode).assertEqual('6901234567890');
+        expect(result.getData().notes).assertEqual('放在抽屉');
+      }
+      expect(validator.validate({ name: '备用电池', barcode: 'a'.repeat(257) }).ok).assertFalse();
+    });
   });
 }

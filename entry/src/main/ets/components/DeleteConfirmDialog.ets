@@ -1,5 +1,6 @@
 @Component
 export struct DeleteConfirmDialog {
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @Link visible: boolean;
   @Link confirmed: boolean;
   @Prop title: string = '确认删除物品？';
@@ -44,13 +45,13 @@ export struct DeleteConfirmDialog {
         .backgroundColor($r('app.color.surface_card'))
         .transition(TransitionEffect.OPACITY
           .combine(TransitionEffect.scale({ x: 0.96, y: 0.96 }))
-          .animation({ duration: 200, curve: Curve.EaseOut }))
+          .animation({ duration: this.reduceAnimation ? 0 : 200, curve: Curve.EaseOut }))
       }
       .width('100%')
       .height('100%')
       .justifyContent(FlexAlign.Center)
       .backgroundColor('#66000000')
-      .transition(TransitionEffect.opacity(0).animation({ duration: 180, curve: Curve.EaseOut }))
+      .transition(TransitionEffect.opacity(0).animation({ duration: this.reduceAnimation ? 0 : 180, curve: Curve.EaseOut }))
     }
   }
 }
