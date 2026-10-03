@@ -35,6 +35,10 @@ export class AssetDao {
     return assets.length === 0 ? undefined : assets[0];
   }
 
+  async findAll(): Promise<ItemAsset[]> {
+    return this.query(new relationalStore.RdbPredicates(ASSET_TABLE));
+  }
+
   async findLatestByItemId(itemId: string): Promise<ItemAsset | undefined> {
     const predicates = new relationalStore.RdbPredicates(ASSET_TABLE);
     predicates.equalTo('item_id', itemId);

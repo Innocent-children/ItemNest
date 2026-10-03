@@ -2,6 +2,7 @@ import { NavigationHelper } from '../navigation/NavigationHelper';
 
 @Component
 export struct EmptyState {
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @Prop title: string = '暂无物品';
   @Prop description: string = '';
   @Prop actionText: string = '';
@@ -35,7 +36,7 @@ export struct EmptyState {
     .alignItems(HorizontalAlign.Center)
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 8 }))
-      .animation({ duration: 220, curve: Curve.EaseOut }))
+      .animation({ duration: this.reduceAnimation ? 0 : 220, curve: Curve.EaseOut }))
   }
 
   private openAction(): void {

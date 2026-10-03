@@ -47,6 +47,7 @@ export class PhotoService {
       expirationDate: item.expirationDate,
       reminderDays: item.reminderDays,
       notes: item.notes,
+      barcode: item.barcode,
       photoState: PhotoState.LOCAL,
       photoLocalId: asset.id,
       createdAt: item.createdAt,
@@ -84,7 +85,7 @@ export class PhotoService {
     const updatedItem: Item = {
       id: item.id, name: item.name, quantity: item.quantity, unit: item.unit,
       locationPath: item.locationPath, category: item.category, expirationDate: item.expirationDate,
-      reminderDays: item.reminderDays, notes: item.notes, photoState: PhotoState.NONE,
+      reminderDays: item.reminderDays, notes: item.notes, barcode: item.barcode, photoState: PhotoState.NONE,
       photoLocalId: undefined, createdAt: item.createdAt, updatedAt: this.clock()
     };
     const updateResult = await this.items.update(updatedItem);

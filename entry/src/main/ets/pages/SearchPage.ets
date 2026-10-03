@@ -100,7 +100,7 @@ export struct SearchPage {
               .fontSize($r('app.float.font_section'))
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))
-            TextInput({ text: this.name, placeholder: '输入物品名称，例如：感冒药' })
+            TextInput({ text: this.name, placeholder: '输入物品名称或条码' })
               .backgroundColor($r('app.color.surface_app'))
               .border({ width: 1, color: $r('app.color.border_subtle') })
               .borderRadius($r('app.float.radius_control'))
@@ -116,6 +116,7 @@ export struct SearchPage {
               this.suggestionPanel()
             }
           }
+          .width('100%')
           .padding($r('app.float.space_4'))
           .borderRadius($r('app.float.radius_card'))
           .backgroundColor($r('app.color.surface_card'))
@@ -124,56 +125,62 @@ export struct SearchPage {
             this.selectedConditionPanel()
           }
 
-          Column({ space: $r('app.float.space_3') }) {
-            Text('位置筛选')
-              .fontSize($r('app.float.font_section'))
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.text_primary'))
-            Text('仅显示已记录的位置')
-              .fontSize($r('app.float.font_caption'))
-              .fontColor($r('app.color.text_secondary'))
-            Flex({ wrap: FlexWrap.Wrap }) {
-              ForEach(this.locationPaths, (location: string) => {
-                Button(location)
-                  .type(ButtonType.Capsule)
-                  .fontColor(this.selectedLocation === location ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
-                  .backgroundColor(this.selectedLocation === location ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
-                  .fontSize($r('app.float.font_caption'))
-                  .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-                  .onClick(() => {
-                    this.selectedLocation = this.selectedLocation === location ? '' : location;
-                    this.search(false, false);
-                  })
-              }, (location: string) => location)
+          if (this.locationPaths.length > 0) {
+            Column({ space: $r('app.float.space_3') }) {
+              Text('位置筛选')
+                .fontSize($r('app.float.font_section'))
+                .fontWeight(FontWeight.Bold)
+                .fontColor($r('app.color.text_primary'))
+              Text('仅显示已记录的位置')
+                .fontSize($r('app.float.font_caption'))
+                .fontColor($r('app.color.text_secondary'))
+              Flex({ wrap: FlexWrap.Wrap }) {
+                ForEach(this.locationPaths, (location: string) => {
+                  Button(location)
+                    .type(ButtonType.Capsule)
+                    .fontColor(this.selectedLocation === location ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
+                    .backgroundColor(this.selectedLocation === location ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
+                    .fontSize($r('app.float.font_caption'))
+                    .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+                    .onClick(() => {
+                      this.selectedLocation = this.selectedLocation === location ? '' : location;
+                      this.search(false, false);
+                    })
+                }, (location: string) => location)
+              }
             }
+            .width('100%')
+            .padding($r('app.float.space_4'))
+            .borderRadius($r('app.float.radius_card'))
+            .backgroundColor($r('app.color.surface_card'))
           }
-          .padding($r('app.float.space_4'))
-          .borderRadius($r('app.float.radius_card'))
-          .backgroundColor($r('app.color.surface_card'))
 
-          Column({ space: $r('app.float.space_3') }) {
-            Text('分类筛选')
-              .fontSize($r('app.float.font_section'))
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.text_primary'))
-            Flex({ wrap: FlexWrap.Wrap }) {
-              ForEach(this.categories, (category: string) => {
-                Button(category)
-                  .type(ButtonType.Capsule)
-                  .fontColor(this.selectedCategory === category ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
-                  .backgroundColor(this.selectedCategory === category ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
-                  .fontSize($r('app.float.font_caption'))
-                  .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-                  .onClick(() => {
-                    this.selectedCategory = this.selectedCategory === category ? '' : category;
-                    this.search(false, false);
-                  })
-              }, (category: string) => category)
+          if (this.categories.length > 0) {
+            Column({ space: $r('app.float.space_3') }) {
+              Text('分类筛选')
+                .fontSize($r('app.float.font_section'))
+                .fontWeight(FontWeight.Bold)
+                .fontColor($r('app.color.text_primary'))
+              Flex({ wrap: FlexWrap.Wrap }) {
+                ForEach(this.categories, (category: string) => {
+                  Button(category)
+                    .type(ButtonType.Capsule)
+                    .fontColor(this.selectedCategory === category ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
+                    .backgroundColor(this.selectedCategory === category ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
+                    .fontSize($r('app.float.font_caption'))
+                    .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+                    .onClick(() => {
+                      this.selectedCategory = this.selectedCategory === category ? '' : category;
+                      this.search(false, false);
+                    })
+                }, (category: string) => category)
+              }
             }
+            .width('100%')
+            .padding($r('app.float.space_4'))
+            .borderRadius($r('app.float.radius_card'))
+            .backgroundColor($r('app.color.surface_card'))
           }
-          .padding($r('app.float.space_4'))
-          .borderRadius($r('app.float.radius_card'))
-          .backgroundColor($r('app.color.surface_card'))
 
           if (this.filterLoading) {
             LoadingState({ text: '正在读取筛选条件…' })

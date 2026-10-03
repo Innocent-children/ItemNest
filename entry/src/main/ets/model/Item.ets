@@ -34,6 +34,7 @@ export interface Item {
   expirationDate?: string;
   reminderDays?: number;
   notes?: string;
+  barcode?: string;
   photoState: PhotoState;
   photoLocalId?: string;
   createdAt: number;
@@ -49,6 +50,7 @@ export interface ItemDraft {
   expirationDate?: string;
   reminderDays?: number;
   notes?: string;
+  barcode?: string;
 }
 
 export interface ItemSummary {

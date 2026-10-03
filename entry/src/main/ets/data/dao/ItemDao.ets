@@ -53,7 +53,7 @@ export class ItemDao {
     const normalized = query.normalized();
     const predicates = new relationalStore.RdbPredicates(ITEM_TABLE);
     if (normalized.name.length > 0) {
-      predicates.contains('name', normalized.name);
+      predicates.beginWrap().contains('name', normalized.name).or().contains('barcode', normalized.name).endWrap();
     }
     if (normalized.locationPath !== undefined) {
       predicates.equalTo('location_path', normalized.locationPath);
@@ -129,6 +129,7 @@ export class ItemDao {
       expirationDate: this.readString(resultSet, 'expiration_date'),
       reminderDays: this.readLong(resultSet, 'reminder_days'),
       notes: this.readString(resultSet, 'notes'),
+      barcode: this.readString(resultSet, 'barcode'),
       photoState: (this.readString(resultSet, 'photo_state') ?? PhotoState.NONE) as PhotoState,
       photoLocalId: this.readString(resultSet, 'photo_local_id'),
       createdAt: this.readLong(resultSet, 'created_at') ?? 0,
@@ -159,6 +160,7 @@ export class ItemDao {
       expiration_date: item.expirationDate ?? null,
       reminder_days: item.reminderDays ?? null,
       notes: item.notes ?? null,
+      barcode: item.barcode ?? null,
       photo_state: item.photoState,
       photo_local_id: item.photoLocalId ?? null,
       created_at: item.createdAt,
@@ -176,6 +178,7 @@ export class ItemDao {
       expiration_date: item.expirationDate ?? null,
       reminder_days: item.reminderDays ?? null,
       notes: item.notes ?? null,
+      barcode: item.barcode ?? null,
       photo_state: item.photoState,
       photo_local_id: item.photoLocalId ?? null,
       updated_at: item.updatedAt

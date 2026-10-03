@@ -6,6 +6,8 @@ import homeSectionVisibilityTest from './HomeSectionVisibility.test';
 import latestRequestCoordinatorTest from './LatestRequestCoordinator.test';
 import refreshContractTest from './RefreshContract.test';
 import searchRequestCoordinatorTest from './SearchRequestCoordinator.test';
+import barcodeMigrationTest from './BarcodeMigration.test';
+import portableBackupDeviceTest from './PortableBackupDevice.test';
 
 export default function testsuite() {
   abilityTest();
@@ -16,4 +18,6 @@ export default function testsuite() {
   latestRequestCoordinatorTest();
   refreshContractTest();
   searchRequestCoordinatorTest();
+  barcodeMigrationTest();
+  portableBackupDeviceTest();
 }

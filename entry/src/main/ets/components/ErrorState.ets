@@ -1,5 +1,6 @@
 @Component
 export struct ErrorState {
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @Prop message: string = '操作失败，请重试';
 
   build() {
@@ -16,6 +17,6 @@ export struct ErrorState {
     .alignItems(HorizontalAlign.Center)
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 6 }))
-      .animation({ duration: 180, curve: Curve.EaseOut }))
+      .animation({ duration: this.reduceAnimation ? 0 : 180, curve: Curve.EaseOut }))
   }
 }

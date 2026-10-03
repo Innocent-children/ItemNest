@@ -12,9 +12,10 @@ export class ValidatedItemDraft {
   readonly expirationDate?: string;
   readonly reminderDays?: number;
   readonly notes?: string;
+  readonly barcode?: string;
 
   constructor(name: string, quantity: number, unit: ItemUnit, locationPath?: string, category?: string,
-    expirationDate?: string, reminderDays?: number, notes?: string) {
+    expirationDate?: string, reminderDays?: number, notes?: string, barcode?: string) {
     this.name = name;
     this.quantity = quantity;
     this.unit = unit;
@@ -23,6 +24,7 @@ export class ValidatedItemDraft {
     this.expirationDate = expirationDate;
     this.reminderDays = reminderDays;
     this.notes = notes;
+    this.barcode = barcode;
   }
 }
 
@@ -71,9 +73,15 @@ export class ItemValidator {
       return failure<ValidatedItemDraft>(notesResult.getError());
     }
 
+    const barcodeResult = this.validateBarcode(draft.barcode);
+    if (!barcodeResult.ok) {
+      return failure<ValidatedItemDraft>(barcodeResult.getError());
+    }
+
     return success(new ValidatedItemDraft(
       nameResult.getData(), quantityResult.getData(), unitResult.getData(), locationResult.getData(),
-      categoryResult.getData(), expirationResult.getData(), reminderResult.getData(), notesResult.getData()
+      categoryResult.getData(), expirationResult.getData(), reminderResult.getData(), notesResult.getData(),
+      barcodeResult.getData()
     ));
   }
 
@@ -157,6 +165,17 @@ export class ItemValidator {
     }
     if (normalized.length > NOTES_MAX_LENGTH) {
       return failure<string | undefined>(new AppError(AppErrorCode.VALIDATION, '注意事项不能超过 500 个字符'));
+    }
+    return success(normalized);
+  }
+
+  validateBarcode(value?: string): Result<string | undefined> {
+    const normalized = value?.trim() ?? '';
+    if (normalized.length === 0) {
+      return success(undefined);
+    }
+    if (normalized.length > 256) {
+      return failure<string | undefined>(new AppError(AppErrorCode.VALIDATION, '条码内容不能超过 256 个字符'));
     }
     return success(normalized);
   }

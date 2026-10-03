@@ -11,6 +11,7 @@ export struct LendingPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @State private loading: boolean = true;
   @State private contentLoaded: boolean = false;
   @State private submitting: boolean = false;
@@ -87,6 +88,10 @@ export struct LendingPage {
               .backgroundColor($r('app.color.surface_card'))
               .borderRadius($r('app.float.radius_card'))
 
+            Text('借出与归还是独立记录，不会自动改变物品库存。')
+              .fontSize($r('app.float.font_caption'))
+              .fontColor($r('app.color.text_secondary'))
+
             TextInput({ text: this.quantityText, placeholder: '数量' })
               .type(InputType.NUMBER_DECIMAL)
               .backgroundColor($r('app.color.surface_card'))
@@ -112,7 +117,7 @@ export struct LendingPage {
                 .borderRadius($r('app.float.radius_control'))
                 .enabled(!this.submitting)
                 .scale({ x: this.pressedAction === 'borrow' ? 0.98 : 1, y: this.pressedAction === 'borrow' ? 0.98 : 1 })
-                .animation({ duration: 120, curve: Curve.EaseOut })
+                .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
                 .onTouch((event: TouchEvent) => {
                   if (event.type === TouchType.Down) {
                     this.pressedAction = 'borrow';
@@ -128,7 +133,7 @@ export struct LendingPage {
                 .borderRadius($r('app.float.radius_control'))
                 .enabled(!this.submitting)
                 .scale({ x: this.pressedAction === 'return' ? 0.98 : 1, y: this.pressedAction === 'return' ? 0.98 : 1 })
-                .animation({ duration: 120, curve: Curve.EaseOut })
+                .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
                 .onTouch((event: TouchEvent) => {
                   if (event.type === TouchType.Down) {
                     this.pressedAction = 'return';

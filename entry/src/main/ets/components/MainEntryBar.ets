@@ -3,6 +3,7 @@ import { RouteName } from '../navigation/RouteName';
 
 @Component
 export struct MainEntryBar {
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @Prop activeRoute: string = RouteName.HOME;
   @State private addPressed: boolean = false;
 
@@ -36,6 +37,7 @@ export struct MainEntryBar {
   @Builder
   private addButton() {
     Button('+')
+      .accessibilityText('新增物品')
       .fontSize($r('app.float.font_section'))
       .fontWeight(FontWeight.Bold)
       .fontColor($r('app.color.brand_on_primary'))
@@ -43,8 +45,8 @@ export struct MainEntryBar {
       .borderRadius(24)
       .width(48)
       .height(40)
-      .scale({ x: this.addPressed ? 0.96 : 1, y: this.addPressed ? 0.96 : 1 })
-      .animation({ duration: 120, curve: Curve.EaseOut })
+      .scale({ x: this.addPressed && !this.reduceAnimation ? 0.96 : 1, y: this.addPressed && !this.reduceAnimation ? 0.96 : 1 })
+      .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Down) {
           this.addPressed = true;

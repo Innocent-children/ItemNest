@@ -192,7 +192,7 @@ export default function inventoryConsistencyTest() {
 
     it('v10 迁移声明完整的批次汇总与关联清理契约', 0, () => {
       const sql = INVENTORY_V10_MIGRATION_STATEMENTS.join('\n');
-      expect(DATABASE_VERSION).assertEqual(10);
+      expect(DATABASE_VERSION).assertEqual(11);
       expect(INVENTORY_V10_TRIGGER_NAMES.length).assertEqual(10);
       expect(sql.includes('WHERE NOT EXISTS')).assertTrue();
       expect(sql.includes('AFTER INSERT ON item')).assertTrue();

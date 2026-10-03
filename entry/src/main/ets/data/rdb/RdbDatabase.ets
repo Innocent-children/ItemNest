@@ -2,7 +2,7 @@ import { Context } from '@kit.AbilityKit';
 import { relationalStore } from '@kit.ArkData';
 import { AppError, AppErrorCode, toAppError } from '../../common/AppError';
 import { failure, Result, success } from '../../common/Result';
-import { createItemSchema, DATABASE_NAME, DATABASE_VERSION } from './ItemSchema';
+import { addItemBarcode, createItemSchema, DATABASE_NAME, DATABASE_VERSION } from './ItemSchema';
 import { createReminderSchema } from './ReminderSchema';
 import { createAssetSchema } from './AssetSchema';
 import { createBatchSchema } from './BatchSchema';
@@ -54,6 +54,9 @@ export async function migrateToLatest(store: relationalStore.RdbStore): Promise<
     }
     if (currentVersion < 10) {
       await createInventoryIntegritySchema(transaction);
+    }
+    if (currentVersion < 11) {
+      await addItemBarcode(transaction);
     }
     await transaction.execute(`PRAGMA user_version = ${DATABASE_VERSION}`);
     await transaction.commit();

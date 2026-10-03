@@ -1,5 +1,6 @@
 @Component
 export struct LoadingState {
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @Prop text: string = '正在加载…';
 
   build() {
@@ -15,6 +16,6 @@ export struct LoadingState {
     .alignItems(HorizontalAlign.Center)
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 6 }))
-      .animation({ duration: 180, curve: Curve.EaseOut }))
+      .animation({ duration: this.reduceAnimation ? 0 : 180, curve: Curve.EaseOut }))
   }
 }

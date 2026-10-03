@@ -9,6 +9,7 @@ export struct LocationManagementPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @State private loading: boolean = true;
   @State private operating: boolean = false;
   @State private loadError: string = '';
@@ -93,7 +94,7 @@ export struct LocationManagementPage {
               .borderRadius($r('app.float.radius_control'))
               .enabled(!this.operating)
               .scale({ x: this.pressedAction === 'create' ? 0.98 : 1, y: this.pressedAction === 'create' ? 0.98 : 1 })
-              .animation({ duration: 120, curve: Curve.EaseOut })
+              .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
               .onTouch((event: TouchEvent) => this.updatePressedAction(event, 'create'))
               .onClick(() => this.createLocation())
             if (this.actionError.length > 0) {
@@ -122,7 +123,7 @@ export struct LocationManagementPage {
                     x: this.pressedAction === `toggle:${location.id}` ? 0.98 : 1,
                     y: this.pressedAction === `toggle:${location.id}` ? 0.98 : 1
                   })
-                  .animation({ duration: 120, curve: Curve.EaseOut })
+                  .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
                   .onTouch((event: TouchEvent) => this.updatePressedAction(event, `toggle:${location.id}`))
                   .onClick(() => this.toggleLocation(location))
               }

@@ -19,6 +19,7 @@ export struct ItemFormPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @State private name: string = '';
   @State private quantityText: string = '1';
   @State private unit: ItemUnit = ItemUnit.PIECE;
@@ -28,6 +29,7 @@ export struct ItemFormPage {
   @State private reminderDaysText: string = '';
   @State private notes: string = '';
   @State private scanText: string = '';
+  @State private scanning: boolean = false;
   @State private quantityError: string = '';
   @State private errorMessage: string = '';
   @State private loading: boolean = false;
@@ -111,7 +113,7 @@ export struct ItemFormPage {
               this.coreSection()
               this.locationSection()
 
-              this.sectionToggle('分类', this.categoryValue.length > 0 ? `当前：${this.categoryValue}` : '可选，用于筛选和整理', this.showCategorySection, 'category')
+              this.sectionToggle('分类', this.categoryValue.length > 0 ? `当前：${this.categoryValue}` : '可选，用于筛选和整理', 'category')
               if (this.showCategorySection) {
                 this.categorySection()
               }
@@ -119,19 +121,18 @@ export struct ItemFormPage {
               this.sectionToggle(
                 '到期与提醒',
                 this.editMode ? '到期日由批次汇总；提前提醒仍可编辑' : '设置保质期和提前提醒',
-                this.showExpirySection,
                 'expiry'
               )
               if (this.showExpirySection) {
                 this.expirySection()
               }
 
-              this.sectionToggle('备注与条码', '补充注意事项或条码文本', this.showNotesSection, 'notes')
+              this.sectionToggle('备注与条码', '补充注意事项或条码文本', 'notes')
               if (this.showNotesSection) {
                 this.notesSection()
               }
 
-              this.sectionToggle('物品照片', this.hasPhoto() ? '当前物品已有照片' : '选择或拍摄一张照片', this.showPhotoSection, 'photo')
+              this.sectionToggle('物品照片', this.hasPhoto() ? '当前物品已有照片' : '选择或拍摄一张照片', 'photo')
               if (this.showPhotoSection) {
                 this.photoSection()
               }
@@ -146,6 +147,7 @@ export struct ItemFormPage {
         }
       }
       .width('100%')
+      .constraintSize({ maxWidth: 800 })
       .height('100%')
       .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
       .backgroundColor($r('app.color.surface_app'))
@@ -216,7 +218,7 @@ export struct ItemFormPage {
         .borderRadius($r('app.float.radius_control'))
         .enabled(!this.saving && this.itemId.length > 0)
         .scale({ x: this.batchManagePressed ? 0.98 : 1, y: this.batchManagePressed ? 0.98 : 1 })
-        .animation({ duration: 120, curve: Curve.EaseOut })
+        .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
         .onTouch((event: TouchEvent) => {
           if (event.type === TouchType.Down) {
             this.batchManagePressed = true;
@@ -272,6 +274,9 @@ export struct ItemFormPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .transition(TransitionEffect.OPACITY
+      .combine(TransitionEffect.translate({ y: 12 }))
+      .animation({ duration: this.reduceAnimation ? 0 : 220, curve: Curve.EaseOut }))
   }
 
   @Builder
@@ -292,7 +297,7 @@ export struct ItemFormPage {
         .borderRadius($r('app.float.radius_control'))
         .enabled(!this.saving)
         .scale({ x: this.savePressed ? 0.98 : 1, y: this.savePressed ? 0.98 : 1 })
-        .animation({ duration: 120, curve: Curve.EaseOut })
+        .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
         .onTouch((event: TouchEvent) => {
           if (event.type === TouchType.Down) {
             this.savePressed = true;
@@ -308,7 +313,7 @@ export struct ItemFormPage {
   }
 
   @Builder
-  private sectionToggle(title: string, description: string, expanded: boolean, section: string) {
+  private sectionToggle(title: string, description: string, section: string) {
     Row() {
       Column({ space: $r('app.float.space_1') }) {
         Text(title)
@@ -320,7 +325,7 @@ export struct ItemFormPage {
           .fontColor($r('app.color.text_secondary'))
       }
       .layoutWeight(1)
-      Text(expanded ? '收起' : '展开')
+      Text(this.isSectionExpanded(section) ? '收起' : '展开')
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.brand_primary'))
     }
@@ -381,6 +386,9 @@ export struct ItemFormPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .transition(TransitionEffect.OPACITY
+      .combine(TransitionEffect.translate({ y: 12 }))
+      .animation({ duration: this.reduceAnimation ? 0 : 220, curve: Curve.EaseOut }))
   }
 
   @Builder
@@ -427,26 +435,31 @@ export struct ItemFormPage {
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
         .onChange((value: string) => this.notes = value)
-      Text('条码/二维码文本（可选）')
+      Text('条码或二维码（可选）')
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
-      TextInput({ text: this.scanText, placeholder: '手动输入条码或二维码文本' })
+      TextInput({ text: this.scanText, placeholder: '扫描或手动输入' })
+        .maxLength(256)
         .backgroundColor($r('app.color.surface_app'))
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
         .onChange((value: string) => this.scanText = value)
-      Button('添加到备注')
+      Button(this.scanning ? '正在打开扫码…' : '扫描条码或二维码')
         .width('100%')
         .fontColor($r('app.color.brand_primary'))
         .backgroundColor($r('app.color.surface_app'))
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
-        .onClick(() => this.applyScanText())
+        .enabled(!this.scanning)
+        .onClick(() => this.scanBarcode())
     }
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .transition(TransitionEffect.OPACITY
+      .combine(TransitionEffect.translate({ y: 12 }))
+      .animation({ duration: this.reduceAnimation ? 0 : 220, curve: Curve.EaseOut }))
   }
 
   @Builder
@@ -482,6 +495,9 @@ export struct ItemFormPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .transition(TransitionEffect.OPACITY
+      .combine(TransitionEffect.translate({ y: 12 }))
+      .animation({ duration: this.reduceAnimation ? 0 : 220, curve: Curve.EaseOut }))
   }
 
   private readRoute(): void {
@@ -549,10 +565,11 @@ export struct ItemFormPage {
     this.expirationDate = this.loadedExpirationDate;
     this.reminderDaysText = item.reminderDays === undefined ? '' : item.reminderDays.toString();
     this.notes = item.notes ?? '';
+    this.scanText = item.barcode ?? '';
     this.existingPhotoLocalId = item.photoLocalId ?? '';
     this.showCategorySection = this.categoryValue.length > 0;
     this.showExpirySection = this.expirationDate.length > 0 || this.reminderDaysText.length > 0;
-    this.showNotesSection = this.notes.length > 0;
+    this.showNotesSection = this.notes.length > 0 || this.scanText.length > 0;
     this.showPhotoSection = this.existingPhotoLocalId.length > 0;
   }
 
@@ -699,7 +716,8 @@ export struct ItemFormPage {
       category: this.categoryValue.length === 0 ? undefined : this.categoryValue,
       expirationDate: this.editMode ? this.loadedExpirationDate : this.expirationDate,
       reminderDays: reminderDays,
-      notes: this.notes
+      notes: this.notes,
+      barcode: this.scanText
     };
   }
 
@@ -766,6 +784,27 @@ export struct ItemFormPage {
   }
 
   private toggleSection(section: string): void {
+    if (this.reduceAnimation) {
+      this.setSectionExpanded(section);
+      return;
+    }
+    this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseOut }, () => this.setSectionExpanded(section));
+  }
+
+  private isSectionExpanded(section: string): boolean {
+    if (section === 'category') {
+      return this.showCategorySection;
+    }
+    if (section === 'expiry') {
+      return this.showExpirySection;
+    }
+    if (section === 'notes') {
+      return this.showNotesSection;
+    }
+    return this.showPhotoSection;
+  }
+
+  private setSectionExpanded(section: string): void {
     if (section === 'category') {
       this.showCategorySection = !this.showCategorySection;
     } else if (section === 'expiry') {
@@ -834,14 +873,31 @@ export struct ItemFormPage {
     return notices.length === 0 ? undefined : notices.join('；');
   }
 
-  private applyScanText(): void {
-    const normalized = this.scanText.trim();
-    if (normalized.length === 0) {
-      this.errorMessage = '请先输入条码或二维码文本';
+  private async scanBarcode(): Promise<void> {
+    const hostContext = this.getUIContext().getHostContext();
+    if (hostContext === undefined) {
+      this.showToast('扫码暂不可用，请手动输入');
       return;
     }
-    const prefix = this.notes.trim().length === 0 ? '' : `${this.notes.trim()}\n`;
-    this.notes = `${prefix}条码信息：${normalized}`;
-    this.scanText = '';
+    this.scanning = true;
+    try {
+      const result = await AppServices.get().scan.scan(hostContext);
+      if (!result.ok) {
+        this.showToast(result.getError().message);
+        return;
+      }
+      if (result.getData() !== undefined) {
+        const scanned = result.getData() ?? '';
+        if (scanned.length > 256) {
+          this.showToast('条码内容超过 256 个字符，请手动整理后输入');
+        } else {
+          this.scanText = scanned;
+        }
+      }
+    } catch (_) {
+      this.showToast('扫码暂不可用，请手动输入');
+    } finally {
+      this.scanning = false;
+    }
   }
 }
