@@ -5,7 +5,7 @@
 
 ## 前置条件
 
-1. 使用支持 HarmonyOS `6.1.1(24)` 的 DevEco Studio 打开项目根目录。
+1. 使用支持 HarmonyOS `7.0` / API `26.0.0` 的 DevEco Studio 打开项目根目录；最低兼容版本仍为 `6.1.1(24)`。
 2. 确认 `build-profile.json5`、`entry/build-profile.json5`、根与 `entry` 的 `oh-package.json5`
    已被 IDE 正确识别，且选中的模块为 `entry`。
 3. 准备一个声明为 phone 或 tablet 的模拟器/真机。设备应使用本地日期，以便验证到期状态。

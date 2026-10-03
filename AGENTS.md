@@ -37,7 +37,7 @@ ItemTrace 是一个面向 HarmonyOS 手机和平板的本地优先个人物品�
 
 ## 技术事实
 
-- HarmonyOS `6.1.1(24)`，ArkTS、ArkUI 声明式 UI、Stage Model、`UIAbility`。
+- 目标 HarmonyOS `7.0` / API `26.0.0`，最低兼容 `6.1.1(24)`；使用 ArkTS、ArkUI 声明式 UI、Stage Model、`UIAbility`。
 - 单一业务模块 `entry`，Bundle 为 `com.imotong.itemtrace`，支持 `phone`、`tablet`。
 - 根/模块构建由 Hvigor 管理；项目模型版本 `6.1.1`。仓库不包含 `hvigorw` wrapper。
 - 业务数据使用 ArkData RDB：`itemtrace.db`，当前 `DATABASE_VERSION = 10`。
@@ -120,7 +120,7 @@ ItemTrace 是一个面向 HarmonyOS 手机和平板的本地优先个人物品�
 
 ## 构建与验证
 
-前置条件：安装支持 HarmonyOS `6.1.1(24)` 的 DevEco Studio，并将 `$devecoHome` 指向安装目录。不要把本机绝对路径写入仓库。
+前置条件：安装支持 HarmonyOS `7.0` / API `26.0.0` 的 DevEco Studio，并将 `$devecoHome` 指向安装目录。不要把本机绝对路径写入仓库。
 
 ```powershell
 $devecoHome = '<DevEco Studio 安装目录>'
