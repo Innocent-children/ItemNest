@@ -21,6 +21,16 @@ export class CategoryService {
     if (name.length === 0 || name.length > 40) {
       return failure<CategoryRecord>(new AppError(AppErrorCode.VALIDATION, '分类名称需为 1 至 40 个字符'));
     }
+    const categoriesResult = await this.categories.listAll();
+    if (!categoriesResult.ok) {
+      return failure<CategoryRecord>(categoriesResult.getError());
+    }
+    for (const category of categoriesResult.getData()) {
+      if (category.name === name) {
+        return failure<CategoryRecord>(new AppError(AppErrorCode.VALIDATION,
+          '该分类已存在，可在列表中启用或改用其他名称'));
+      }
+    }
     const now = this.clock();
     return this.categories.create({
       id: createCategoryId(this.clock),

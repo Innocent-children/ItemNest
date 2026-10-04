@@ -1,3 +1,5 @@
+import { notificationManager } from '@kit.NotificationKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { reminderAgentManager } from '@kit.BackgroundTasksKit';
 import { AppError, AppErrorCode } from '../../common/AppError';
 import { failure, Result, success } from '../../common/Result';
@@ -11,6 +13,10 @@ export interface ReminderAdapter {
 export class SystemReminderAdapter implements ReminderAdapter {
   async schedule(item: Item, scheduledAt: number): Promise<Result<number>> {
     try {
+      if (!await notificationManager.isNotificationEnabled()) {
+        return failure<number>(new AppError(AppErrorCode.SYSTEM_PERMISSION_DENIED,
+          '系统通知未授权，请在设置中管理系统通知授权后重试'));
+      }
       const date = new Date(scheduledAt);
       const request: reminderAgentManager.ReminderRequestCalendar = {
         reminderType: reminderAgentManager.ReminderType.REMINDER_TYPE_CALENDAR,
@@ -27,8 +33,14 @@ export class SystemReminderAdapter implements ReminderAdapter {
         tapDismissed: true
       };
       return success<number>(await reminderAgentManager.publishReminder(request));
-    } catch (_) {
-      return failure<number>(new AppError(AppErrorCode.REMINDER_DISPATCH, '系统提醒创建失败，请检查通知授权后重试'));
+    } catch (error) {
+      const code = (error as BusinessError).code;
+      const message = code === 201 ? '设备未授予代理提醒权限，请检查系统权限' :
+        code === 1700001 ? '系统通知未授权，请在设置中管理系统通知授权后重试' :
+          code === 1700002 ? '系统提醒数量已达上限，请清理已有提醒后重试' :
+            '系统提醒创建失败，请稍后重试';
+      return failure<number>(new AppError(code === 201 || code === 1700001
+        ? AppErrorCode.SYSTEM_PERMISSION_DENIED : AppErrorCode.REMINDER_DISPATCH, message));
     }
   }
 

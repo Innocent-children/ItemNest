@@ -25,6 +25,22 @@ import { LocationManagementPage } from './LocationManagementPage';
 import { SearchPage } from './SearchPage';
 import { SettingsPage } from './SettingsPage';
 
+interface HomeMetricParams {
+  label: string;
+  count: number;
+  background: ResourceColor;
+  textColor: ResourceColor;
+}
+
+interface HomeSummarySectionParams {
+  title: string;
+  subtitle: string;
+  items: ItemSummary[];
+  emptyText: string;
+  actionRoute: string;
+  actionReturnTo?: string;
+}
+
 @Entry
 @Component
 struct Index {
@@ -183,6 +199,11 @@ struct Index {
       this.homeContent()
     }
     .hideTitleBar(true)
+    .onNavBarStateChange((visible: boolean) => {
+      if (visible) {
+        this.refreshSummaryForCurrentRevision(false);
+      }
+    })
     .navDestination(this.navDestinationBuilder)
     .width('100%')
     .height('100%')
@@ -213,13 +234,13 @@ struct Index {
                 this.locationShortcutSection()
               }
               if (shouldShowRecentSection(this.showRecentSection)) {
-                this.summarySection('最近添加', '刚记录的物品', this.recentItems, '暂无物品', RouteName.ITEM_FORM, RouteName.HOME)
+                this.summarySection({ title: '最近添加', subtitle: '刚记录的物品', items: this.recentItems, emptyText: '暂无物品', actionRoute: RouteName.ITEM_FORM, actionReturnTo: RouteName.HOME })
               }
               if (this.showExpirySection) {
-                this.summarySection('即将到期', '优先处理，避免浪费', this.dueSoonItems, '暂无即将到期物品', RouteName.ITEM_LIST)
+                this.summarySection({ title: '即将到期', subtitle: '优先处理，避免浪费', items: this.dueSoonItems, emptyText: '暂无即将到期物品', actionRoute: RouteName.ITEM_LIST })
               }
               if (this.showStockSection) {
-                this.summarySection('待补货', '数量为 0 的物品', this.outOfStockItems, '暂无待补货物品', RouteName.ITEM_LIST)
+                this.summarySection({ title: '待补货', subtitle: '数量为 0 的物品', items: this.outOfStockItems, emptyText: '暂无待补货物品', actionRoute: RouteName.ITEM_LIST })
                 if (this.lowStockItems.length > 0) {
                   this.lowStockSection()
                 }
@@ -332,9 +353,9 @@ struct Index {
   @Builder
   private overview() {
     Row({ space: $r('app.float.space_2') }) {
-      this.metricCard('最近添加', this.recentItems.length, $r('app.color.surface_accent'), $r('app.color.brand_primary'))
-      this.metricCard('即将到期', this.dueSoonCount, $r('app.color.status_warning_soft'), $r('app.color.status_warning'))
-      this.metricCard('待补货', this.outOfStockCount, $r('app.color.status_danger_soft'), $r('app.color.status_danger'))
+      this.metricCard({ label: '最近添加', count: this.recentItems.length, background: $r('app.color.surface_accent'), textColor: $r('app.color.brand_primary') })
+      this.metricCard({ label: '即将到期', count: this.dueSoonCount, background: $r('app.color.status_warning_soft'), textColor: $r('app.color.status_warning') })
+      this.metricCard({ label: '待补货', count: this.outOfStockCount, background: $r('app.color.status_danger_soft'), textColor: $r('app.color.status_danger') })
     }
     .width('100%')
     .transition(TransitionEffect.OPACITY
@@ -343,20 +364,20 @@ struct Index {
   }
 
   @Builder
-  private metricCard(label: string, count: number, background: ResourceColor, textColor: ResourceColor) {
+  private metricCard($$: HomeMetricParams) {
     Column({ space: $r('app.float.space_1') }) {
-      Text(count.toString())
+      Text($$.count.toString())
         .fontSize($r('app.float.font_title'))
         .fontWeight(FontWeight.Bold)
-        .fontColor(textColor)
-      Text(label)
+        .fontColor($$.textColor)
+      Text($$.label)
         .fontSize($r('app.float.font_caption'))
-        .fontColor(textColor)
+        .fontColor($$.textColor)
     }
     .layoutWeight(1)
     .padding($r('app.float.space_3'))
     .borderRadius($r('app.float.radius_control'))
-    .backgroundColor(background)
+    .backgroundColor($$.background)
     .alignItems(HorizontalAlign.Start)
   }
 
@@ -401,36 +422,36 @@ struct Index {
   }
 
   @Builder
-  private summarySection(title: string, subtitle: string, items: ItemSummary[], emptyText: string, actionRoute: string, actionReturnTo: string = '') {
+  private summarySection($$: HomeSummarySectionParams) {
     Column({ space: $r('app.float.space_3') }) {
       Row() {
         Column({ space: $r('app.float.space_1') }) {
-          Text(title)
+          Text($$.title)
             .fontSize($r('app.float.font_section'))
             .fontWeight(FontWeight.Bold)
             .fontColor($r('app.color.text_primary'))
-          Text(subtitle)
+          Text($$.subtitle)
             .fontSize($r('app.float.font_caption'))
             .fontColor($r('app.color.text_secondary'))
         }
         .layoutWeight(1)
-        Text(`${items.length} 项`)
+        Text(`${$$.items.length} 项`)
           .fontSize($r('app.float.font_caption'))
           .fontColor($r('app.color.text_secondary'))
       }
-      if (items.length === 0) {
+      if ($$.items.length === 0) {
         EmptyState({
-          title: emptyText,
-          description: this.summaryEmptyDescription(title),
-          actionText: this.summaryEmptyActionText(title),
-          actionRoute: actionRoute,
-          actionMode: actionRoute === RouteName.ITEM_FORM ? 'create' : '',
-          actionReturnTo: actionReturnTo
+          title: $$.emptyText,
+          description: this.summaryEmptyDescription($$.title),
+          actionText: this.summaryEmptyActionText($$.title),
+          actionRoute: $$.actionRoute,
+          actionMode: $$.actionRoute === RouteName.ITEM_FORM ? 'create' : '',
+          actionReturnTo: $$.actionReturnTo ?? ''
         })
       } else {
-        ForEach(items, (item: ItemSummary) => {
+        ForEach($$.items, (item: ItemSummary) => {
           ItemCard({ item: item })
-        }, (item: ItemSummary) => item.id)
+        }, (item: ItemSummary) => `${item.id}:${item.updatedAt}:${item.expiryStatus}:${item.quantity}`)
       }
     }
     .width('100%')

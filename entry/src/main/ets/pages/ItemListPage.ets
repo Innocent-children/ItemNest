@@ -23,6 +23,7 @@ export struct ItemListPage {
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private items: ItemSummary[] = [];
+  @State private sortDescription: string = '按最近更新排序';
   private query: ItemQuery = new ItemQuery();
   private lastRouteRefreshAt: number = 0;
   private lastHandledDataRevision: number = -1;
@@ -83,7 +84,7 @@ export struct ItemListPage {
               .fontSize($r('app.float.font_title'))
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))
-            Text(this.query.isEmpty() ? '按最近添加排序' : '正在显示已筛选的物品')
+            Text(this.query.isEmpty() ? this.sortDescription : '正在显示已筛选的物品')
               .fontSize($r('app.float.font_caption'))
               .fontColor($r('app.color.text_secondary'))
           }
@@ -144,7 +145,7 @@ export struct ItemListPage {
             ListItem() {
               ItemCard({ item: item })
             }
-          }, (item: ItemSummary) => item.id)
+          }, (item: ItemSummary) => `${item.id}:${item.updatedAt}:${item.expiryStatus}:${item.quantity}`)
         }
         .layoutWeight(1)
         .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
@@ -242,6 +243,8 @@ export struct ItemListPage {
     }
     const sortedItems = items.slice();
     const sortMode = preferencesResult.getData().defaultSort;
+    this.sortDescription = sortMode === ItemSortMode.NAME_ASC ? '按名称 A-Z 排序' :
+      sortMode === ItemSortMode.UPDATED_DESC ? '按最近更新排序' : '按最近添加排序';
     if (sortMode === ItemSortMode.NAME_ASC) {
       sortedItems.sort((left: ItemSummary, right: ItemSummary) => left.name.localeCompare(right.name));
     } else if (sortMode === ItemSortMode.UPDATED_DESC) {

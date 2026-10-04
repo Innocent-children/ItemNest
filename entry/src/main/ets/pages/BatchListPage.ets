@@ -136,7 +136,7 @@ export struct BatchListPage {
                 .borderRadius($r('app.float.radius_card'))
                 .backgroundColor($r('app.color.surface_card'))
               }
-            }, (batch: Batch) => batch.id)
+            }, (batch: Batch) => `${batch.id}:${batch.updatedAt}:${batch.quantity}:${batch.expirationDate ?? ''}`)
           }
           .layoutWeight(1)
           .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })

@@ -85,7 +85,7 @@ export struct LocationManagementPage {
                     .enabled(!this.operating)
                     .onClick(() => this.selectedParentId = this.selectedParentId === location.id ? '' : location.id)
                 }
-              }, (location: LocationRecord) => location.id)
+              }, (location: LocationRecord) => `${location.id}:${location.updatedAt}:${location.active}`)
             }
             Button('新增位置')
               .width('100%')
@@ -131,7 +131,7 @@ export struct LocationManagementPage {
               .padding($r('app.float.space_3'))
               .backgroundColor($r('app.color.surface_card'))
               .borderRadius($r('app.float.radius_control'))
-            }, (location: LocationRecord) => location.id)
+            }, (location: LocationRecord) => `${location.id}:${location.updatedAt}:${location.active}`)
           }
           .width('100%')
           .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })

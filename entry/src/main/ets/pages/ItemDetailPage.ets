@@ -14,6 +14,22 @@ import { ItemFormRouteParams, requireItemId, RouteRefreshParams } from '../navig
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
 
+interface ItemDetailParams {
+  item: Item;
+}
+
+interface DetailRowParams {
+  label: string;
+  value: string;
+}
+
+interface ManagementEntryParams {
+  title: string;
+  description: string;
+  route: RouteName;
+  itemId: string;
+}
+
 @Component
 export struct ItemDetailPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
@@ -149,7 +165,7 @@ export struct ItemDetailPage {
           }
           .padding($r('app.float.space_4'))
         } else if (this.item !== undefined) {
-          this.detailContent(this.item)
+          this.detailContent({ item: this.item })
         }
       }
       .width('100%')
@@ -168,12 +184,12 @@ export struct ItemDetailPage {
   }
 
   @Builder
-  private detailContent(item: Item) {
+  private detailContent($$: ItemDetailParams) {
     Scroll() {
       Column({ space: $r('app.float.space_4') }) {
         Column({ space: $r('app.float.space_3') }) {
           Row({ space: $r('app.float.space_3') }) {
-            Text(item.name.substring(0, 1))
+            Text($$.item.name.substring(0, 1))
               .fontSize($r('app.float.font_title'))
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.brand_primary'))
@@ -184,11 +200,11 @@ export struct ItemDetailPage {
               .textAlign(TextAlign.Center)
               .padding({ top: 12 })
             Column({ space: $r('app.float.space_1') }) {
-              Text(item.name)
+              Text($$.item.name)
                 .fontSize($r('app.float.font_title'))
                 .fontWeight(FontWeight.Bold)
                 .fontColor($r('app.color.text_primary'))
-              Text(`${item.quantity}${item.unit}`)
+              Text(`${$$.item.quantity}${$$.item.unit}`)
                 .fontSize($r('app.float.font_body'))
                 .fontWeight(FontWeight.Medium)
                 .fontColor($r('app.color.brand_primary'))
@@ -206,12 +222,12 @@ export struct ItemDetailPage {
           this.actionErrorPanel()
         }
 
-        this.managementSection(item)
-        this.lowStockSection(item)
-        this.locationSection(item)
-        this.expirySection(item)
-        this.notesSection(item)
-        this.photoSection(item)
+        this.managementSection({ item: $$.item })
+        this.lowStockSection({ item: $$.item })
+        this.locationSection({ item: $$.item })
+        this.expirySection({ item: $$.item })
+        this.notesSection({ item: $$.item })
+        this.photoSection({ item: $$.item })
 
         if (this.deleting) {
           LoadingState({ text: '正在删除物品…' })
@@ -244,7 +260,7 @@ export struct ItemDetailPage {
   }
 
   @Builder
-  private lowStockSection(item: Item) {
+  private lowStockSection($$: ItemDetailParams) {
     Column({ space: $r('app.float.space_3') }) {
       Text('低库存状态')
         .fontSize($r('app.float.font_section'))
@@ -285,9 +301,9 @@ export struct ItemDetailPage {
             .onChange((value: boolean) => this.thresholdEnabled = value)
         }
         .width('100%')
-        Text(this.lowStockStatusText(item))
+        Text(this.lowStockStatusText($$.item))
           .fontSize($r('app.float.font_caption'))
-          .fontColor(this.isBelowLowStockThreshold(item) ? $r('app.color.status_danger') : $r('app.color.text_secondary'))
+          .fontColor(this.isBelowLowStockThreshold($$.item) ? $r('app.color.status_danger') : $r('app.color.text_secondary'))
           .width('100%')
         Button(this.thresholdSaving ? '正在保存…' : '保存低库存设置')
           .width('100%')
@@ -295,7 +311,7 @@ export struct ItemDetailPage {
           .backgroundColor($r('app.color.brand_primary'))
           .borderRadius($r('app.float.radius_control'))
           .enabled(!this.thresholdSaving)
-          .onClick(() => this.saveLowStockThreshold(item))
+          .onClick(() => this.saveLowStockThreshold($$.item))
       }
     }
     .width('100%')
@@ -305,14 +321,14 @@ export struct ItemDetailPage {
   }
 
   @Builder
-  private locationSection(item: Item) {
+  private locationSection($$: ItemDetailParams) {
     Column({ space: $r('app.float.space_3') }) {
       Text('存放与分类')
         .fontSize($r('app.float.font_section'))
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
-      this.detailRow('位置', item.locationPath ?? '未设置')
-      this.detailRow('分类', item.category ?? '未设置')
+      this.detailRow({ label: '位置', value: $$.item.locationPath ?? '未设置' })
+      this.detailRow({ label: '分类', value: $$.item.category ?? '未设置' })
     }
     .width('100%')
     .padding($r('app.float.space_4'))
@@ -321,14 +337,14 @@ export struct ItemDetailPage {
   }
 
   @Builder
-  private expirySection(item: Item) {
+  private expirySection($$: ItemDetailParams) {
     Column({ space: $r('app.float.space_3') }) {
       Text('到期与提醒')
         .fontSize($r('app.float.font_section'))
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
-      this.detailRow('到期日期', item.expirationDate ?? '未设置')
-      this.detailRow('提前提醒', item.reminderDays === undefined ? `默认提前 ${this.defaultReminderDays} 天` : `提前 ${item.reminderDays} 天`)
+      this.detailRow({ label: '到期日期', value: $$.item.expirationDate ?? '未设置' })
+      this.detailRow({ label: '提前提醒', value: $$.item.reminderDays === undefined ? `默认提前 ${this.defaultReminderDays} 天` : `提前 ${$$.item.reminderDays} 天` })
       if (this.reminderMessage.length > 0) {
         Text(this.reminderMessage)
           .fontSize($r('app.float.font_caption'))
@@ -351,18 +367,18 @@ export struct ItemDetailPage {
   }
 
   @Builder
-  private notesSection(item: Item) {
+  private notesSection($$: ItemDetailParams) {
     Column({ space: $r('app.float.space_3') }) {
       Text('注意事项')
         .fontSize($r('app.float.font_section'))
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
-      Text(item.notes ?? '未填写')
+      Text($$.item.notes ?? '未填写')
         .fontSize($r('app.float.font_body'))
-        .fontColor(item.notes === undefined ? $r('app.color.text_secondary') : $r('app.color.text_primary'))
+        .fontColor($$.item.notes === undefined ? $r('app.color.text_secondary') : $r('app.color.text_primary'))
         .width('100%')
-      if (item.barcode !== undefined && item.barcode.length > 0) {
-        Text(`条码/二维码：${item.barcode}`)
+      if ($$.item.barcode !== undefined && $$.item.barcode.length > 0) {
+        Text(`条码/二维码：${$$.item.barcode}`)
           .fontSize($r('app.float.font_body'))
           .fontColor($r('app.color.text_primary'))
           .width('100%')
@@ -375,7 +391,7 @@ export struct ItemDetailPage {
   }
 
   @Builder
-  private photoSection(item: Item) {
+  private photoSection($$: ItemDetailParams) {
     Column({ space: $r('app.float.space_3') }) {
       Text('物品照片')
         .fontSize($r('app.float.font_section'))
@@ -394,7 +410,7 @@ export struct ItemDetailPage {
           .enabled(!this.removingPhoto)
           .onClick(() => this.removePhoto())
       } else {
-        Text(item.photoLocalId === undefined ? '暂未添加照片。' : '照片暂时无法读取，可在编辑页重新选择。')
+        Text($$.item.photoLocalId === undefined ? '暂未添加照片。' : '照片暂时无法读取，可在编辑页重新选择。')
           .fontSize($r('app.float.font_body'))
           .fontColor($r('app.color.text_secondary'))
       }
@@ -406,13 +422,13 @@ export struct ItemDetailPage {
   }
 
   @Builder
-  private detailRow(label: string, value: string) {
+  private detailRow($$: DetailRowParams) {
     Row({ space: $r('app.float.space_3') }) {
-      Text(label)
+      Text($$.label)
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
         .width(84)
-      Text(value)
+      Text($$.value)
         .fontSize($r('app.float.font_body'))
         .fontColor($r('app.color.text_primary'))
         .layoutWeight(1)
@@ -537,11 +553,10 @@ export struct ItemDetailPage {
     this.actionError = '';
     try {
       const result = await AppServices.get().reminders.reconcile(item);
+      await this.loadReminderState(item);
       if (!result.ok) {
         this.actionError = result.getError().message;
-        return;
       }
-      await this.loadReminderState(item);
     } catch (_) {
       this.actionError = '重试创建提醒失败，请稍后再试';
     } finally {
@@ -562,7 +577,7 @@ export struct ItemDetailPage {
   }
 
   @Builder
-  private managementSection(item: Item) {
+  private managementSection($$: ItemDetailParams) {
     Column({ space: $r('app.float.space_3') }) {
       Row() {
         Text('管理动作')
@@ -575,18 +590,8 @@ export struct ItemDetailPage {
           .fontColor($r('app.color.text_secondary'))
       }
       Row({ space: $r('app.float.space_2') }) {
-        this.managementEntry(
-          '批次',
-          this.batchCount === 0 ? `汇总 ${item.quantity}${item.unit}` : `${this.batchCount} 个批次`,
-          RouteName.BATCH_LIST,
-          item.id
-        )
-        this.managementEntry(
-          '借还',
-          this.borrowedQuantity === 0 ? '当前无借出' : `借出 ${this.borrowedQuantity}${item.unit}`,
-          RouteName.LENDING,
-          item.id
-        )
+        this.managementEntry({ title: '批次', description: this.batchCount === 0 ? `汇总 ${$$.item.quantity}${$$.item.unit}` : `${this.batchCount} 个批次`, route: RouteName.BATCH_LIST, itemId: $$.item.id })
+        this.managementEntry({ title: '借还', description: this.borrowedQuantity === 0 ? '当前无借出' : `借出 ${this.borrowedQuantity}${$$.item.unit}`, route: RouteName.LENDING, itemId: $$.item.id })
       }
       .width('100%')
     }
@@ -597,13 +602,13 @@ export struct ItemDetailPage {
   }
 
   @Builder
-  private managementEntry(title: string, description: string, route: RouteName, itemId: string) {
+  private managementEntry($$: ManagementEntryParams) {
     Column({ space: $r('app.float.space_1') }) {
-      Text(title)
+      Text($$.title)
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
-      Text(description)
+      Text($$.description)
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
       Text('进入')
@@ -615,7 +620,7 @@ export struct ItemDetailPage {
     .borderRadius($r('app.float.radius_control'))
     .backgroundColor($r('app.color.surface_app'))
     .border({ width: 1, color: $r('app.color.border_subtle') })
-    .onClick(() => NavigationHelper.pushUrl({ url: route, params: { itemId: itemId } }))
+    .onClick(() => NavigationHelper.pushUrl({ url: $$.route, params: { itemId: $$.itemId } }))
   }
 
   private async loadManagementState(item: Item, requestId?: number): Promise<void> {

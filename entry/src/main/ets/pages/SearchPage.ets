@@ -13,6 +13,11 @@ import { ItemListRouteParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
 
+interface SearchConditionParams {
+  label: string;
+  type: string;
+}
+
 @Component
 export struct SearchPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
@@ -221,7 +226,7 @@ export struct SearchPage {
               .onClick(() => this.openResultList())
             ForEach(this.items, (item: ItemSummary) => {
               ItemCard({ item: item })
-            }, (item: ItemSummary) => item.id)
+            }, (item: ItemSummary) => `${item.id}:${item.updatedAt}:${item.expiryStatus}:${item.quantity}`)
           }
         }
         .width('100%')
@@ -301,13 +306,13 @@ export struct SearchPage {
       }
       Flex({ wrap: FlexWrap.Wrap }) {
         if (this.name.trim().length > 0) {
-          this.conditionChip(`名称：${this.name.trim()}`, 'name')
+          this.conditionChip({ label: `名称：${this.name.trim()}`, type: 'name' })
         }
         if (this.selectedLocation.length > 0) {
-          this.conditionChip(`位置：${this.selectedLocation}`, 'location')
+          this.conditionChip({ label: `位置：${this.selectedLocation}`, type: 'location' })
         }
         if (this.selectedCategory.length > 0) {
-          this.conditionChip(`分类：${this.selectedCategory}`, 'category')
+          this.conditionChip({ label: `分类：${this.selectedCategory}`, type: 'category' })
         }
       }
     }
@@ -318,14 +323,14 @@ export struct SearchPage {
   }
 
   @Builder
-  private conditionChip(label: string, type: string) {
-    Button(`${label}  ×`)
+  private conditionChip($$: SearchConditionParams) {
+    Button(`${$$.label}  ×`)
       .type(ButtonType.Capsule)
       .fontColor($r('app.color.brand_primary'))
       .backgroundColor($r('app.color.surface_accent'))
       .fontSize($r('app.float.font_caption'))
       .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-      .onClick(() => this.clearCondition(type))
+      .onClick(() => this.clearCondition($$.type))
   }
 
   private readInitialQuery(): void {

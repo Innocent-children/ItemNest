@@ -1,4 +1,5 @@
-import { ConfigurationConstant } from '@kit.AbilityKit';
+import { notificationManager } from '@kit.NotificationKit';
+import { common, ConfigurationConstant } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
 import { resourceManager } from '@kit.LocalizationKit';
 import { NavigationHelper } from '../navigation/NavigationHelper';
@@ -22,6 +23,8 @@ export struct SettingsPage {
   @State private themeMode: ThemeMode = ThemeMode.SYSTEM;
   @State private reminderEnabled: boolean = false;
   @State private persistedReminderEnabled: boolean = false;
+  @State private notificationStatus: string = '';
+  @State private notificationBusy: boolean = false;
   @State private loading: boolean = false;
   @State private saving: boolean = false;
   @State private errorMessage: string = '';
@@ -33,6 +36,7 @@ export struct SettingsPage {
 
   aboutToAppear(): void {
     this.load();
+    this.loadNotificationStatus();
   }
 
   build() {
@@ -139,11 +143,49 @@ export struct SettingsPage {
           .onChange((value: boolean) => this.reminderEnabled = value)
       }
       .width('100%')
+      Text(this.notificationStatus)
+        .fontSize($r('app.float.font_caption'))
+        .fontColor($r('app.color.text_secondary'))
+      Button(this.notificationBusy ? '正在打开…' : '管理系统通知授权')
+        .fontColor($r('app.color.brand_primary'))
+        .backgroundColor($r('app.color.surface_accent'))
+        .enabled(!this.notificationBusy)
+        .onClick(() => this.manageNotificationPermission())
     }
     .width('100%')
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+  }
+
+  private async loadNotificationStatus(): Promise<void> {
+    try {
+      this.notificationStatus = await notificationManager.isNotificationEnabled()
+        ? '系统通知已授权，允许创建提醒后需保存对应物品。'
+        : '系统通知尚未授权；到期提醒需要系统通知授权。';
+    } catch (_) {
+      this.notificationStatus = '暂时无法读取系统通知授权状态。';
+    }
+  }
+
+  private async manageNotificationPermission(): Promise<void> {
+    if (this.notificationBusy) {
+      return;
+    }
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    if (context === undefined) {
+      this.notificationStatus = '通知授权设置暂不可用，请稍后重试。';
+      return;
+    }
+    this.notificationBusy = true;
+    try {
+      await notificationManager.openNotificationSettingsWithResult(context);
+      await this.loadNotificationStatus();
+    } catch (_) {
+      await this.loadNotificationStatus();
+    } finally {
+      this.notificationBusy = false;
+    }
   }
 
   @Builder

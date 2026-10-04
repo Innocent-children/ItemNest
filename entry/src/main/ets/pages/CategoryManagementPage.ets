@@ -109,7 +109,7 @@ export struct CategoryManagementPage {
               .padding($r('app.float.space_3'))
               .backgroundColor($r('app.color.surface_card'))
               .borderRadius($r('app.float.radius_control'))
-            }, (category: CategoryRecord) => category.id)
+            }, (category: CategoryRecord) => `${category.id}:${category.updatedAt}:${category.active}`)
           }
           .width('100%')
           .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
