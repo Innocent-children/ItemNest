@@ -59,8 +59,15 @@ export class ItemSearchService {
     const items = itemsResult.getData();
     for (let index = 0; index < items.length; index++) {
       const item = items[index];
-      if (item.locationPath !== undefined && locationPaths.indexOf(item.locationPath) < 0) {
-        locationPaths.push(item.locationPath);
+      const paths = item.activeLocationPaths ?? (item.locationPath === undefined ? [] : [item.locationPath]);
+      for (let pathIndex = 0; pathIndex < paths.length; pathIndex++) {
+        const segments = paths[pathIndex].split('/').map((segment: string) => segment.trim());
+        for (let depth = 1; depth <= segments.length; depth++) {
+          const path = segments.slice(0, depth).join(' / ');
+          if (path.length > 0 && locationPaths.indexOf(path) < 0) {
+            locationPaths.push(path);
+          }
+        }
       }
       if (item.category !== undefined && categories.indexOf(item.category) < 0) {
         categories.push(item.category);

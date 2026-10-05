@@ -1,3 +1,4 @@
+import { uiSpring } from '../ui/VisualStyle';
 @Component
 export struct ErrorState {
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
@@ -17,6 +18,6 @@ export struct ErrorState {
     .alignItems(HorizontalAlign.Center)
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 6 }))
-      .animation({ duration: this.reduceAnimation ? 0 : 180, curve: Curve.EaseOut }))
+      .animation(uiSpring(this.reduceAnimation, 0.3, 0.68)))
   }
 }

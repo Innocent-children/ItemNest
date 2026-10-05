@@ -1,3 +1,4 @@
+import inventoryUpgradeDeviceTest from './InventoryUpgradeDevice.test';
 import appEventBusFlowTest from './AppEventBusFlow.test';
 import abilityTest from './Ability.test';
 import dataFailureMappingTest from './DataFailureMapping.test';
@@ -10,6 +11,7 @@ import barcodeMigrationTest from './BarcodeMigration.test';
 import portableBackupDeviceTest from './PortableBackupDevice.test';
 
 export default function testsuite() {
+  inventoryUpgradeDeviceTest();
   abilityTest();
   appEventBusFlowTest();
   dataFailureMappingTest();

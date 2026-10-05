@@ -15,7 +15,7 @@ function createItem(index: number): Item {
     unit: ItemUnit.PIECE,
     locationPath: index === 49 ? '卧室 / 药箱' : '客厅 / 收纳箱',
     category: index === 49 ? '药品' : '生活用品',
-    expirationDate: index < 12 ? '2026-06-20' : undefined,
+    expirationDate: index >= 12 && index < 24 ? '2026-06-20' : undefined,
     photoState: PhotoState.NONE,
     createdAt: index,
     updatedAt: index
@@ -39,7 +39,7 @@ export default function itemSearchAndSummaryTest() {
       }
     });
 
-    it('首页摘要限制十条并识别临期和待补货', 0, async () => {
+    it('首页摘要限制十条并分别识别有库存临期和待补货', 0, async () => {
       const repository = new FakeItemRepository();
       for (let index = 0; index < 50; index++) {
         repository.items.push(createItem(index));
@@ -53,6 +53,43 @@ export default function itemSearchAndSummaryTest() {
         expect(summary.getData().outOfStockItems.length).assertEqual(10);
         expect(summary.getData().dueSoonCount).assertEqual(12);
         expect(summary.getData().outOfStockCount).assertEqual(12);
+      }
+    });
+
+    it('已过期与临期一起待处理，全部列表不被十条预览截断', 0, async () => {
+      const repository = new FakeItemRepository();
+      for (let index = 0; index < 16; index++) {
+        const item = createItem(index + 100);
+        item.expirationDate = index === 0 ? '2026-06-01' : '2026-06-22';
+        repository.items.push(item);
+      }
+      const emptyOldItem = createItem(999);
+      emptyOldItem.quantity = 0;
+      emptyOldItem.expirationDate = '2026-05-01';
+      repository.items.push(emptyOldItem);
+      const summary = await new HomeSummaryService(repository, new ExpiryService())
+        .getSummary(new Date(2026, 5, 20));
+      expect(summary.ok).assertTrue();
+      if (summary.ok) {
+        expect(summary.getData().dueSoonCount).assertEqual(16);
+        expect(summary.getData().dueSoonItems.length).assertEqual(10);
+        expect(summary.getData().expiryAttentionItems.length).assertEqual(16);
+        expect(summary.getData().expiryAttentionItems[0].id).assertEqual('item-100');
+        expect(summary.getData().outOfStockCount).assertEqual(1);
+      }
+    });
+
+    it('详情转换和首页摘要均保留有效批次位置', 0, async () => {
+      const repository = new FakeItemRepository();
+      const item = createItem(100);
+      item.activeLocationPaths = ['新药箱', '书房抽屉'];
+      repository.items.push(item);
+      const listSummary = new ItemListService(repository, new ExpiryService()).toSummary(item);
+      expect(listSummary.activeLocationPaths?.join('；')).assertEqual('新药箱；书房抽屉');
+      const homeResult = await new HomeSummaryService(repository, new ExpiryService()).getSummary();
+      expect(homeResult.ok).assertTrue();
+      if (homeResult.ok) {
+        expect(homeResult.getData().recentItems[0].activeLocationPaths?.join('；')).assertEqual('新药箱；书房抽屉');
       }
     });
 

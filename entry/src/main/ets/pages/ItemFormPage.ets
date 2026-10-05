@@ -1,11 +1,11 @@
+import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { LocationInput } from '../components/LocationInput';
 import { LocationSelector } from '../components/LocationSelector';
 import { LoadingState } from '../components/LoadingState';
 import { QuantityInput } from '../components/QuantityInput';
-import { CATEGORY_OPTIONS, CategoryRecord } from '../model/Category';
-import { Item, ItemDraft, ItemUnit } from '../model/Item';
+import { ITEM_UNIT_OPTIONS, Item, ItemDraft, ItemUnit } from '../model/Item';
 import { AssetSource } from '../model/ItemAsset';
 import { LocationRecord } from '../model/Location';
 import { buildItemRefreshParams } from '../navigation/RefreshContract';
@@ -13,12 +13,15 @@ import { ItemFormRouteParams, requireItemId } from '../navigation/RouteContract'
 import { RouteName } from '../navigation/RouteName';
 import { AppEventBus } from '../common/AppEventBus';
 import { AppServices } from '../service/AppServices';
+import { activeCategoryNames, refreshedUnit } from '../service/ItemFlowPresentation';
 
 @Component
 export struct ItemFormPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
+  @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @State private name: string = '';
   @State private quantityText: string = '1';
@@ -41,7 +44,9 @@ export struct ItemFormPage {
   @State private pendingPhotoUri: string = '';
   @State private existingPhotoLocalId: string = '';
   @State private managedLocations: LocationRecord[] = [];
-  @State private categoryOptions: string[] = CATEGORY_OPTIONS.slice();
+  @State private categoryOptions: string[] = [];
+  @State private categoryLoadError: string = '';
+  @State private categoryLoading: boolean = false;
   @State private pendingPhotoSource: AssetSource = AssetSource.PHOTO_PICKER;
   @State private photoPicking: boolean = false;
   @State private showDiscardConfirm: boolean = false;
@@ -58,6 +63,7 @@ export struct ItemFormPage {
   private backHandler: () => boolean = () => this.handleNavigationBack();
   private existingLoaded: boolean = false;
   private managedFieldsRequestId: number = 0;
+  private categoryLoadRequestId: number = 0;
 
   aboutToAppear(): void {
     NavigationHelper.registerBackHandler(this.backHandler);
@@ -74,7 +80,13 @@ export struct ItemFormPage {
     NavigationHelper.unregisterBackHandler(this.backHandler);
   }
 
+  onPageShow(): void {
+    this.loadManagedLocations();
+    this.loadCategoryOptions();
+  }
+
   private onDataRevisionChanged(): void {
+    this.loadCategoryOptions();
     if (this.editMode && this.existingLoaded && this.itemId.length > 0 && !this.saving) {
       this.refreshManagedBatchFields();
     }
@@ -95,6 +107,8 @@ export struct ItemFormPage {
           }
           .layoutWeight(1)
           Button('取消')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
             .fontColor($r('app.color.brand_primary'))
             .backgroundColor($r('app.color.surface_card'))
             .border({ width: 1, color: $r('app.color.border_subtle') })
@@ -149,7 +163,7 @@ export struct ItemFormPage {
       .width('100%')
       .constraintSize({ maxWidth: 800 })
       .height('100%')
-      .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
+      .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
       .backgroundColor($r('app.color.surface_app'))
 
       DeleteConfirmDialog({
@@ -181,44 +195,64 @@ export struct ItemFormPage {
   @Builder
   private coreSection() {
     Column({ space: $r('app.float.space_4') }) {
-      this.fieldTitle('基础信息', this.editMode ? '名称可编辑；库存信息由批次统一管理。' : '名称必填；数量和单位默认即可保存。')
+      this.fieldTitle('基础信息', this.editMode ? '名称与单位可编辑；数量和到期日由批次管理。' : '数量填写目前拥有的总量，包含借出部分；借还可在保存后记录。')
       TextInput({ text: this.name, placeholder: '例如：感冒药' })
         .maxLength(80)
         .backgroundColor($r('app.color.surface_app'))
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
         .onChange((value: string) => this.name = value)
-      QuantityInput({
-        quantityText: $quantityText,
-        unit: $unit,
-        errorMessage: $quantityError,
-        inputEnabled: !this.editMode
-      })
       if (this.editMode) {
+        Text(`总量 ${this.quantityText}${this.unit}（包含借出）`)
+          .fontSize($r('app.float.font_body'))
+          .fontColor($r('app.color.text_primary'))
+        Text('统一修改单位')
+          .fontSize($r('app.float.font_body'))
+          .fontColor($r('app.color.text_primary'))
+        Flex({ wrap: FlexWrap.Wrap }) {
+          ForEach(ITEM_UNIT_OPTIONS, (option: ItemUnit) => {
+            Button(option)
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
+              .type(ButtonType.Capsule)
+              .fontColor(this.unit === option ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
+              .backgroundColor(this.unit === option ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
+              .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+              .enabled(!this.saving)
+              .onClick(() => this.unit = option)
+          }, (option: ItemUnit) => option)
+        }
+        Text('修改后所有批次和借还数量使用新单位，数值不会自动换算。')
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.text_secondary'))
         this.batchSourceNotice()
+      } else {
+        QuantityInput({ quantityText: $quantityText, unit: $unit, errorMessage: $quantityError })
       }
     }
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
   }
 
   @Builder
   private batchSourceNotice() {
     Column({ space: $r('app.float.space_3') }) {
-      Text('数量/单位/到期日请在批次管理中修改')
+      Text('数量和到期日请在批次管理中修改；日常用量可在详情记录')
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
       Button('进入批次管理')
+        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
         .width('100%')
         .fontColor($r('app.color.brand_primary'))
         .backgroundColor($r('app.color.surface_app'))
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
         .enabled(!this.saving && this.itemId.length > 0)
-        .scale({ x: this.batchManagePressed ? 0.98 : 1, y: this.batchManagePressed ? 0.98 : 1 })
-        .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
+        .scale({ x: this.batchManagePressed && !this.reduceAnimation ? 0.96 : 1, y: this.batchManagePressed && !this.reduceAnimation ? 0.96 : 1 })
+        .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
         .onTouch((event: TouchEvent) => {
           if (event.type === TouchType.Down) {
             this.batchManagePressed = true;
@@ -237,7 +271,7 @@ export struct ItemFormPage {
   @Builder
   private locationSection() {
     Column({ space: $r('app.float.space_4') }) {
-      this.fieldTitle('放在哪里', '位置会优先显示在列表中。')
+      this.fieldTitle('默认位置', '批次未单独填写位置时使用这里；找物按仍有数量的批次显示。')
       LocationInput({ locationPath: $locationPath })
       if (this.managedLocations.length > 0) {
         Text('常用位置')
@@ -250,6 +284,7 @@ export struct ItemFormPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
   }
 
   @Builder
@@ -259,9 +294,34 @@ export struct ItemFormPage {
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
+      if (this.categoryLoadError.length > 0) {
+        Text(this.categoryLoadError)
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.status_danger'))
+        Button(this.categoryLoading ? '正在读取…' : '重试读取分类')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent'))
+          .enabled(!this.categoryLoading)
+          .onClick(() => this.loadCategoryOptions())
+      } else if (this.categoryOptions.length === 0) {
+        Text(this.categoryLoading ? '正在读取分类…' : '暂无启用的分类，可在设置中管理。')
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.text_secondary'))
+      }
+      if (!this.categoryLoading && this.categoryLoadError.length === 0 && this.categoryValue.length > 0 && this.categoryOptions.indexOf(this.categoryValue) < 0) {
+        Text(`原分类“${this.categoryValue}”不在启用列表中，可保留原值或重新选择。`)
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.text_secondary'))
+        Button('清除原分类')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .onClick(() => this.categoryValue = '')
+      }
       Flex({ wrap: FlexWrap.Wrap }) {
         ForEach(this.categoryOptions, (category: string) => {
           Button(category)
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
             .type(ButtonType.Capsule)
             .fontColor(this.categoryValue === category ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
             .backgroundColor(this.categoryValue === category ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
@@ -274,9 +334,10 @@ export struct ItemFormPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 12 }))
-      .animation({ duration: this.reduceAnimation ? 0 : 220, curve: Curve.EaseOut }))
+      .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
   }
 
   @Builder
@@ -291,13 +352,14 @@ export struct ItemFormPage {
           .backgroundColor($r('app.color.status_danger_soft'))
       }
       Button(this.saving ? '正在保存…' : '保存物品')
+        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
         .width('100%')
         .fontColor($r('app.color.brand_on_primary'))
         .backgroundColor($r('app.color.brand_primary'))
         .borderRadius($r('app.float.radius_control'))
         .enabled(!this.saving)
-        .scale({ x: this.savePressed ? 0.98 : 1, y: this.savePressed ? 0.98 : 1 })
-        .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
+        .scale({ x: this.savePressed && !this.reduceAnimation ? 0.96 : 1, y: this.savePressed && !this.reduceAnimation ? 0.96 : 1 })
+        .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
         .onTouch((event: TouchEvent) => {
           if (event.type === TouchType.Down) {
             this.savePressed = true;
@@ -333,6 +395,7 @@ export struct ItemFormPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
     .onClick(() => this.toggleSection(section))
   }
 
@@ -349,6 +412,8 @@ export struct ItemFormPage {
           .fontColor(this.expirationDate.length === 0 ? $r('app.color.text_secondary') : $r('app.color.text_primary'))
           .layoutWeight(1)
         Button('清除')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent'))
           .borderRadius($r('app.float.radius_control'))
@@ -386,14 +451,17 @@ export struct ItemFormPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 12 }))
-      .animation({ duration: this.reduceAnimation ? 0 : 220, curve: Curve.EaseOut }))
+      .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
   }
 
   @Builder
   private reminderShortcut(label: string, value: string) {
     Button(label)
+      .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+      .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
       .type(ButtonType.Capsule)
       .fontColor(this.reminderDaysText === value ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
       .backgroundColor(this.reminderDaysText === value ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
@@ -405,6 +473,8 @@ export struct ItemFormPage {
   @Builder
   private expirationShortcut(label: string, offsetDays: number) {
     Button(label)
+      .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+      .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
       .type(ButtonType.Capsule)
       .fontColor($r('app.color.brand_primary'))
       .backgroundColor($r('app.color.surface_accent'))
@@ -446,6 +516,8 @@ export struct ItemFormPage {
         .borderRadius($r('app.float.radius_control'))
         .onChange((value: string) => this.scanText = value)
       Button(this.scanning ? '正在打开扫码…' : '扫描条码或二维码')
+        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
         .width('100%')
         .fontColor($r('app.color.brand_primary'))
         .backgroundColor($r('app.color.surface_app'))
@@ -457,9 +529,10 @@ export struct ItemFormPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 12 }))
-      .animation({ duration: this.reduceAnimation ? 0 : 220, curve: Curve.EaseOut }))
+      .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
   }
 
   @Builder
@@ -470,6 +543,8 @@ export struct ItemFormPage {
         .fontColor($r('app.color.text_secondary'))
       Row({ space: $r('app.float.space_2') }) {
         Button(this.photoPicking ? '正在打开选择器…' : '选择照片')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .layoutWeight(1)
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent'))
@@ -477,6 +552,8 @@ export struct ItemFormPage {
           .enabled(!this.photoPicking)
           .onClick(() => this.selectPhoto())
         Button('拍摄照片')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .layoutWeight(1)
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_app'))
@@ -495,9 +572,10 @@ export struct ItemFormPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 12 }))
-      .animation({ duration: this.reduceAnimation ? 0 : 220, curve: Curve.EaseOut }))
+      .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
   }
 
   private readRoute(): void {
@@ -537,20 +615,30 @@ export struct ItemFormPage {
   }
 
   private async loadCategoryOptions(): Promise<void> {
-    const result = await AppServices.get().categories.list();
-    if (!result.ok) {
-      this.categoryOptions = CATEGORY_OPTIONS.slice();
-      return;
-    }
-    const options: string[] = CATEGORY_OPTIONS.slice();
-    const categories = result.getData();
-    for (let index = 0; index < categories.length; index++) {
-      const category: CategoryRecord = categories[index];
-      if (category.active && options.indexOf(category.name) < 0) {
-        options.push(category.name);
+    const requestId = ++this.categoryLoadRequestId;
+    this.categoryLoading = true;
+    try {
+      const result = await AppServices.get().categories.list();
+      if (requestId !== this.categoryLoadRequestId) {
+        return;
+      }
+      if (!result.ok) {
+        this.categoryOptions = [];
+        this.categoryLoadError = result.getError().message;
+        return;
+      }
+      this.categoryOptions = activeCategoryNames(result.getData());
+      this.categoryLoadError = '';
+    } catch (_) {
+      if (requestId === this.categoryLoadRequestId) {
+        this.categoryOptions = [];
+        this.categoryLoadError = '读取分类失败，请重试';
+      }
+    } finally {
+      if (requestId === this.categoryLoadRequestId) {
+        this.categoryLoading = false;
       }
     }
-    this.categoryOptions = options;
   }
 
   private applyItem(item: Item): void {
@@ -677,11 +765,12 @@ export struct ItemFormPage {
   }
 
   private applyManagedBatchFields(item: Item): void {
+    const nextUnit = refreshedUnit(this.unit, this.loadedUnit, item.unit);
     this.loadedQuantityText = item.quantity.toString();
     this.loadedUnit = item.unit;
     this.loadedExpirationDate = item.expirationDate ?? '';
     this.quantityText = this.loadedQuantityText;
-    this.unit = this.loadedUnit;
+    this.unit = nextUnit;
     this.expirationDate = this.loadedExpirationDate;
   }
 
@@ -711,7 +800,7 @@ export struct ItemFormPage {
     return {
       name: this.name,
       quantity: quantity,
-      unit: this.editMode ? this.loadedUnit : this.unit,
+      unit: this.unit,
       locationPath: this.locationPath,
       category: this.categoryValue.length === 0 ? undefined : this.categoryValue,
       expirationDate: this.editMode ? this.loadedExpirationDate : this.expirationDate,
@@ -772,7 +861,7 @@ export struct ItemFormPage {
     return JSON.stringify({
       name: this.name,
       quantityText: this.editMode ? '' : this.quantityText,
-      unit: this.editMode ? '' : this.unit,
+      unit: this.unit,
       locationPath: this.locationPath,
       categoryValue: this.categoryValue,
       expirationDate: this.editMode ? '' : this.expirationDate,
@@ -788,7 +877,7 @@ export struct ItemFormPage {
       this.setSectionExpanded(section);
       return;
     }
-    this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseOut }, () => this.setSectionExpanded(section));
+    this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.4, 0.76), () => this.setSectionExpanded(section));
   }
 
   private isSectionExpanded(section: string): boolean {
@@ -866,9 +955,13 @@ export struct ItemFormPage {
         notices.push(`物品已保存，但${photoResult.getError().message}`);
       }
     }
-    const reminderResult = await AppServices.get().reminders.reconcile(currentItem);
-    if (!reminderResult.ok) {
-      notices.push(`物品已保存，但${reminderResult.getError().message}`);
+    try {
+      const reminderResult = await AppServices.get().reminders.reconcileLatest(currentItem.id);
+      if (!reminderResult.ok) {
+        notices.push(`物品已保存，提醒更新失败：${reminderResult.getError().message}；可在详情重试`);
+      }
+    } catch (_) {
+      notices.push('物品已保存，提醒更新失败；可在详情重试');
     }
     return notices.length === 0 ? undefined : notices.join('；');
   }

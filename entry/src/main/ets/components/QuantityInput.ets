@@ -1,7 +1,9 @@
+import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { ITEM_UNIT_OPTIONS, ItemUnit } from '../model/Item';
 
 @Component
 export struct QuantityInput {
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @Link quantityText: string;
   @Link unit: ItemUnit;
   @Link errorMessage: string;
@@ -25,6 +27,8 @@ export struct QuantityInput {
         })
       Row({ space: $r('app.float.space_2') }) {
         Button('-')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .layoutWeight(1)
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent'))
@@ -32,6 +36,8 @@ export struct QuantityInput {
           .enabled(this.inputEnabled)
           .onClick(() => this.adjustQuantity(-1))
         Button('+')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .layoutWeight(1)
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent'))
@@ -39,6 +45,8 @@ export struct QuantityInput {
           .enabled(this.inputEnabled)
           .onClick(() => this.adjustQuantity(1))
         Button('置 0')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .layoutWeight(1)
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_app'))
@@ -51,6 +59,8 @@ export struct QuantityInput {
       Flex({ wrap: FlexWrap.Wrap }) {
         ForEach(ITEM_UNIT_OPTIONS, (option: ItemUnit) => {
           Button(option)
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
             .type(ButtonType.Capsule)
             .fontColor(this.unit === option ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
             .backgroundColor(this.unit === option ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))

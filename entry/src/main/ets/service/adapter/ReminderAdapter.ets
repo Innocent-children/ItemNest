@@ -6,16 +6,27 @@ import { failure, Result, success } from '../../common/Result';
 import { Item } from '../../model/Item';
 
 export interface ReminderAdapter {
+  checkPermission?(): Promise<Result<void>>;
   schedule(item: Item, scheduledAt: number): Promise<Result<number>>;
   cancel(systemReminderId: number): Promise<Result<void>>;
 }
 
 export class SystemReminderAdapter implements ReminderAdapter {
+  async checkPermission(): Promise<Result<void>> {
+    try {
+      return await notificationManager.isNotificationEnabled() ? success<void>(undefined) :
+        failure<void>(new AppError(AppErrorCode.SYSTEM_PERMISSION_DENIED,
+          '系统通知未授权，请在设置中管理系统通知授权后重试'));
+    } catch (_) {
+      return failure<void>(new AppError(AppErrorCode.SYSTEM_UNAVAILABLE, '暂时无法读取系统通知授权状态，请稍后重试'));
+    }
+  }
+
   async schedule(item: Item, scheduledAt: number): Promise<Result<number>> {
     try {
-      if (!await notificationManager.isNotificationEnabled()) {
-        return failure<number>(new AppError(AppErrorCode.SYSTEM_PERMISSION_DENIED,
-          '系统通知未授权，请在设置中管理系统通知授权后重试'));
+      const permission = await this.checkPermission();
+      if (!permission.ok) {
+        return failure<number>(permission.getError());
       }
       const date = new Date(scheduledAt);
       const request: reminderAgentManager.ReminderRequestCalendar = {
@@ -29,7 +40,7 @@ export class SystemReminderAdapter implements ReminderAdapter {
           second: 0
         },
         title: 'ItemTrace 到期提醒',
-        content: `“${item.name}”即将到期，请及时检查。`,
+        content: `“${item.name}”到期日为 ${item.expirationDate ?? '未设置'}，请及时检查。`,
         tapDismissed: true
       };
       return success<number>(await reminderAgentManager.publishReminder(request));
@@ -48,7 +59,11 @@ export class SystemReminderAdapter implements ReminderAdapter {
     try {
       await reminderAgentManager.cancelReminder(systemReminderId);
       return success<void>(undefined);
-    } catch (_) {
+    } catch (error) {
+      if ((error as BusinessError).code === 1700003) {
+        // Already expired or removed by the system; there is nothing left to cancel.
+        return success<void>(undefined);
+      }
       return failure<void>(new AppError(AppErrorCode.REMINDER_DISPATCH, '系统提醒取消失败，请稍后重试'));
     }
   }

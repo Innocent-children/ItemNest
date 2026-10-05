@@ -23,6 +23,7 @@ export default function expiryServiceTest() {
       expect(service.getExpiryStatus(itemWithDate('2026-06-27'), today)).assertEqual(ExpiryStatus.DUE_SOON);
       expect(service.getExpiryStatus(itemWithDate('2026-06-28'), today)).assertEqual(ExpiryStatus.NORMAL);
       expect(service.getStockStatus(itemWithDate(undefined, undefined, 0))).assertEqual(StockStatus.OUT_OF_STOCK);
+      expect(service.getExpiryStatus(itemWithDate('2026-06-01', 7, 0), today)).assertEqual(ExpiryStatus.NO_EXPIRY_DATE);
     });
   });
 }

@@ -89,6 +89,9 @@ export default function homeSummaryFlowTest() {
         item.quantity = 0;
         item.expirationDate = '2026-06-20';
         repository.items.push(item);
+        const dueItem = createSummaryItem(index + 12);
+        dueItem.expirationDate = '2026-06-20';
+        repository.items.push(dueItem);
       }
 
       const summary = await new HomeSummaryService(repository, new ExpiryService())

@@ -11,13 +11,15 @@ export class HomeSummary {
   readonly outOfStockItems: ItemSummary[];
   readonly dueSoonCount: number;
   readonly outOfStockCount: number;
+  readonly expiryAttentionItems: ItemSummary[];
 
-  constructor(recentItems: ItemSummary[], dueSoonItems: ItemSummary[], outOfStockItems: ItemSummary[], dueSoonCount: number, outOfStockCount: number) {
+  constructor(recentItems: ItemSummary[], dueSoonItems: ItemSummary[], outOfStockItems: ItemSummary[], dueSoonCount: number, outOfStockCount: number, expiryAttentionItems: ItemSummary[] = dueSoonItems) {
     this.recentItems = recentItems;
     this.dueSoonItems = dueSoonItems;
     this.outOfStockItems = outOfStockItems;
     this.dueSoonCount = dueSoonCount;
     this.outOfStockCount = outOfStockCount;
+    this.expiryAttentionItems = expiryAttentionItems;
   }
 }
 
@@ -40,19 +42,15 @@ export class HomeSummaryService {
       return failure<HomeSummary>(itemsResult.getError());
     }
     const recentItems = this.toSummaries(recentResult.getData(), now);
-    const dueSoonItems: ItemSummary[] = [];
+    const expiryAttentionItems: ItemSummary[] = [];
     const outOfStockItems: ItemSummary[] = [];
-    let dueSoonCount = 0;
     let outOfStockCount = 0;
     const items = itemsResult.getData();
     for (let index = 0; index < items.length; index++) {
       const item = items[index];
       const summary = this.toSummary(item, now);
-      if (summary.expiryStatus === ExpiryStatus.DUE_SOON) {
-        dueSoonCount++;
-        if (dueSoonItems.length < 10) {
-          dueSoonItems.push(summary);
-        }
+      if (summary.expiryStatus === ExpiryStatus.DUE_SOON || summary.expiryStatus === ExpiryStatus.EXPIRED) {
+        expiryAttentionItems.push(summary);
       }
       if (summary.stockStatus === StockStatus.OUT_OF_STOCK) {
         outOfStockCount++;
@@ -61,7 +59,10 @@ export class HomeSummaryService {
         }
       }
     }
-    return success(new HomeSummary(recentItems, dueSoonItems, outOfStockItems, dueSoonCount, outOfStockCount));
+    expiryAttentionItems.sort((left: ItemSummary, right: ItemSummary) =>
+      (left.expirationDate ?? '').localeCompare(right.expirationDate ?? ''));
+    return success(new HomeSummary(recentItems, expiryAttentionItems.slice(0, 10), outOfStockItems,
+      expiryAttentionItems.length, outOfStockCount, expiryAttentionItems));
   }
 
   private toSummaries(items: Item[], now: Date): ItemSummary[] {
@@ -79,6 +80,7 @@ export class HomeSummaryService {
       quantity: item.quantity,
       unit: item.unit,
       locationPath: item.locationPath,
+      activeLocationPaths: item.activeLocationPaths,
       category: item.category,
       expirationDate: item.expirationDate,
       expiryStatus: this.expiryService.getExpiryStatus(item, now),

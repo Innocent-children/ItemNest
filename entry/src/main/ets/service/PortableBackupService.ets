@@ -11,6 +11,7 @@ import { AppEventBus } from '../common/AppEventBus';
 import { AssetRepositoryPort } from '../data/repository/AssetRepository';
 import { StockThresholdRepository } from '../data/repository/StockThresholdRepository';
 import { RdbDatabase } from '../data/rdb/RdbDatabase';
+import { migrateLendingRelations } from '../data/rdb/TraceEventSchema';
 import { Item, PhotoState } from '../model/Item';
 import { ItemAsset, AssetSource } from '../model/ItemAsset';
 import { ExportService } from './ExportService';
@@ -134,6 +135,26 @@ export class PortableBackupService {
     return success(this.validation.preview(payload));
   }
 
+  async previewCurrent(): Promise<Result<ImportPreview>> {
+    const exported = await this.exporter.exportJson();
+    if (!exported.ok) {
+      return failure<ImportPreview>(exported.getError());
+    }
+    const thresholds = await this.thresholds.listAll();
+    if (!thresholds.ok) {
+      return failure<ImportPreview>(thresholds.getError());
+    }
+    try {
+      const data = JSON.parse(exported.getData()) as ItemTraceExportPayload;
+      const photoCount = data.items.filter((item: Item) => item.photoState === PhotoState.LOCAL).length;
+      return success(new ImportPreview(data.items.length, data.batches.length, data.locations.length,
+        data.categories.length, data.traceEvents.length, undefined, photoCount, thresholds.getData().length,
+        data.items.slice(0, 5).map((item: Item) => item.name)));
+    } catch (_) {
+      return failure<ImportPreview>(new AppError(AppErrorCode.DATABASE_READ, '无法核对当前数据，请重试预览'));
+    }
+  }
+
   async restore(text: string, confirmed: boolean): Promise<Result<string>> {
     if (!confirmed) {
       return failure<string>(new AppError(AppErrorCode.VALIDATION, '恢复前需要明确确认'));
@@ -196,7 +217,7 @@ export class PortableBackupService {
         try { await this.files.removeOwnedPhoto(asset.localPath); } catch (_) {}
       }
       for (const item of cancelledItems) {
-        try { await this.reminders.reconcile(item); } catch (_) {}
+        try { await this.reminders.reconcileLatest(item.id); } catch (_) {}
       }
       return failure<string>(new AppError(AppErrorCode.DATABASE_WRITE, '恢复失败，数据库已回滚；恢复前备份已在应用内保留'));
     }
@@ -204,7 +225,7 @@ export class PortableBackupService {
     let cleanupFailed = false;
     for (const item of payload.items) {
       try {
-        const scheduled = await this.reminders.reconcile(item);
+        const scheduled = await this.reminders.reconcileLatest(item.id);
         if (!scheduled.ok) {
           cleanupFailed = true;
         }
@@ -252,8 +273,11 @@ export class PortableBackupService {
     for (const trace of payload.traceEvents) {
       await store.insert('trace_event', { id: trace.id, item_id: trace.itemId, batch_id: trace.batchId ?? null,
         type: trace.type, quantity: trace.quantity, counterpart: trace.counterpart ?? null,
-        note: trace.note ?? null, created_at: trace.createdAt });
+        note: trace.note ?? null, created_at: trace.createdAt, voided_at: trace.voidedAt ?? null,
+        return_allocations_json: trace.returnAllocations === undefined ? null : JSON.stringify(trace.returnAllocations),
+        legacy_allocated: trace.legacyAllocated === true ? 1 : 0 });
     }
+    await migrateLendingRelations(store);
     for (const asset of assets) {
       await store.insert('item_asset', { id: asset.id, item_id: asset.itemId, local_path: asset.localPath,
         source: asset.source, created_at: asset.createdAt });

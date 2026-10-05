@@ -1,3 +1,4 @@
+import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 
 @Component
@@ -11,7 +12,15 @@ export struct EmptyState {
   @Prop actionReturnTo: string = '';
 
   build() {
-    Column({ space: $r('app.float.space_2') }) {
+    Column({ space: $r('app.float.space_3') }) {
+      Image($r('app.media.ui_trace'))
+        .width(30).height(30)
+        .fillColor($r('app.color.brand_primary'))
+        .padding(14)
+        .width(58).height(58)
+        .backgroundColor($r('app.color.surface_accent'))
+        .borderRadius(21)
+        .accessibilityLevel('no')
       Text(this.title)
         .fontSize($r('app.float.font_section'))
         .fontWeight(FontWeight.Medium)
@@ -24,6 +33,8 @@ export struct EmptyState {
       }
       if (this.actionText.length > 0 && this.actionRoute.length > 0) {
         Button(this.actionText)
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .fontColor($r('app.color.brand_on_primary'))
           .backgroundColor($r('app.color.brand_primary'))
           .onClick(() => this.openAction())
@@ -33,10 +44,11 @@ export struct EmptyState {
     .padding($r('app.float.space_6'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .border({ width: 1, color: $r('app.color.border_subtle') })
     .alignItems(HorizontalAlign.Center)
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 8 }))
-      .animation({ duration: this.reduceAnimation ? 0 : 220, curve: Curve.EaseOut }))
+      .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
   }
 
   private openAction(): void {

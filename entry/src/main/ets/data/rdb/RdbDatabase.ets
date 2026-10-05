@@ -3,15 +3,15 @@ import { relationalStore } from '@kit.ArkData';
 import { AppError, AppErrorCode, toAppError } from '../../common/AppError';
 import { failure, Result, success } from '../../common/Result';
 import { addItemBarcode, createItemSchema, DATABASE_NAME, DATABASE_VERSION } from './ItemSchema';
-import { createReminderSchema } from './ReminderSchema';
+import { addReminderMetadata, createReminderSchema } from './ReminderSchema';
 import { createAssetSchema } from './AssetSchema';
 import { createBatchSchema } from './BatchSchema';
 import { createStockThresholdSchema } from './StockThresholdSchema';
-import { createTraceEventSchema } from './TraceEventSchema';
+import { createTraceEventSchema, migrateLendingRelations } from './TraceEventSchema';
 import { createLocationSchema } from './LocationSchema';
 import { createCategorySchema } from './CategorySchema';
 import { createSearchHistorySchema } from './SearchHistorySchema';
-import { createInventoryIntegritySchema } from './InventoryIntegritySchema';
+import { createInventoryIntegritySchema, updateInventoryIntegritySchema } from './InventoryIntegritySchema';
 
 export async function migrateToLatest(store: relationalStore.RdbStore): Promise<void> {
   const currentVersion = store.version;
@@ -58,6 +58,11 @@ export async function migrateToLatest(store: relationalStore.RdbStore): Promise<
     if (currentVersion < 11) {
       await addItemBarcode(transaction);
     }
+    if (currentVersion < 12) {
+      await addReminderMetadata(transaction);
+      await migrateLendingRelations(transaction);
+      await updateInventoryIntegritySchema(transaction);
+    }
     await transaction.execute(`PRAGMA user_version = ${DATABASE_VERSION}`);
     await transaction.commit();
   } catch (error) {
@@ -74,11 +79,14 @@ export async function migrateToLatest(store: relationalStore.RdbStore): Promise<
 
 export class RdbDatabase {
   private readonly context: Context;
+  private readonly databaseName: string;
   private store?: relationalStore.RdbStore;
   private initializing?: Promise<Result<relationalStore.RdbStore>>;
+  private static readonly writeQueues: Map<string, Promise<void>> = new Map<string, Promise<void>>();
 
-  constructor(context: Context) {
+  constructor(context: Context, databaseName: string = DATABASE_NAME) {
     this.context = context;
+    this.databaseName = databaseName;
   }
 
   async getStore(): Promise<Result<relationalStore.RdbStore>> {
@@ -105,6 +113,20 @@ export class RdbDatabase {
   }
 
   async transaction<T>(operation: (store: relationalStore.Transaction) => Promise<T>): Promise<T> {
+    const previous = RdbDatabase.writeQueues.get(this.databaseName) ?? Promise.resolve();
+    let release: () => void = () => {};
+    RdbDatabase.writeQueues.set(this.databaseName, new Promise<void>((resolve: () => void) => {
+      release = resolve;
+    }));
+    await previous;
+    try {
+      return await this.runTransaction(operation);
+    } finally {
+      release();
+    }
+  }
+
+  private async runTransaction<T>(operation: (store: relationalStore.Transaction) => Promise<T>): Promise<T> {
     const store = await this.requireStore();
     let transaction: relationalStore.Transaction | undefined = undefined;
     try {
@@ -139,7 +161,7 @@ export class RdbDatabase {
     let openedStore: relationalStore.RdbStore | undefined = undefined;
     try {
       const config: relationalStore.StoreConfig = {
-        name: DATABASE_NAME,
+        name: this.databaseName,
         securityLevel: relationalStore.SecurityLevel.S3
       };
       openedStore = await relationalStore.getRdbStore(this.context, config);

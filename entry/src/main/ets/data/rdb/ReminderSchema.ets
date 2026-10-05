@@ -25,3 +25,9 @@ export async function createReminderSchema(store: relationalStore.Transaction): 
     await SchemaExecutor.execute(store, REMINDER_INDEXES[index]);
   }
 }
+
+// Nullable metadata preserves existing reminders while enabling stable plans and content updates.
+export async function addReminderMetadata(store: relationalStore.Transaction): Promise<void> {
+  await SchemaExecutor.execute(store, 'ALTER TABLE reminder_record ADD COLUMN plan_key TEXT');
+  await SchemaExecutor.execute(store, 'ALTER TABLE reminder_record ADD COLUMN content_signature TEXT');
+}

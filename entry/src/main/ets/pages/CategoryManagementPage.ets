@@ -1,3 +1,4 @@
+import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
@@ -9,6 +10,8 @@ export struct CategoryManagementPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
+  @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @State private loading: boolean = true;
   @State private operating: boolean = false;
@@ -66,13 +69,14 @@ export struct CategoryManagementPage {
               .enabled(!this.operating)
               .onChange((value: string) => this.name = value)
             Button('新增分类')
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
               .width('100%')
               .fontColor($r('app.color.brand_on_primary'))
               .backgroundColor($r('app.color.brand_primary'))
               .borderRadius($r('app.float.radius_control'))
               .enabled(!this.operating)
-              .scale({ x: this.pressedAction === 'create' ? 0.98 : 1, y: this.pressedAction === 'create' ? 0.98 : 1 })
-              .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
+              .scale({ x: this.pressedAction === 'create' && !this.reduceAnimation ? 0.96 : 1, y: this.pressedAction === 'create' && !this.reduceAnimation ? 0.96 : 1 })
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
               .onTouch((event: TouchEvent) => this.updatePressedAction(event, 'create'))
               .onClick(() => this.createCategory())
             if (this.actionError.length > 0) {
@@ -93,15 +97,16 @@ export struct CategoryManagementPage {
                 }
                 .layoutWeight(1)
                 Button(category.active ? '停用' : '启用')
+                  .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
                   .fontColor($r('app.color.brand_primary'))
                   .backgroundColor($r('app.color.surface_accent'))
                   .borderRadius($r('app.float.radius_control'))
                   .enabled(!this.operating)
                   .scale({
-                    x: this.pressedAction === `toggle:${category.id}` ? 0.98 : 1,
-                    y: this.pressedAction === `toggle:${category.id}` ? 0.98 : 1
+                    x: this.pressedAction === `toggle:${category.id}` && !this.reduceAnimation ? 0.96 : 1,
+                    y: this.pressedAction === `toggle:${category.id}` && !this.reduceAnimation ? 0.96 : 1
                   })
-                  .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
+                  .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
                   .onTouch((event: TouchEvent) => this.updatePressedAction(event, `toggle:${category.id}`))
                   .onClick(() => this.toggleCategory(category))
               }
@@ -119,7 +124,7 @@ export struct CategoryManagementPage {
     }
     .width('100%')
     .height('100%')
-    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
+    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
   }
 

@@ -1,21 +1,140 @@
 {
   "color": [
-    { "name": "start_window_background", "value": "#101513" },
-    { "name": "surface_app", "value": "#101513" },
-    { "name": "surface_card", "value": "#19211E" },
-    { "name": "surface_accent", "value": "#173C30" },
-    { "name": "brand_primary", "value": "#7AD8B4" },
-    { "name": "brand_on_primary", "value": "#10231C" },
-    { "name": "text_primary", "value": "#EFF7F2" },
-    { "name": "text_secondary", "value": "#B7C5BE" },
-    { "name": "border_subtle", "value": "#34463D" },
-    { "name": "status_danger", "value": "#FFB4AB" },
-    { "name": "status_danger_soft", "value": "#5C1E1A" },
-    { "name": "status_warning", "value": "#FFDA8A" },
-    { "name": "status_warning_soft", "value": "#4A3800" },
-    { "name": "status_success", "value": "#8CE6B7" },
-    { "name": "status_success_soft", "value": "#123E2A" },
-    { "name": "status_neutral", "value": "#BECBC4" },
-    { "name": "status_neutral_soft", "value": "#2A3731" }
+    {
+      "name": "start_window_background",
+      "value": "#12151A"
+    },
+    {
+      "name": "surface_app",
+      "value": "#12151A"
+    },
+    {
+      "name": "surface_card",
+      "value": "#1F232A"
+    },
+    {
+      "name": "surface_accent",
+      "value": "#233E31"
+    },
+    {
+      "name": "brand_primary",
+      "value": "#85DDB1"
+    },
+    {
+      "name": "brand_on_primary",
+      "value": "#123323"
+    },
+    {
+      "name": "text_primary",
+      "value": "#EBEDF2"
+    },
+    {
+      "name": "text_secondary",
+      "value": "#A9B0BC"
+    },
+    {
+      "name": "border_subtle",
+      "value": "#30363E"
+    },
+    {
+      "name": "status_danger",
+      "value": "#FFB4AB"
+    },
+    {
+      "name": "status_danger_soft",
+      "value": "#5C1E1A"
+    },
+    {
+      "name": "status_warning",
+      "value": "#FFDA8A"
+    },
+    {
+      "name": "status_warning_soft",
+      "value": "#4A3800"
+    },
+    {
+      "name": "status_success",
+      "value": "#8CE6B7"
+    },
+    {
+      "name": "status_success_soft",
+      "value": "#123E2A"
+    },
+    {
+      "name": "status_neutral",
+      "value": "#BECBC4"
+    },
+    {
+      "name": "status_neutral_soft",
+      "value": "#2A3731"
+    },
+    {
+      "name": "hero_start",
+      "value": "#202B26"
+    },
+    {
+      "name": "hero_end",
+      "value": "#233E31"
+    },
+    {
+      "name": "hero_text",
+      "value": "#EBEDF2"
+    },
+    {
+      "name": "hero_secondary",
+      "value": "#B6C9BE"
+    },
+    {
+      "name": "hero_chip",
+      "value": "#314D3D"
+    },
+    {
+      "name": "hero_action",
+      "value": "#85DDB1"
+    },
+    {
+      "name": "hero_action_text",
+      "value": "#123323"
+    },
+    {
+      "name": "dock_glass",
+      "value": "#CC252A32"
+    },
+    {
+      "name": "glass_border",
+      "value": "#554D5662"
+    },
+    {
+      "name": "shadow_soft",
+      "value": "#18000000"
+    },
+    {
+      "name": "shadow_dock",
+      "value": "#55000000"
+    },
+    {
+      "name": "particle_mint",
+      "value": "#B9F4CB"
+    },
+    {
+      "name": "dock_selected",
+      "value": "#14FFFFFF"
+    },
+    {
+      "name": "dock_pressed",
+      "value": "#14FFFFFF"
+    },
+    {
+      "name": "dock_action_start",
+      "value": "#37A777"
+    },
+    {
+      "name": "dock_action_end",
+      "value": "#178753"
+    },
+    {
+      "name": "dock_on_action",
+      "value": "#FFFFFF"
+    }
   ]
 }

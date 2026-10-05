@@ -30,6 +30,8 @@ export interface Item {
   quantity: number;
   unit: ItemUnit;
   locationPath?: string;
+  // 读取时计算的现存批次位置；空数组表示没有现存批次，locationPath仍保留默认存放位置。
+  activeLocationPaths?: string[];
   category?: string;
   expirationDate?: string;
   reminderDays?: number;
@@ -59,6 +61,8 @@ export interface ItemSummary {
   quantity: number;
   unit: ItemUnit;
   locationPath?: string;
+  // 读取时计算的现存批次位置；空数组表示没有现存批次，locationPath仍保留默认存放位置。
+  activeLocationPaths?: string[];
   category?: string;
   expirationDate?: string;
   expiryStatus: ExpiryStatus;

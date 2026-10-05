@@ -44,7 +44,15 @@ export class ItemRepository implements ItemRepositoryPort {
       if (!updated) {
         return failure<Item>(new AppError(AppErrorCode.NOT_FOUND, '物品不存在或已删除'));
       }
-      return success(item);
+      try {
+        const saved = await this.itemDao.findById(item.id);
+        if (saved === undefined) {
+          return failure<Item>(new AppError(AppErrorCode.NOT_FOUND, '物品已保存，但当前记录已不存在，请返回物品列表'));
+        }
+        return success(saved);
+      } catch (_) {
+        return failure<Item>(new AppError(AppErrorCode.DATABASE_READ, '物品已保存，暂时无法刷新详情，请重新加载'));
+      }
     } catch (error) {
       return failure<Item>(toAppError(error, AppErrorCode.DATABASE_WRITE, '修改物品失败，请重试'));
     }

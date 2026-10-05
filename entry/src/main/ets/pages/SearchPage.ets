@@ -1,9 +1,9 @@
+import { RoundedButtonStyle, dockContentInset, uiSpring } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
-import { MainEntryBar } from '../components/MainEntryBar';
 import { AppEventBus } from '../common/AppEventBus';
 import { SearchRequestCoordinator } from '../common/SearchRequestCoordinator';
 import { ItemSummary } from '../model/Item';
@@ -20,9 +20,13 @@ interface SearchConditionParams {
 
 @Component
 export struct SearchPage {
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemtrace.mainDockVisible') private dockVisible: boolean = true;
+  @StorageLink('itemtrace.keyboardVisible') private keyboardVisible: boolean = false;
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
-  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
+  @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @State private name: string = '';
   @State private selectedLocation: string = '';
   @State private selectedCategory: string = '';
@@ -89,6 +93,8 @@ export struct SearchPage {
         }
         .layoutWeight(1)
         Button('清除')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_card'))
           .border({ width: 1, color: $r('app.color.border_subtle') })
@@ -105,18 +111,35 @@ export struct SearchPage {
               .fontSize($r('app.float.font_section'))
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))
-            TextInput({ text: this.name, placeholder: '输入物品名称或条码' })
-              .backgroundColor($r('app.color.surface_app'))
-              .border({ width: 1, color: $r('app.color.border_subtle') })
-              .borderRadius($r('app.float.radius_control'))
-              .onChange((value: string) => {
-                this.name = value;
-                this.requestCoordinator.invalidateSearchResults();
-                this.searchLoading = false;
-                this.searchErrorMessage = '';
-                this.loadSuggestions();
-                this.scheduleSearch();
-              })
+            Row({ space: $r('app.float.space_2') }) {
+              Image($r('app.media.dock_search'))
+                .width(20).height(20)
+                .fillColor($r('app.color.text_secondary'))
+                .margin({ left: $r('app.float.space_4') })
+                .accessibilityLevel('no')
+              TextInput({ text: this.name, placeholder: '输入物品名称或条码' })
+                .layoutWeight(1)
+                .height(48)
+                .fontSize($r('app.float.font_body'))
+                .fontColor($r('app.color.text_primary'))
+                .placeholderColor($r('app.color.text_secondary'))
+                .caretColor($r('app.color.brand_primary'))
+                .backgroundColor(Color.Transparent)
+                .border({ width: 0 })
+                .padding({ left: 0, right: $r('app.float.space_4') })
+                .onChange((value: string) => {
+                  this.name = value;
+                  this.requestCoordinator.invalidateSearchResults();
+                  this.searchLoading = false;
+                  this.searchErrorMessage = '';
+                  this.loadSuggestions();
+                  this.scheduleSearch();
+                })
+            }
+            .width('100%')
+            .backgroundColor($r('app.color.surface_app'))
+            .border({ width: 0.8, color: $r('app.color.border_subtle') })
+            .borderRadius($r('app.float.radius_pill'))
             if (this.suggestions.length > 0 || this.history.length > 0) {
               this.suggestionPanel()
             }
@@ -125,6 +148,7 @@ export struct SearchPage {
           .padding($r('app.float.space_4'))
           .borderRadius($r('app.float.radius_card'))
           .backgroundColor($r('app.color.surface_card'))
+          .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
 
           if (!this.currentQuery().isEmpty()) {
             this.selectedConditionPanel()
@@ -142,6 +166,8 @@ export struct SearchPage {
               Flex({ wrap: FlexWrap.Wrap }) {
                 ForEach(this.locationPaths, (location: string) => {
                   Button(location)
+                    .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                    .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
                     .type(ButtonType.Capsule)
                     .fontColor(this.selectedLocation === location ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
                     .backgroundColor(this.selectedLocation === location ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
@@ -158,6 +184,7 @@ export struct SearchPage {
             .padding($r('app.float.space_4'))
             .borderRadius($r('app.float.radius_card'))
             .backgroundColor($r('app.color.surface_card'))
+            .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
           }
 
           if (this.categories.length > 0) {
@@ -169,6 +196,8 @@ export struct SearchPage {
               Flex({ wrap: FlexWrap.Wrap }) {
                 ForEach(this.categories, (category: string) => {
                   Button(category)
+                    .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                    .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
                     .type(ButtonType.Capsule)
                     .fontColor(this.selectedCategory === category ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
                     .backgroundColor(this.selectedCategory === category ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
@@ -185,6 +214,7 @@ export struct SearchPage {
             .padding($r('app.float.space_4'))
             .borderRadius($r('app.float.radius_card'))
             .backgroundColor($r('app.color.surface_card'))
+            .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
           }
 
           if (this.filterLoading) {
@@ -192,6 +222,8 @@ export struct SearchPage {
           } else if (this.filterErrorMessage.length > 0) {
             ErrorState({ message: this.filterErrorMessage })
             Button('重试加载筛选条件')
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
               .fontColor($r('app.color.brand_on_primary'))
               .backgroundColor($r('app.color.brand_primary'))
               .onClick(() => this.loadFilterOptions(true))
@@ -202,12 +234,16 @@ export struct SearchPage {
           } else if (this.searchErrorMessage.length > 0) {
             ErrorState({ message: this.searchErrorMessage })
             Button('重试搜索')
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
               .fontColor($r('app.color.brand_on_primary'))
               .backgroundColor($r('app.color.brand_primary'))
               .onClick(() => this.search(true, false))
           } else if (this.searched && this.items.length === 0) {
             EmptyState({ title: '暂无搜索结果', description: '请修改或清除筛选条件后重试。' })
             Button('清除条件')
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
               .width('100%')
               .fontColor($r('app.color.brand_primary'))
               .backgroundColor($r('app.color.surface_accent'))
@@ -219,6 +255,8 @@ export struct SearchPage {
               .fontWeight(FontWeight.Medium)
               .fontColor($r('app.color.text_primary'))
             Button('查看完整列表')
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
               .width('100%')
               .fontColor($r('app.color.brand_primary'))
               .backgroundColor($r('app.color.surface_accent'))
@@ -230,15 +268,14 @@ export struct SearchPage {
           }
         }
         .width('100%')
-        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
+        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: dockContentInset(this.dockVisible, this.keyboardVisible) })
       }
       .layoutWeight(1)
 
-      MainEntryBar({ activeRoute: RouteName.SEARCH })
     }
     .width('100%')
     .height('100%')
-    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
+    .padding({ top: this.safeAreaTop, left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
   }
 
@@ -252,6 +289,8 @@ export struct SearchPage {
         Flex({ wrap: FlexWrap.Wrap }) {
           ForEach(this.suggestions, (suggestion: string) => {
             Button(suggestion)
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
               .type(ButtonType.Capsule)
               .fontColor($r('app.color.brand_primary'))
               .backgroundColor($r('app.color.surface_accent'))
@@ -273,12 +312,16 @@ export struct SearchPage {
             .fontColor($r('app.color.text_secondary'))
             .layoutWeight(1)
           Button('清除')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
             .fontColor($r('app.color.brand_primary'))
             .backgroundColor($r('app.color.surface_app'))
             .onClick(() => this.clearHistory())
         }
         ForEach(this.history, (record: SearchHistory) => {
           Button(record.queryText ?? record.locationPath ?? record.category ?? '最近查看')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
             .type(ButtonType.Capsule)
             .fontColor($r('app.color.brand_primary'))
             .backgroundColor($r('app.color.surface_accent'))
@@ -300,6 +343,8 @@ export struct SearchPage {
           .fontColor($r('app.color.text_secondary'))
           .layoutWeight(1)
         Button('全部清除')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_app'))
           .onClick(() => this.clearQuery())
@@ -325,6 +370,8 @@ export struct SearchPage {
   @Builder
   private conditionChip($$: SearchConditionParams) {
     Button(`${$$.label}  ×`)
+      .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+      .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
       .type(ButtonType.Capsule)
       .fontColor($r('app.color.brand_primary'))
       .backgroundColor($r('app.color.surface_accent'))

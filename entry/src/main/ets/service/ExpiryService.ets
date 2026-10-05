@@ -7,7 +7,7 @@ const DEFAULT_REMINDER_DAYS: number = 7;
 
 export class ExpiryService {
   getExpiryStatus(item: Item, now: Date = new Date()): ExpiryStatus {
-    if (item.expirationDate === undefined || item.expirationDate.length === 0) {
+    if (item.quantity <= 0 || item.expirationDate === undefined || item.expirationDate.length === 0) {
       return ExpiryStatus.NO_EXPIRY_DATE;
     }
     const expiration = this.toLocalDay(item.expirationDate);

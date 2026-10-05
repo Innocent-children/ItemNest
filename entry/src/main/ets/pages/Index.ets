@@ -1,3 +1,5 @@
+import { AmbientParticles } from '../components/AmbientParticles';
+import { RoundedButtonStyle, dockContentInset, uiSpring } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { accessibility } from '@kit.AccessibilityKit';
 import { EmptyState } from '../components/EmptyState';
@@ -39,6 +41,7 @@ interface HomeSummarySectionParams {
   emptyText: string;
   actionRoute: string;
   actionReturnTo?: string;
+  expandableExpiry?: boolean;
 }
 
 @Entry
@@ -49,11 +52,22 @@ struct Index {
   @StorageLink('itemtrace.preferenceRevision') @Watch('onRevisionChanged') private preferenceRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
+  @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @State private homeVisible: boolean = true;
+  @State private mainTabIndex: number = 0;
+  @State private navigationRootVisible: boolean = true;
+  @StorageLink('itemtrace.mainDockVisible') private dockVisible: boolean = true;
+  @StorageLink('itemtrace.keyboardVisible') private keyboardVisible: boolean = false;
+  @State private dockRoute: string = RouteName.HOME;
+  private mainTabRoutes: string[] = [RouteName.HOME, RouteName.ITEM_LIST, RouteName.SEARCH, RouteName.SETTINGS];
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private recentItems: ItemSummary[] = [];
   @State private dueSoonItems: ItemSummary[] = [];
+  @State private expiryAttentionItems: ItemSummary[] = [];
+  @State private showAllExpiryItems: boolean = false;
   @State private outOfStockItems: ItemSummary[] = [];
   @State private lowStockItems: LowStockItem[] = [];
   @State private dueSoonCount: number = 0;
@@ -80,6 +94,7 @@ struct Index {
       accessibility.onAnimationReduceStateChange(this.animationReduceListener);
     } catch (_) {
     }
+    this.dockVisible = true;
     NavigationHelper.registerPathStack(this.pathStack);
     this.subscribeDataRefresh();
     this.subscribeRouteResultRefresh();
@@ -194,20 +209,87 @@ struct Index {
     });
   }
 
-  build() {
-    Navigation(this.pathStack) {
-      this.homeContent()
+  // Main columns are peers, not push/pop destinations. Their cached views and Dock stay in place.
+  private selectMainTab(route: string): void {
+    const index = this.mainTabRoutes.indexOf(route);
+    if (index < 0 || route === this.dockRoute) {
+      return;
     }
-    .hideTitleBar(true)
-    .onNavBarStateChange((visible: boolean) => {
-      if (visible) {
-        this.refreshSummaryForCurrentRevision(false);
+    this.mainTabIndex = index;
+    this.dockRoute = route;
+    if (this.pathStack.size() > 0) {
+      // Leave a filtered main-column destination without replaying navigation transitions.
+      this.pathStack.clear(false);
+    }
+    this.homeVisible = index === 0 && this.navigationRootVisible;
+  }
+
+  onBackPress(): boolean {
+    if (this.pathStack.size() === 0 && this.mainTabIndex !== 0) {
+      this.selectMainTab(RouteName.HOME);
+      return true;
+    }
+    return false;
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.Bottom }) {
+      Navigation(this.pathStack) {
+        this.mainTabs()
       }
-    })
-    .navDestination(this.navDestinationBuilder)
+      .hideTitleBar(true)
+      .onNavBarStateChange((visible: boolean) => {
+        this.navigationRootVisible = visible;
+        this.homeVisible = visible && this.mainTabIndex === 0;
+        if (visible) {
+          this.dockVisible = true;
+          this.dockRoute = this.mainTabRoutes[this.mainTabIndex];
+          this.refreshSummaryForCurrentRevision(false);
+        }
+      })
+      .navDestination(this.navDestinationBuilder)
+      .width('100%')
+      .height('100%')
+      .backgroundColor($r('app.color.surface_app'))
+
+      MainEntryBar({ activeRoute: this.dockRoute, onTabSelected: (route: string) => this.selectMainTab(route) })
+        .visibility(this.dockVisible ? Visibility.Visible : Visibility.None)
+        .padding({ left: this.safeAreaLeft, right: this.safeAreaRight })
+    }
     .width('100%')
     .height('100%')
+    .padding({ bottom: this.dockVisible && !this.keyboardVisible ? this.safeAreaBottom : 0 })
     .backgroundColor($r('app.color.surface_app'))
+  }
+
+  @Builder
+  private mainTabs() {
+    Tabs({ index: $$this.mainTabIndex }) {
+      TabContent() {
+        this.homeContent()
+      }
+      TabContent() {
+        ItemListPage()
+      }
+      TabContent() {
+        SearchPage()
+      }
+      TabContent() {
+        SettingsPage({ isMainTab: true })
+      }
+    }
+    .barHeight(0, true)
+    .animationDuration(0)
+    .scrollable(false)
+    .width('100%')
+    .height('100%')
+    .onChange((index: number) => {
+      this.mainTabIndex = index;
+      if (this.navigationRootVisible) {
+        this.dockRoute = this.mainTabRoutes[index];
+        this.homeVisible = index === 0;
+      }
+    })
   }
 
   @Builder
@@ -219,6 +301,8 @@ struct Index {
         Column({ space: $r('app.float.space_3') }) {
           ErrorState({ message: this.errorMessage })
           Button('重新加载')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
             .fontColor($r('app.color.brand_on_primary'))
             .backgroundColor($r('app.color.brand_primary'))
             .onClick(() => this.refreshSummaryForCurrentRevision(true))
@@ -227,7 +311,8 @@ struct Index {
       } else {
         Scroll() {
           Row() {
-            Column({ space: $r('app.float.space_6') }) {
+            Column({ space: $r('app.float.space_5') }) {
+              this.homeHeader()
               this.hero()
               this.overview()
               if (this.locationPaths.length > 0) {
@@ -237,7 +322,7 @@ struct Index {
                 this.summarySection({ title: '最近添加', subtitle: '刚记录的物品', items: this.recentItems, emptyText: '暂无物品', actionRoute: RouteName.ITEM_FORM, actionReturnTo: RouteName.HOME })
               }
               if (this.showExpirySection) {
-                this.summarySection({ title: '即将到期', subtitle: '优先处理，避免浪费', items: this.dueSoonItems, emptyText: '暂无即将到期物品', actionRoute: RouteName.ITEM_LIST })
+                this.summarySection({ title: '到期待处理', subtitle: '包含已过期和即将到期，按到期日排列', items: this.showAllExpiryItems ? this.expiryAttentionItems : this.dueSoonItems, emptyText: '暂无到期待处理物品', actionRoute: RouteName.ITEM_LIST, expandableExpiry: true })
               }
               if (this.showStockSection) {
                 this.summarySection({ title: '待补货', subtitle: '数量为 0 的物品', items: this.outOfStockItems, emptyText: '暂无待补货物品', actionRoute: RouteName.ITEM_LIST })
@@ -248,7 +333,7 @@ struct Index {
             }
             .width('100%')
             .constraintSize({ maxWidth: 960 })
-            .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
+            .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: dockContentInset(this.dockVisible, this.keyboardVisible) })
           }
           .width('100%')
           .justifyContent(FlexAlign.Center)
@@ -256,11 +341,13 @@ struct Index {
         .layoutWeight(1)
       }
 
-      MainEntryBar({ activeRoute: RouteName.HOME })
+      if (this.loading || this.errorMessage.length > 0) {
+        Blank().layoutWeight(1)
+      }
     }
     .width('100%')
     .height('100%')
-    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
+    .padding({ top: this.safeAreaTop, left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
   }
 
@@ -292,75 +379,151 @@ struct Index {
       }
     }
     .hideTitleBar(true)
+    .onWillShow(() => {
+      this.dockVisible = this.mainTabRoutes.indexOf(name) >= 0;
+      if (this.dockVisible) {
+        this.dockRoute = name;
+      }
+    })
     .onBackPressed(() => NavigationHelper.handleBackPressed())
   }
 
   @Builder
-  private hero() {
-    Column({ space: $r('app.float.space_4') }) {
-      Row({ space: $r('app.float.space_2') }) {
-        Text('IT')
-          .fontSize($r('app.float.font_caption'))
+  private homeHeader() {
+    Row({ space: $r('app.float.space_3') }) {
+      Column({ space: $r('app.float.space_1') }) {
+        Text('首页')
+          .fontSize($r('app.float.font_title'))
           .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_accent'))
-          .borderRadius(16)
-          .padding({ left: $r('app.float.space_2'), right: $r('app.float.space_2'), top: $r('app.float.space_1'), bottom: $r('app.float.space_1') })
-        Text('ITEMTRACE')
+          .fontColor($r('app.color.text_primary'))
+        Text('位置、数量与到期，一目了然')
           .fontSize($r('app.float.font_caption'))
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.brand_primary'))
+          .fontColor($r('app.color.text_secondary'))
       }
-      Text('物品，有迹可循')
-        .fontSize($r('app.float.font_display'))
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.text_primary'))
-      Text('把位置、数量和到期日记下来；需要时，随时找到。')
-        .fontSize($r('app.float.font_body'))
-        .fontColor($r('app.color.text_secondary'))
-      Row({ space: $r('app.float.space_2') }) {
-        Button('+ 记录物品')
-          .layoutWeight(1)
-          .fontColor($r('app.color.brand_on_primary'))
-          .backgroundColor($r('app.color.brand_primary'))
-          .borderRadius($r('app.float.radius_control'))
-          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create', returnTo: RouteName.HOME } }))
-        Button('搜索')
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_card'))
-          .border({ width: 1, color: $r('app.color.border_subtle') })
-          .borderRadius($r('app.float.radius_control'))
-          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.SEARCH }))
-        Button('设置')
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_card'))
-          .border({ width: 1, color: $r('app.color.border_subtle') })
-          .borderRadius($r('app.float.radius_control'))
-          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.SETTINGS }))
-      }
-      .width('100%')
+      .layoutWeight(1)
+      Image($r('app.media.ui_trace'))
+        .width(24).height(24)
+        .fillColor($r('app.color.brand_primary'))
+        .padding(12)
+        .width(48).height(48)
+        .backgroundColor($r('app.color.surface_card'))
+        .border({ width: 0.8, color: $r('app.color.glass_border') })
+        .borderRadius(24)
+        .accessibilityLevel('no')
     }
     .width('100%')
-    .padding($r('app.float.space_6'))
+  }
+
+  @Builder
+  private hero() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Row() {
+        Stack() {
+          Shape() {
+            Circle().width(158).height(158)
+          }
+          .width(158).height(158)
+          .fill(Color.Transparent).stroke($r('app.color.border_subtle')).strokeWidth(1)
+          Shape() {
+            Circle().width(112).height(112)
+          }
+          .width(112).height(112)
+          .fill($r('app.color.surface_accent')).stroke($r('app.color.border_subtle')).strokeWidth(1)
+          Image($r('app.media.ui_trace')).width(46).height(46)
+            .fillColor($r('app.color.hero_action')).opacity(0.65)
+        }
+        .width(158).height(158)
+      }
+      .width('100%').justifyContent(FlexAlign.End)
+      .padding({ top: 10, right: 10 })
+      .hitTestBehavior(HitTestMode.None)
+      .accessibilityLevel('no')
+
+      AmbientParticles({ active: this.homeVisible })
+
+      Column({ space: $r('app.float.space_4') }) {
+        Row({ space: $r('app.float.space_2') }) {
+          Image($r('app.media.ui_trace'))
+            .width(20).height(20).fillColor($r('app.color.hero_action'))
+            .accessibilityLevel('no')
+          Text('ITEMTRACE')
+            .fontSize($r('app.float.font_caption'))
+            .fontWeight(FontWeight.Bold)
+            .letterSpacing(2)
+            .fontColor($r('app.color.hero_text'))
+        }
+        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+        .borderRadius(20)
+        .backgroundColor($r('app.color.hero_chip'))
+
+        Column({ space: 8 }) {
+          Text('物品，有迹可循。')
+            .fontSize($r('app.float.font_title'))
+            .fontWeight(FontWeight.Bold)
+            .fontColor($r('app.color.hero_text'))
+          Text('把位置、数量和到期日记下来；需要时，随时找到。')
+            .fontSize($r('app.float.font_body'))
+            .fontColor($r('app.color.hero_secondary'))
+            .width('100%')
+        }
+        .alignItems(HorizontalAlign.Start)
+        .width('100%')
+
+        Flex({ wrap: FlexWrap.Wrap }) {
+          Button('+ 记录物品')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
+            .fontColor($r('app.color.hero_action_text'))
+            .backgroundColor($r('app.color.hero_action'))
+            .borderRadius(22)
+            .padding({ left: 20, right: 20 })
+            .margin({ right: 8, bottom: 8 })
+            .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create', returnTo: RouteName.HOME } }))
+          Button('搜索')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
+            .fontColor($r('app.color.hero_text'))
+            .backgroundColor($r('app.color.hero_chip'))
+            .borderRadius(22)
+            .margin({ right: 8, bottom: 8 })
+            .onClick(() => this.selectMainTab(RouteName.SEARCH))
+          Button('设置')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
+            .fontColor($r('app.color.hero_text'))
+            .backgroundColor($r('app.color.hero_chip'))
+            .borderRadius(22)
+            .margin({ bottom: 8 })
+            .onClick(() => this.selectMainTab(RouteName.SETTINGS))
+        }
+        .width('100%')
+      }
+      .width('100%')
+      .padding({ left: 24, right: 24, top: 24, bottom: 16 })
+      .alignItems(HorizontalAlign.Start)
+    }
+    .width('100%')
+    .linearGradient({ angle: 125, colors: [[$r('app.color.hero_start'), 0], [$r('app.color.hero_end'), 1]] })
     .borderRadius($r('app.float.radius_card'))
-    .backgroundColor($r('app.color.surface_card'))
-    .border({ width: 1, color: $r('app.color.border_subtle') })
+    .clip(true)
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 6 })
     .transition(TransitionEffect.OPACITY
-      .combine(TransitionEffect.translate({ y: 16 }))
-      .animation({ duration: this.reduceAnimation ? 0 : 280, curve: Curve.EaseOut }))
+      .combine(TransitionEffect.translate({ y: 18 }))
+      .combine(TransitionEffect.scale({ x: 0.97, y: 0.97 }))
+      .animation(uiSpring(this.reduceAnimation, 0.48, 0.76)))
   }
 
   @Builder
   private overview() {
     Row({ space: $r('app.float.space_2') }) {
       this.metricCard({ label: '最近添加', count: this.recentItems.length, background: $r('app.color.surface_accent'), textColor: $r('app.color.brand_primary') })
-      this.metricCard({ label: '即将到期', count: this.dueSoonCount, background: $r('app.color.status_warning_soft'), textColor: $r('app.color.status_warning') })
+      this.metricCard({ label: '到期待处理', count: this.dueSoonCount, background: $r('app.color.status_warning_soft'), textColor: $r('app.color.status_warning') })
       this.metricCard({ label: '待补货', count: this.outOfStockCount, background: $r('app.color.status_danger_soft'), textColor: $r('app.color.status_danger') })
     }
     .width('100%')
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 12 }))
-      .animation({ duration: this.reduceAnimation ? 0 : 280, curve: Curve.EaseOut }))
+      .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
   }
 
   @Builder
@@ -375,9 +538,10 @@ struct Index {
         .fontColor($$.textColor)
     }
     .layoutWeight(1)
-    .padding($r('app.float.space_3'))
-    .borderRadius($r('app.float.radius_control'))
+    .padding({ left: 14, right: 12, top: 18, bottom: 18 })
+    .borderRadius(22)
     .backgroundColor($$.background)
+    .shadow({ radius: 8, color: $r('app.color.shadow_soft'), offsetY: 3 })
     .alignItems(HorizontalAlign.Start)
   }
 
@@ -396,6 +560,8 @@ struct Index {
         }
         .layoutWeight(1)
         Button('全部')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_app'))
           .border({ width: 1, color: $r('app.color.border_subtle') })
@@ -405,6 +571,8 @@ struct Index {
       Flex({ wrap: FlexWrap.Wrap }) {
         ForEach(this.locationPaths, (location: string) => {
           Button(location)
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
             .type(ButtonType.Capsule)
             .fontColor($r('app.color.brand_primary'))
             .backgroundColor($r('app.color.surface_accent'))
@@ -418,6 +586,7 @@ struct Index {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
     .border({ width: 1, color: $r('app.color.border_subtle') })
   }
 
@@ -435,9 +604,16 @@ struct Index {
             .fontColor($r('app.color.text_secondary'))
         }
         .layoutWeight(1)
-        Text(`${$$.items.length} 项`)
+        Text(`${$$.expandableExpiry ? this.dueSoonCount : $$.items.length} 项`)
           .fontSize($r('app.float.font_caption'))
           .fontColor($r('app.color.text_secondary'))
+        if ($$.expandableExpiry && this.expiryAttentionItems.length > 10) {
+          Button(this.showAllExpiryItems ? '收起' : '查看全部待处理')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .fontColor($r('app.color.brand_primary'))
+            .backgroundColor($r('app.color.surface_accent'))
+            .onClick(() => this.showAllExpiryItems = !this.showAllExpiryItems)
+        }
       }
       if ($$.items.length === 0) {
         EmptyState({
@@ -464,7 +640,7 @@ struct Index {
         .fontSize($r('app.float.font_section'))
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
-      Text('低于你为物品设置的阈值，仅在应用内提示。')
+      Text('拥有的总量（包含借出）低于设置阈值，仅在应用内提示。')
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
       ForEach(this.lowStockItems, (item: LowStockItem) => {
@@ -483,7 +659,7 @@ struct Index {
         .backgroundColor($r('app.color.surface_card'))
         .transition(TransitionEffect.OPACITY
           .combine(TransitionEffect.translate({ y: 10 }))
-          .animation({ duration: this.reduceAnimation ? 0 : 240, curve: Curve.EaseOut }))
+          .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
         .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_DETAIL, params: { itemId: item.itemId } }))
       }, (item: LowStockItem) => item.itemId)
     }
@@ -520,12 +696,13 @@ struct Index {
       const summary = result.getData();
       this.recentItems = summary.recentItems;
       this.dueSoonItems = summary.dueSoonItems;
+      this.expiryAttentionItems = summary.expiryAttentionItems;
       this.outOfStockItems = summary.outOfStockItems;
       if (this.reduceAnimation) {
         this.dueSoonCount = summary.dueSoonCount;
         this.outOfStockCount = summary.outOfStockCount;
       } else {
-        this.getUIContext().animateTo({ duration: 240, curve: Curve.EaseOut }, () => {
+        this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.4, 0.76), () => {
           this.dueSoonCount = summary.dueSoonCount;
           this.outOfStockCount = summary.outOfStockCount;
         });
@@ -561,7 +738,7 @@ struct Index {
     if (title === '最近添加') {
       return '先记录一个物品，首页会自动显示最近内容。';
     }
-    if (title === '即将到期') {
+    if (title === '到期待处理') {
       return '目前没有需要优先处理的到期物品。';
     }
     if (title === '待补货') {

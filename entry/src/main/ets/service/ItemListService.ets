@@ -27,6 +27,7 @@ export class ItemListService {
       quantity: item.quantity,
       unit: item.unit,
       locationPath: item.locationPath,
+      activeLocationPaths: item.activeLocationPaths,
       category: item.category,
       expirationDate: item.expirationDate,
       expiryStatus: this.expiryService.getExpiryStatus(item, now),

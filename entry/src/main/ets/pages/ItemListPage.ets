@@ -1,9 +1,9 @@
+import { RoundedButtonStyle, dockContentInset, uiSpring } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
-import { MainEntryBar } from '../components/MainEntryBar';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { ItemSortMode } from '../model/UserPreferences';
@@ -16,10 +16,14 @@ import { AppServices } from '../service/AppServices';
 
 @Component
 export struct ItemListPage {
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemtrace.mainDockVisible') private dockVisible: boolean = true;
+  @StorageLink('itemtrace.keyboardVisible') private keyboardVisible: boolean = false;
   @StorageLink('itemtrace.dataRevision') @Watch('onRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.preferenceRevision') @Watch('onRevisionChanged') private preferenceRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
-  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
+  @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private items: ItemSummary[] = [];
@@ -90,6 +94,8 @@ export struct ItemListPage {
           }
           .layoutWeight(1)
           Button('筛选')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
             .fontColor($r('app.color.brand_primary'))
             .backgroundColor($r('app.color.surface_card'))
             .border({ width: 1, color: $r('app.color.border_subtle') })
@@ -97,6 +103,8 @@ export struct ItemListPage {
             .onClick(() => NavigationHelper.pushUrl({ url: RouteName.SEARCH, params: { query: this.query } }))
         }
         Button('+ 新增物品')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .width('100%')
           .fontColor($r('app.color.brand_on_primary'))
           .backgroundColor($r('app.color.brand_primary'))
@@ -106,39 +114,53 @@ export struct ItemListPage {
       .width('100%')
       .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
 
-      if (this.loading) {
-        LoadingState({ text: '正在加载物品…' })
-      } else if (this.errorMessage.length > 0) {
-        ErrorState({ message: this.errorMessage })
-        Button('重试')
-          .fontColor($r('app.color.brand_on_primary'))
-          .backgroundColor($r('app.color.brand_primary'))
-          .onClick(() => this.loadItemsForCurrentRevision(true))
-      } else if (this.items.length === 0) {
-        Column({ space: $r('app.float.space_3') }) {
-          if (this.query.isEmpty()) {
-            EmptyState({
-              title: '暂无物品',
-              description: '新增第一个物品，开始记录它放在哪里。',
-              actionText: '新增物品',
-              actionRoute: RouteName.ITEM_FORM,
-              actionMode: 'create',
-              actionReturnTo: RouteName.ITEM_LIST
-            })
-          } else {
-            EmptyState({
-              title: '暂无搜索结果',
-              description: '请修改或清除搜索条件后重试。'
-            })
-            Button('清除条件')
-              .width('100%')
-              .fontColor($r('app.color.brand_primary'))
-              .backgroundColor($r('app.color.surface_accent'))
-              .borderRadius($r('app.float.radius_control'))
-              .onClick(() => this.handleEmptyAction())
+      if (this.loading || this.errorMessage.length > 0 || this.items.length === 0) {
+        Scroll() {
+          Column({ space: $r('app.float.space_3') }) {
+            if (this.loading) {
+              LoadingState({ text: '正在加载物品…' })
+            } else if (this.errorMessage.length > 0) {
+              ErrorState({ message: this.errorMessage })
+              Button('重试')
+                .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
+                .fontColor($r('app.color.brand_on_primary'))
+                .backgroundColor($r('app.color.brand_primary'))
+                .onClick(() => this.loadItemsForCurrentRevision(true))
+            } else if (this.items.length === 0) {
+              Column({ space: $r('app.float.space_3') }) {
+                if (this.query.isEmpty()) {
+                  EmptyState({
+                    title: '暂无物品',
+                    description: '新增第一个物品，开始记录它放在哪里。',
+                    actionText: '新增物品',
+                    actionRoute: RouteName.ITEM_FORM,
+                    actionMode: 'create',
+                    actionReturnTo: RouteName.ITEM_LIST
+                  })
+                } else {
+                  EmptyState({
+                    title: '暂无搜索结果',
+                    description: '请修改或清除搜索条件后重试。'
+                  })
+                  Button('清除条件')
+                    .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                    .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
+                    .width('100%')
+                    .fontColor($r('app.color.brand_primary'))
+                    .backgroundColor($r('app.color.surface_accent'))
+                    .borderRadius($r('app.float.radius_control'))
+                    .onClick(() => this.handleEmptyAction())
+                }
+              }
+              .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4') })
+            }
           }
+          .width('100%')
+          .padding({ bottom: dockContentInset(this.dockVisible, this.keyboardVisible) })
         }
-        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4') })
+        .width('100%')
+        .layoutWeight(1)
       } else {
         List({ space: 12 }) {
           ForEach(this.items, (item: ItemSummary) => {
@@ -146,16 +168,19 @@ export struct ItemListPage {
               ItemCard({ item: item })
             }
           }, (item: ItemSummary) => `${item.id}:${item.updatedAt}:${item.expiryStatus}:${item.quantity}`)
+          ListItem() {
+            Row().width('100%').height(dockContentInset(this.dockVisible, this.keyboardVisible))
+          }
+          .accessibilityLevel('no')
         }
         .layoutWeight(1)
-        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
+        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4') })
       }
 
-      MainEntryBar({ activeRoute: RouteName.ITEM_LIST })
     }
     .width('100%')
     .height('100%')
-    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
+    .padding({ top: this.safeAreaTop, left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
   }
 

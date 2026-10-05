@@ -2,6 +2,8 @@ import { relationalStore } from '@kit.ArkData';
 import { AppError, AppErrorCode } from '../../common/AppError';
 import { Item, ItemUnit, PhotoState } from '../../model/Item';
 import { ItemQuery } from '../../model/ItemQuery';
+import { isSameOrDescendantLocation } from '../../service/InventoryPolicy';
+import { BATCH_TABLE } from '../rdb/BatchSchema';
 import { ITEM_TABLE } from '../rdb/ItemSchema';
 import { RdbDatabase } from '../rdb/RdbDatabase';
 import { ResultSetReader } from '../rdb/ResultSetReader';
@@ -55,14 +57,19 @@ export class ItemDao {
     if (normalized.name.length > 0) {
       predicates.beginWrap().contains('name', normalized.name).or().contains('barcode', normalized.name).endWrap();
     }
-    if (normalized.locationPath !== undefined) {
-      predicates.equalTo('location_path', normalized.locationPath);
-    }
     if (normalized.category !== undefined) {
       predicates.equalTo('category', normalized.category);
     }
     predicates.orderByDesc('created_at');
-    return this.queryItems(predicates);
+    const items = await this.queryItems(predicates);
+    const location = normalized.locationPath;
+    if (location === undefined) {
+      return items;
+    }
+    return items.filter((item: Item) => {
+      const paths = item.activeLocationPaths ?? (item.locationPath === undefined ? [] : [item.locationPath]);
+      return paths.some((path: string) => isSameOrDescendantLocation(path, location));
+    });
   }
 
   async update(item: Item): Promise<boolean> {
@@ -109,12 +116,44 @@ export class ItemDao {
       } finally {
         ResultSetReader.close(resultSet);
       }
+      await this.populateActiveLocations(store, items);
       return items;
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
       }
       throw new AppError(AppErrorCode.DATABASE_READ, '读取物品失败，请重试');
+    }
+  }
+
+  private async populateActiveLocations(store: relationalStore.RdbStore, items: Item[]): Promise<void> {
+    if (items.length === 0) {
+      return;
+    }
+    for (let index = 0; index < items.length; index++) {
+      items[index].activeLocationPaths = [];
+    }
+    const predicates = new relationalStore.RdbPredicates(BATCH_TABLE);
+    predicates.greaterThan('quantity', 0);
+    predicates.in('item_id', items.map((item: Item) => item.id));
+    predicates.orderByAsc('created_at');
+    const resultSet = await store.query(predicates);
+    try {
+      while (ResultSetReader.goToNextRow(resultSet)) {
+        const itemId = this.readString(resultSet, 'item_id');
+        const item = items.find((candidate: Item) => candidate.id === itemId);
+        if (item === undefined) {
+          continue;
+        }
+        const path = this.readString(resultSet, 'location_path') ?? item.locationPath;
+        const paths = item.activeLocationPaths ?? [];
+        if (path !== undefined && path.length > 0 && paths.indexOf(path) === -1) {
+          paths.push(path);
+          item.activeLocationPaths = paths;
+        }
+      }
+    } finally {
+      ResultSetReader.close(resultSet);
     }
   }
 
@@ -171,11 +210,9 @@ export class ItemDao {
   private toUpdateValues(item: Item): relationalStore.ValuesBucket {
     return {
       name: item.name,
-      quantity: item.quantity,
       unit: item.unit,
       location_path: item.locationPath ?? null,
       category: item.category ?? null,
-      expiration_date: item.expirationDate ?? null,
       reminder_days: item.reminderDays ?? null,
       notes: item.notes ?? null,
       barcode: item.barcode ?? null,

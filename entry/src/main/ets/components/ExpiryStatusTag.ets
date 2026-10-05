@@ -7,9 +7,10 @@ export struct ExpiryStatusTag {
   build() {
     Text(expiryStatusLabel(this.status))
       .fontSize($r('app.float.font_caption'))
+      .fontWeight(FontWeight.Medium)
       .fontColor(this.textColor())
       .backgroundColor(this.tagBackgroundColor())
-      .borderRadius($r('app.float.radius_control'))
+      .borderRadius(20)
       .padding({ left: $r('app.float.space_2'), right: $r('app.float.space_2'), top: $r('app.float.space_1'), bottom: $r('app.float.space_1') })
   }
 

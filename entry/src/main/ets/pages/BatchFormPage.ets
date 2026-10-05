@@ -1,3 +1,4 @@
+import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { LoadingState } from '../components/LoadingState';
@@ -14,6 +15,8 @@ export struct BatchFormPage {
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
+  @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @State private loading: boolean = true;
   @State private formReady: boolean = false;
   @State private saving: boolean = false;
@@ -69,6 +72,8 @@ export struct BatchFormPage {
             .fontColor($r('app.color.text_primary'))
             .layoutWeight(1)
           Button('取消')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
             .fontColor($r('app.color.brand_primary'))
             .backgroundColor($r('app.color.surface_card'))
             .border({ width: 1, color: $r('app.color.border_subtle') })
@@ -84,7 +89,10 @@ export struct BatchFormPage {
         } else {
           Scroll() {
             Column({ space: $r('app.float.space_4') }) {
-            TextInput({ text: this.quantityText, placeholder: '数量' })
+            Text('填写此批次剩余总量，包含借出部分，不是这次增减的数量。')
+              .fontSize($r('app.float.font_caption'))
+              .fontColor($r('app.color.text_secondary'))
+            TextInput({ text: this.quantityText, placeholder: '批次总量' })
               .type(InputType.NUMBER_DECIMAL)
               .backgroundColor($r('app.color.surface_card'))
               .border({ width: 1, color: $r('app.color.border_subtle') })
@@ -102,7 +110,7 @@ export struct BatchFormPage {
                   .fontColor($r('app.color.brand_primary'))
               }
               .width('100%')
-              Text('批次单位继承物品单位，不可单独修改')
+              Text('批次单位与物品统一。如需纠正单位，请在编辑物品中修改；数值不会自动换算。')
                 .fontSize($r('app.float.font_caption'))
                 .fontColor($r('app.color.text_secondary'))
             }
@@ -132,13 +140,14 @@ export struct BatchFormPage {
                 .fontColor($r('app.color.status_danger'))
             }
             Button(this.saving ? '正在保存…' : '保存批次')
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
               .width('100%')
               .fontColor($r('app.color.brand_on_primary'))
               .backgroundColor($r('app.color.brand_primary'))
               .borderRadius($r('app.float.radius_control'))
               .enabled(!this.saving && this.formReady)
-              .scale({ x: this.savePressed ? 0.98 : 1, y: this.savePressed ? 0.98 : 1 })
-              .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
+              .scale({ x: this.savePressed && !this.reduceAnimation ? 0.96 : 1, y: this.savePressed && !this.reduceAnimation ? 0.96 : 1 })
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
               .onTouch((event: TouchEvent) => {
                 if (event.type === TouchType.Down) {
                   this.savePressed = true;
@@ -156,7 +165,7 @@ export struct BatchFormPage {
       }
       .width('100%')
       .height('100%')
-      .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
+      .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
       .backgroundColor($r('app.color.surface_app'))
 
       DeleteConfirmDialog({
@@ -264,8 +273,17 @@ export struct BatchFormPage {
       const draft = this.createDraft();
       const result = this.editMode ? await AppServices.get().batches.update(this.batchId, draft) : await AppServices.get().batches.create(draft);
       if (result.ok) {
+        let notice = this.editMode ? '批次已更新' : '批次已保存';
+        try {
+          const reminderResult = await AppServices.get().reminders.reconcileLatest(this.itemId);
+          if (!reminderResult.ok) {
+            notice += '，提醒更新失败，可在物品详情重试';
+          }
+        } catch (_) {
+          notice += '，提醒更新失败，可在物品详情重试';
+        }
         const refreshAt = AppEventBus.notifyDataChanged();
-        this.showToast(this.editMode ? '批次已更新' : '批次已保存');
+        this.showToast(notice);
         NavigationHelper.back({
           url: RouteName.BATCH_LIST,
           params: buildBatchRefreshParams(refreshAt, this.itemId, result.getData().id)

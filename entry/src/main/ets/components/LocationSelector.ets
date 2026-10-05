@@ -1,7 +1,9 @@
+import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { LocationRecord } from '../model/Location';
 
 @Component
 export struct LocationSelector {
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @Link selectedPath: string;
   @Prop locations: LocationRecord[] = [];
 
@@ -10,6 +12,8 @@ export struct LocationSelector {
       ForEach(this.locations, (location: LocationRecord) => {
         if (location.active) {
           Button(location.path)
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
             .type(ButtonType.Capsule)
             .fontColor(this.selectedPath === location.path ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
             .backgroundColor(this.selectedPath === location.path ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))

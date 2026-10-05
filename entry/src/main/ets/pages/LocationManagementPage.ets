@@ -1,3 +1,4 @@
+import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
@@ -9,6 +10,8 @@ export struct LocationManagementPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
+  @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @State private loading: boolean = true;
   @State private operating: boolean = false;
@@ -68,6 +71,8 @@ export struct LocationManagementPage {
               .onChange((value: string) => this.name = value)
             Flex({ wrap: FlexWrap.Wrap }) {
               Button('无父级')
+                .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
                 .type(ButtonType.Capsule)
                 .fontColor(this.selectedParentId.length === 0 ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
                 .backgroundColor(this.selectedParentId.length === 0 ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
@@ -77,6 +82,8 @@ export struct LocationManagementPage {
               ForEach(this.locations, (location: LocationRecord) => {
                 if (location.active) {
                   Button(location.path)
+                    .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                    .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
                     .type(ButtonType.Capsule)
                     .fontColor(this.selectedParentId === location.id ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
                     .backgroundColor(this.selectedParentId === location.id ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
@@ -88,13 +95,14 @@ export struct LocationManagementPage {
               }, (location: LocationRecord) => `${location.id}:${location.updatedAt}:${location.active}`)
             }
             Button('新增位置')
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
               .width('100%')
               .fontColor($r('app.color.brand_on_primary'))
               .backgroundColor($r('app.color.brand_primary'))
               .borderRadius($r('app.float.radius_control'))
               .enabled(!this.operating)
-              .scale({ x: this.pressedAction === 'create' ? 0.98 : 1, y: this.pressedAction === 'create' ? 0.98 : 1 })
-              .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
+              .scale({ x: this.pressedAction === 'create' && !this.reduceAnimation ? 0.96 : 1, y: this.pressedAction === 'create' && !this.reduceAnimation ? 0.96 : 1 })
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
               .onTouch((event: TouchEvent) => this.updatePressedAction(event, 'create'))
               .onClick(() => this.createLocation())
             if (this.actionError.length > 0) {
@@ -115,15 +123,16 @@ export struct LocationManagementPage {
                 }
                 .layoutWeight(1)
                 Button(location.active ? '停用' : '启用')
+                  .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
                   .fontColor($r('app.color.brand_primary'))
                   .backgroundColor($r('app.color.surface_accent'))
                   .borderRadius($r('app.float.radius_control'))
                   .enabled(!this.operating)
                   .scale({
-                    x: this.pressedAction === `toggle:${location.id}` ? 0.98 : 1,
-                    y: this.pressedAction === `toggle:${location.id}` ? 0.98 : 1
+                    x: this.pressedAction === `toggle:${location.id}` && !this.reduceAnimation ? 0.96 : 1,
+                    y: this.pressedAction === `toggle:${location.id}` && !this.reduceAnimation ? 0.96 : 1
                   })
-                  .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
+                  .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
                   .onTouch((event: TouchEvent) => this.updatePressedAction(event, `toggle:${location.id}`))
                   .onClick(() => this.toggleLocation(location))
               }
@@ -141,7 +150,7 @@ export struct LocationManagementPage {
     }
     .width('100%')
     .height('100%')
-    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
+    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
   }
 

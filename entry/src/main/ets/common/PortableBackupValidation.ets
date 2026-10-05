@@ -2,9 +2,9 @@ import { AppError, AppErrorCode } from './AppError';
 import { failure, Result, success } from './Result';
 import { ImportPreview, ItemTraceExportPayload } from './ImportValidation';
 import { ItemValidator } from './ItemValidator';
-import { PhotoState } from '../model/Item';
+import { Item, PhotoState } from '../model/Item';
 import { isItemUnit } from '../model/Item';
-import { TraceEventType } from '../model/TraceEvent';
+import { allocateLegacyReturns, TraceEvent, TraceEventType } from '../model/TraceEvent';
 import { StockThreshold } from '../model/StockThreshold';
 
 export const PORTABLE_BACKUP_VERSION: string = 'itemtrace.backup.v2';
@@ -58,6 +58,7 @@ export class PortableBackupValidation {
       const batchCounts = new Map<string, number>();
       const batchTotals = new Map<string, number>();
       const earliestDates = new Map<string, string>();
+      const legacyEarliestDates = new Map<string, string>();
       let encodedPhotoLength = 0;
       for (const item of payload.items) {
         if (!item || !this.validId(item.id) || itemIds.has(item.id) ||
@@ -89,8 +90,12 @@ export class PortableBackupValidation {
         batchCounts.set(batch.itemId, (batchCounts.get(batch.itemId) ?? 0) + 1);
         batchTotals.set(batch.itemId, (batchTotals.get(batch.itemId) ?? 0) + batch.quantity);
         if (batch.expirationDate !== undefined && batch.expirationDate.length > 0) {
+          const legacyDate = legacyEarliestDates.get(batch.itemId);
+          if (legacyDate === undefined || batch.expirationDate < legacyDate) {
+            legacyEarliestDates.set(batch.itemId, batch.expirationDate);
+          }
           const currentDate = earliestDates.get(batch.itemId);
-          if (currentDate === undefined || batch.expirationDate < currentDate) {
+          if (batch.quantity > 0 && (currentDate === undefined || batch.expirationDate < currentDate)) {
             earliestDates.set(batch.itemId, batch.expirationDate);
           }
         }
@@ -99,9 +104,13 @@ export class PortableBackupValidation {
         const total = batchTotals.get(item.id) ?? 0;
         if ((batchCounts.get(item.id) ?? 0) === 0 ||
           Math.abs(Math.round(total * 100) / 100 - item.quantity) >= 1e-9 ||
-          earliestDates.get(item.id) !== item.expirationDate) {
+          (earliestDates.get(item.id) !== item.expirationDate &&
+            legacyEarliestDates.get(item.id) !== item.expirationDate)) {
           return this.invalid('备份文件的批次汇总与物品不一致');
         }
+        // Earlier v2 files included depleted batches in the date rollup. Keep their records and
+        // rebuild only this derived date, so a valid old backup remains recoverable.
+        item.expirationDate = earliestDates.get(item.id);
       }
       for (const location of payload.locations) {
         if (!location || !this.validId(location.id) || locationIds.has(location.id) ||
@@ -146,12 +155,24 @@ export class PortableBackupValidation {
           (trace.batchId !== undefined && !batchIds.has(trace.batchId)) ||
           (trace.batchId !== undefined && batchOwners.get(trace.batchId) !== trace.itemId) ||
           (trace.type !== TraceEventType.BORROW && trace.type !== TraceEventType.RETURN &&
+            trace.type !== TraceEventType.CONSUME &&
             trace.type !== TraceEventType.QUANTITY_ADJUST && trace.type !== TraceEventType.IMPORT &&
             trace.type !== TraceEventType.EXPORT) ||
-          !Number.isFinite(trace.quantity) || trace.quantity < 0 || !Number.isFinite(trace.createdAt)) {
+          !Number.isFinite(trace.quantity) || trace.quantity < 0 || !Number.isFinite(trace.createdAt) ||
+          (trace.counterpart !== undefined && typeof trace.counterpart !== 'string') ||
+          (trace.note !== undefined && typeof trace.note !== 'string') ||
+          (trace.voidedAt !== undefined && !Number.isFinite(trace.voidedAt)) ||
+          (trace.legacyAllocated !== undefined && typeof trace.legacyAllocated !== 'boolean') ||
+          (trace.returnAllocations !== undefined && !Array.isArray(trace.returnAllocations)) ||
+          (trace.type !== TraceEventType.RETURN &&
+            (trace.returnAllocations !== undefined || trace.legacyAllocated === true))) {
           return this.invalid('备份文件包含无效借还记录');
         }
         traceIds.add(trace.id);
+      }
+      allocateLegacyReturns(payload.traceEvents);
+      if (!this.validReturnRelations(payload.traceEvents)) {
+        return this.invalid('备份文件包含无效归还关联');
       }
       for (const threshold of payload.thresholds) {
         if (!threshold || !itemIds.has(threshold.itemId) || thresholdIds.has(threshold.itemId) ||
@@ -183,7 +204,50 @@ export class PortableBackupValidation {
 
   preview(payload: PortableBackupPayload): ImportPreview {
     return new ImportPreview(payload.items.length, payload.batches.length, payload.locations.length,
-      payload.categories.length, payload.traceEvents.length);
+      payload.categories.length, payload.traceEvents.length, payload.exportedAt, payload.photos.length,
+      payload.thresholds.length, payload.items.slice(0, 5).map((item: Item) => item.name));
+  }
+
+  private validReturnRelations(events: TraceEvent[]): boolean {
+    const byId = new Map<string, TraceEvent>();
+    const returnedByLoan = new Map<string, number>();
+    for (const event of events) {
+      byId.set(event.id, event);
+    }
+    for (const event of events) {
+      if (event.type !== TraceEventType.RETURN || event.returnAllocations === undefined) {
+        continue;
+      }
+      const relationIds = new Set<string>();
+      let allocated = 0;
+      for (const relation of event.returnAllocations) {
+        if (!relation || !this.validId(relation.borrowEventId) || relationIds.has(relation.borrowEventId) ||
+          !Number.isFinite(relation.quantity) || relation.quantity <= 0 ||
+          Math.abs(Math.round(relation.quantity * 100) - relation.quantity * 100) >= 1e-9) {
+          return false;
+        }
+        const borrowed = byId.get(relation.borrowEventId);
+        if (borrowed === undefined || borrowed.type !== TraceEventType.BORROW ||
+          borrowed.itemId !== event.itemId ||
+          (event.voidedAt === undefined && borrowed.voidedAt !== undefined)) {
+          return false;
+        }
+        relationIds.add(relation.borrowEventId);
+        allocated += relation.quantity;
+        if (event.voidedAt === undefined) {
+          const returned = (returnedByLoan.get(borrowed.id) ?? 0) + relation.quantity;
+          if (returned > borrowed.quantity + 1e-9) {
+            return false;
+          }
+          returnedByLoan.set(borrowed.id, returned);
+        }
+      }
+      if (allocated > event.quantity + 1e-9 ||
+        (event.legacyAllocated !== true && Math.abs(allocated - event.quantity) >= 1e-9)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private validId(value: string): boolean {

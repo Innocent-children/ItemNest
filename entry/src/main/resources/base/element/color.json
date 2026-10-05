@@ -2,11 +2,11 @@
   "color": [
     {
       "name": "start_window_background",
-      "value": "#F6F8F6"
+      "value": "#F3F4F7"
     },
     {
       "name": "surface_app",
-      "value": "#F6F8F6"
+      "value": "#F3F4F7"
     },
     {
       "name": "surface_card",
@@ -14,11 +14,11 @@
     },
     {
       "name": "surface_accent",
-      "value": "#DDF4EB"
+      "value": "#E5F3EC"
     },
     {
       "name": "brand_primary",
-      "value": "#176B52"
+      "value": "#167B50"
     },
     {
       "name": "brand_on_primary",
@@ -26,15 +26,15 @@
     },
     {
       "name": "text_primary",
-      "value": "#18211E"
+      "value": "#24272C"
     },
     {
       "name": "text_secondary",
-      "value": "#5E6A65"
+      "value": "#686D76"
     },
     {
       "name": "border_subtle",
-      "value": "#DFE6E1"
+      "value": "#E5E8ED"
     },
     {
       "name": "status_danger",
@@ -67,6 +67,74 @@
     {
       "name": "status_neutral_soft",
       "value": "#EAF0EC"
+    },
+    {
+      "name": "hero_start",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "hero_end",
+      "value": "#EAF4EF"
+    },
+    {
+      "name": "hero_text",
+      "value": "#24272C"
+    },
+    {
+      "name": "hero_secondary",
+      "value": "#606C66"
+    },
+    {
+      "name": "hero_chip",
+      "value": "#E1F0E8"
+    },
+    {
+      "name": "hero_action",
+      "value": "#167B50"
+    },
+    {
+      "name": "hero_action_text",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "dock_glass",
+      "value": "#BFFFFFFF"
+    },
+    {
+      "name": "glass_border",
+      "value": "#DDFFFFFF"
+    },
+    {
+      "name": "shadow_soft",
+      "value": "#080D182B"
+    },
+    {
+      "name": "shadow_dock",
+      "value": "#180D182B"
+    },
+    {
+      "name": "particle_mint",
+      "value": "#B9F4CB"
+    },
+    {
+      "name": "dock_selected",
+      "value": "#0A24272C"
+    },
+    {
+      "name": "dock_pressed",
+      "value": "#0A24272C"
+    },
+    {
+      "name": "dock_action_start",
+      "value": "#39A47B"
+    },
+    {
+      "name": "dock_action_end",
+      "value": "#168253"
+    },
+    {
+      "name": "dock_on_action",
+      "value": "#FFFFFF"
     }
   ]
 }

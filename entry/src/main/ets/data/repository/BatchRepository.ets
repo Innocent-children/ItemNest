@@ -10,6 +10,7 @@ export interface BatchRepositoryPort {
   listAll(): Promise<Result<Batch[]>>;
   update(batch: Batch): Promise<Result<Batch>>;
   deleteConfirmed(batchId: string): Promise<Result<void>>;
+  consumeAtomic?(itemId: string, quantity: number, batchId: string | undefined, now: number): Promise<Result<void>>;
 }
 
 export class BatchRepository implements BatchRepositoryPort {
@@ -17,6 +18,15 @@ export class BatchRepository implements BatchRepositoryPort {
 
   constructor(dao: BatchDao) {
     this.dao = dao;
+  }
+
+  async consumeAtomic(itemId: string, quantity: number, batchId: string | undefined, now: number): Promise<Result<void>> {
+    try {
+      await this.dao.consume(itemId, quantity, batchId, now);
+      return success<void>(undefined);
+    } catch (error) {
+      return failure<void>(toAppError(error, AppErrorCode.DATABASE_WRITE, '记录消耗失败，请重试'));
+    }
   }
 
   async create(batch: Batch): Promise<Result<Batch>> {

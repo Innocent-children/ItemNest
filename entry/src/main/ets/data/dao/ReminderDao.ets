@@ -58,7 +58,7 @@ export class ReminderDao {
   async countScheduledBetween(startAt: number, endAt: number): Promise<number> {
     try {
       const predicates = new relationalStore.RdbPredicates(REMINDER_TABLE);
-      predicates.equalTo('status', ReminderRecordStatus.SCHEDULED);
+      predicates.in('status', [ReminderRecordStatus.SCHEDULED, ReminderRecordStatus.DUE]);
       predicates.greaterThanOrEqualTo('scheduled_at', startAt);
       predicates.lessThan('scheduled_at', endAt);
       const store = await this.database.requireStore();
@@ -102,6 +102,8 @@ export class ReminderDao {
       systemReminderId: this.readLong(resultSet, 'system_reminder_id'),
       status: (this.readString(resultSet, 'status') ?? ReminderRecordStatus.FAILED) as ReminderRecordStatus,
       errorSummary: this.readString(resultSet, 'error_summary'),
+      planKey: this.readString(resultSet, 'plan_key'),
+      contentSignature: this.readString(resultSet, 'content_signature'),
       updatedAt: this.readLong(resultSet, 'updated_at') ?? 0
     };
   }
@@ -113,6 +115,8 @@ export class ReminderDao {
       system_reminder_id: record.systemReminderId ?? null,
       status: record.status,
       error_summary: record.errorSummary ?? null,
+      plan_key: record.planKey ?? null,
+      content_signature: record.contentSignature ?? null,
       updated_at: record.updatedAt
     };
   }

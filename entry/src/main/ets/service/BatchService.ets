@@ -96,6 +96,13 @@ export class BatchService {
     return this.batches.update(batch);
   }
 
+  async consume(itemId: string, quantity: number, batchId?: string): Promise<Result<void>> {
+    if (this.batches.consumeAtomic === undefined) {
+      return failure<void>(new AppError(AppErrorCode.SYSTEM_UNAVAILABLE, '当前无法记录消耗，请重新打开应用后重试'));
+    }
+    return this.batches.consumeAtomic(itemId, quantity, batchId, this.clock());
+  }
+
   async delete(batchId: string): Promise<Result<void>> {
     return this.runExclusiveDelete(() => this.deleteInternal(batchId));
   }
@@ -108,16 +115,6 @@ export class BatchService {
     const existing = existingResult.getData();
     if (existing === undefined) {
       return failure<void>(new AppError(AppErrorCode.NOT_FOUND, '批次不存在或已删除'));
-    }
-    const itemBatchesResult = await this.batches.listByItemId(existing.itemId);
-    if (!itemBatchesResult.ok) {
-      return failure<void>(itemBatchesResult.getError());
-    }
-    if (itemBatchesResult.getData().length <= 1) {
-      return failure<void>(new AppError(
-        AppErrorCode.VALIDATION,
-        '至少保留一个批次；如需清空库存，请将最后一个批次数量改为 0'
-      ));
     }
     return this.batches.deleteConfirmed(batchId);
   }

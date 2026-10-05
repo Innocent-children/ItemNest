@@ -1,3 +1,4 @@
+import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 @Component
 export struct DeleteConfirmDialog {
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
@@ -20,6 +21,8 @@ export struct DeleteConfirmDialog {
             .fontColor($r('app.color.text_secondary'))
           Row({ space: $r('app.float.space_3') }) {
             Button('取消')
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
               .layoutWeight(1)
               .fontColor($r('app.color.brand_primary'))
               .backgroundColor($r('app.color.surface_accent'))
@@ -28,6 +31,8 @@ export struct DeleteConfirmDialog {
                 this.visible = false;
               })
             Button(this.confirmText)
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
               .layoutWeight(1)
               .fontColor($r('app.color.brand_on_primary'))
               .backgroundColor($r('app.color.status_danger'))
@@ -45,13 +50,13 @@ export struct DeleteConfirmDialog {
         .backgroundColor($r('app.color.surface_card'))
         .transition(TransitionEffect.OPACITY
           .combine(TransitionEffect.scale({ x: 0.96, y: 0.96 }))
-          .animation({ duration: this.reduceAnimation ? 0 : 200, curve: Curve.EaseOut }))
+          .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
       }
       .width('100%')
       .height('100%')
       .justifyContent(FlexAlign.Center)
       .backgroundColor('#66000000')
-      .transition(TransitionEffect.opacity(0).animation({ duration: this.reduceAnimation ? 0 : 180, curve: Curve.EaseOut }))
+      .transition(TransitionEffect.opacity(0).animation(uiSpring(this.reduceAnimation, 0.3, 0.68)))
     }
   }
 }

@@ -6,11 +6,11 @@
     },
     {
       "name": "font_display",
-      "value": "30fp"
+      "value": "32fp"
     },
     {
       "name": "font_title",
-      "value": "24fp"
+      "value": "28fp"
     },
     {
       "name": "font_section",
@@ -46,11 +46,19 @@
     },
     {
       "name": "radius_card",
-      "value": "20vp"
+      "value": "24vp"
     },
     {
       "name": "radius_control",
-      "value": "12vp"
+      "value": "22vp"
+    },
+    {
+      "name": "space_5",
+      "value": "20vp"
+    },
+    {
+      "name": "radius_pill",
+      "value": "40vp"
     }
   ]
 }

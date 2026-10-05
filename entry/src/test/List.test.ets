@@ -1,3 +1,4 @@
+import pageFlowPolicyTest from './ets/test/PageFlowPolicy.test';
 import localUnitTest from './LocalUnit.test';
 import appEventBusTest from './ets/test/AppEventBus.test';
 import dataFailureMappingTest from './ets/test/DataFailureMapping.test';
@@ -22,6 +23,7 @@ import scanAdapterTest from './ets/test/ScanAdapter.test';
 import backupPhotoCodecTest from './ets/test/BackupPhotoCodec.test';
 
 export default function testsuite() {
+  pageFlowPolicyTest();
   localUnitTest();
   appEventBusTest();
   dataFailureMappingTest();

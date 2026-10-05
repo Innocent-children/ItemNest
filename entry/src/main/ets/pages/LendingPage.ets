@@ -1,8 +1,11 @@
+import { RoundedButtonStyle } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
-import { TraceEvent, TraceEventType } from '../model/TraceEvent';
+import { LatestRequestCoordinator } from '../common/LatestRequestCoordinator';
+import { ItemUnit } from '../model/Item';
+import { OutstandingLoan, ReturnAllocation, TraceEvent, TraceEventType } from '../model/TraceEvent';
 import { BatchRouteParams, requireItemId } from '../navigation/RouteContract';
 import { AppServices } from '../service/AppServices';
 
@@ -11,20 +14,32 @@ export struct LendingPage {
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
+  @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @State private loading: boolean = true;
   @State private contentLoaded: boolean = false;
   @State private submitting: boolean = false;
   @State private loadError: string = '';
   @State private actionError: string = '';
-  @State private pressedAction: string = '';
   @State private quantityText: string = '1';
   @State private counterpart: string = '';
   @State private note: string = '';
+  @State private itemName: string = '';
+  @State private unit: ItemUnit = ItemUnit.PIECE;
+  @State private totalQuantity: number = 0;
+  @State private availableQuantity: number = 0;
   @State private borrowedQuantity: number = 0;
+  @State private inventoryWarning: string = '';
+  @State private outstandingLoans: OutstandingLoan[] = [];
   @State private events: TraceEvent[] = [];
+  @State private formMode: string = 'borrow';
+  @State private selectedBorrowId: string = '';
+  @State private editEventId: string = '';
   private itemId: string = '';
   private lastHandledDataRevision: number = -1;
+  private loadRequests: LatestRequestCoordinator = new LatestRequestCoordinator();
+  private scroller: Scroller = new Scroller();
 
   aboutToAppear(): void {
     const params = NavigationHelper.getParams() as BatchRouteParams | undefined;
@@ -36,6 +51,10 @@ export struct LendingPage {
     }
     this.itemId = itemIdResult.getData();
     this.loadStateForCurrentRevision(true);
+  }
+
+  aboutToDisappear(): void {
+    this.loadRequests.invalidate();
   }
 
   onPageShow(): void {
@@ -72,104 +91,156 @@ export struct LendingPage {
         .fontColor($r('app.color.text_primary'))
         .width('100%')
         .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
-
       if (this.loading) {
         LoadingState({ text: '正在读取借还记录…' })
       } else if (!this.contentLoaded && this.loadError.length > 0) {
         ErrorState({ message: this.loadError })
+        Button('重新加载')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .onClick(() => this.loadStateForCurrentRevision(true))
       } else {
-        Scroll() {
+        Scroll(this.scroller) {
           Column({ space: $r('app.float.space_4') }) {
-            Text(`当前借出：${this.borrowedQuantity}`)
+            Column({ space: $r('app.float.space_2') }) {
+              Text(this.itemName)
+                .fontSize($r('app.float.font_section'))
+                .fontWeight(FontWeight.Bold)
+                .fontColor($r('app.color.text_primary'))
+              Text(`总量 ${this.totalQuantity}${this.unit} · 在手 ${this.availableQuantity}${this.unit} · 未归还 ${this.borrowedQuantity}${this.unit}`)
+                .fontSize($r('app.float.font_body'))
+                .fontColor($r('app.color.text_primary'))
+              Text('总量包含借出的物品。借出减少在手，归还增加在手，总量不变；用掉物品才减少总量。')
+                .fontSize($r('app.float.font_caption'))
+                .fontColor($r('app.color.text_secondary'))
+              if (this.inventoryWarning.length > 0) {
+                Text(this.inventoryWarning)
+                  .fontSize($r('app.float.font_caption'))
+                  .fontColor($r('app.color.status_danger'))
+              }
+            }
+            .width('100%')
+            .padding($r('app.float.space_4'))
+            .backgroundColor($r('app.color.surface_card'))
+            .borderRadius($r('app.float.radius_card'))
+
+            Row({ space: $r('app.float.space_2') }) {
+              Button('记录借出')
+                .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                .layoutWeight(1)
+                .enabled(!this.submitting)
+                .onClick(() => this.startBorrow())
+              Button('记录归还')
+                .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                .layoutWeight(1)
+                .enabled(!this.submitting && this.outstandingLoans.length > 0)
+                .onClick(() => this.startReturn())
+            }
+            .width('100%')
+
+            Text(this.formTitle())
               .fontSize($r('app.float.font_section'))
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))
-              .padding($r('app.float.space_4'))
-              .backgroundColor($r('app.color.surface_card'))
-              .borderRadius($r('app.float.radius_card'))
-
-            Text('借出与归还是独立记录，不会自动改变物品库存。')
-              .fontSize($r('app.float.font_caption'))
-              .fontColor($r('app.color.text_secondary'))
-
-            TextInput({ text: this.quantityText, placeholder: '数量' })
+            if (this.isReturnForm()) {
+              Text(this.formMode === 'editReturn' ? '归还来源保持原关联；选中其他借出可纠正归还对象。' : '选择这次归还对应的借出记录')
+                .fontSize($r('app.float.font_caption'))
+                .fontColor($r('app.color.text_secondary'))
+              ForEach(this.returnCandidates(), (loan: OutstandingLoan) => {
+                Button(`${this.selectedBorrowId === loan.borrowEvent.id ? '✓ ' : ''}${this.loanLabel(loan)}`)
+                  .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                  .width('100%')
+                  .enabled(!this.submitting)
+                  .onClick(() => {
+                    this.selectedBorrowId = loan.borrowEvent.id;
+                  })
+              }, (loan: OutstandingLoan) => `${loan.borrowEvent.id}-${loan.remainingQuantity}-${loan.borrowEvent.counterpart ?? ''}-${loan.borrowEvent.note ?? ''}`)
+            } else {
+              TextInput({ text: this.counterpart, placeholder: '借给谁，可选' })
+                .backgroundColor($r('app.color.surface_card'))
+                .border({ width: 1, color: $r('app.color.border_subtle') })
+                .borderRadius($r('app.float.radius_control'))
+                .enabled(!this.submitting)
+                .onChange((value: string) => this.counterpart = value)
+            }
+            TextInput({ text: this.quantityText, placeholder: `数量（${this.unit}）` })
               .type(InputType.NUMBER_DECIMAL)
               .backgroundColor($r('app.color.surface_card'))
               .border({ width: 1, color: $r('app.color.border_subtle') })
               .borderRadius($r('app.float.radius_control'))
+              .enabled(!this.submitting)
               .onChange((value: string) => this.quantityText = value)
-            TextInput({ text: this.counterpart, placeholder: '借给谁，可选' })
-              .backgroundColor($r('app.color.surface_card'))
-              .border({ width: 1, color: $r('app.color.border_subtle') })
-              .borderRadius($r('app.float.radius_control'))
-              .onChange((value: string) => this.counterpart = value)
             TextInput({ text: this.note, placeholder: '备注，可选' })
               .backgroundColor($r('app.color.surface_card'))
               .border({ width: 1, color: $r('app.color.border_subtle') })
               .borderRadius($r('app.float.radius_control'))
+              .enabled(!this.submitting)
               .onChange((value: string) => this.note = value)
-
             Row({ space: $r('app.float.space_2') }) {
-              Button('借出')
+              if (this.editEventId.length > 0 || this.isReturnForm()) {
+                Button('取消')
+                  .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                  .layoutWeight(1)
+                  .enabled(!this.submitting)
+                  .onClick(() => this.startBorrow())
+              }
+              Button(this.submitting ? '正在保存…' : this.editEventId.length > 0 ? '保存纠正' : this.isReturnForm() ? '确认归还' : '确认借出')
+                .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
                 .layoutWeight(1)
                 .fontColor($r('app.color.brand_on_primary'))
                 .backgroundColor($r('app.color.brand_primary'))
                 .borderRadius($r('app.float.radius_control'))
-                .enabled(!this.submitting)
-                .scale({ x: this.pressedAction === 'borrow' ? 0.98 : 1, y: this.pressedAction === 'borrow' ? 0.98 : 1 })
-                .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
-                .onTouch((event: TouchEvent) => {
-                  if (event.type === TouchType.Down) {
-                    this.pressedAction = 'borrow';
-                  } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-                    this.pressedAction = '';
-                  }
-                })
-                .onClick(() => this.borrow())
-              Button('归还')
-                .layoutWeight(1)
-                .fontColor($r('app.color.brand_primary'))
-                .backgroundColor($r('app.color.surface_accent'))
-                .borderRadius($r('app.float.radius_control'))
-                .enabled(!this.submitting)
-                .scale({ x: this.pressedAction === 'return' ? 0.98 : 1, y: this.pressedAction === 'return' ? 0.98 : 1 })
-                .animation({ duration: this.reduceAnimation ? 0 : 120, curve: Curve.EaseOut })
-                .onTouch((event: TouchEvent) => {
-                  if (event.type === TouchType.Down) {
-                    this.pressedAction = 'return';
-                  } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-                    this.pressedAction = '';
-                  }
-                })
-                .onClick(() => this.returnItem())
+                .enabled(!this.submitting && this.loadError.length === 0)
+                .onClick(() => this.saveOperation())
             }
             .width('100%')
-
             if (this.actionError.length > 0) {
               ErrorState({ message: this.actionError })
-            } else if (this.loadError.length > 0) {
-              ErrorState({ message: this.loadError })
             }
+            if (this.loadError.length > 0) {
+              ErrorState({ message: this.loadError })
+              Button('重新加载')
+                .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                .onClick(() => this.loadStateForCurrentRevision(false))
+            }
+
+            Text('尚未归还')
+              .fontSize($r('app.float.font_section'))
+              .fontWeight(FontWeight.Bold)
+              .fontColor($r('app.color.text_primary'))
+            if (this.outstandingLoans.length === 0) {
+              Text('目前没有待归还的借出记录')
+                .fontSize($r('app.float.font_caption'))
+                .fontColor($r('app.color.text_secondary'))
+            }
+            ForEach(this.outstandingLoans, (loan: OutstandingLoan) => {
+              Column({ space: $r('app.float.space_2') }) {
+                Text(this.loanLabel(loan))
+                  .fontSize($r('app.float.font_body'))
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor($r('app.color.text_primary'))
+                if (loan.borrowEvent.note !== undefined) {
+                  Text(`备注：${loan.borrowEvent.note}`)
+                    .fontSize($r('app.float.font_caption'))
+                    .fontColor($r('app.color.text_secondary'))
+                }
+                Button('归还这笔')
+                  .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                  .enabled(!this.submitting)
+                  .onClick(() => this.startReturn(loan))
+              }
+              .width('100%')
+              .padding($r('app.float.space_3'))
+              .backgroundColor($r('app.color.surface_card'))
+              .borderRadius($r('app.float.radius_control'))
+            }, (loan: OutstandingLoan) => `${loan.borrowEvent.id}-${loan.remainingQuantity}-${loan.borrowEvent.counterpart ?? ''}-${loan.borrowEvent.note ?? ''}`)
 
             Text('操作记录')
               .fontSize($r('app.float.font_section'))
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))
             ForEach(this.events, (event: TraceEvent) => {
-              Column({ space: $r('app.float.space_1') }) {
-                Text(`${this.eventLabel(event.type)} ${event.quantity}`)
-                  .fontSize($r('app.float.font_body'))
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor($r('app.color.text_primary'))
-                Text(`${new Date(event.createdAt).toLocaleString()}${event.counterpart === undefined ? '' : ` · ${event.counterpart}`}`)
-                  .fontSize($r('app.float.font_caption'))
-                  .fontColor($r('app.color.text_secondary'))
-              }
-              .width('100%')
-              .padding($r('app.float.space_3'))
-              .backgroundColor($r('app.color.surface_card'))
-              .borderRadius($r('app.float.radius_control'))
-            }, (event: TraceEvent) => event.id)
+              this.eventCard(event)
+            }, (event: TraceEvent) => `${event.id}-${event.quantity}-${event.voidedAt ?? 0}-${event.note ?? ''}-${event.counterpart ?? ''}-${JSON.stringify(event.returnAllocations ?? [])}`)
           }
           .width('100%')
           .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
@@ -179,11 +250,56 @@ export struct LendingPage {
     }
     .width('100%')
     .height('100%')
-    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
+    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
   }
 
+  @Builder
+  private eventCard(event: TraceEvent) {
+    Column({ space: $r('app.float.space_1') }) {
+      Text(`${this.eventLabel(event.type)} ${event.quantity}${this.unit}${event.voidedAt === undefined ? '' : ' · 已撤销'}`)
+        .fontSize($r('app.float.font_body'))
+        .fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.text_primary'))
+      Text(`${new Date(event.createdAt).toLocaleString()}${event.counterpart === undefined ? '' : ` · ${event.counterpart}`}`)
+        .fontSize($r('app.float.font_caption'))
+        .fontColor($r('app.color.text_secondary'))
+      if (event.note !== undefined) {
+        Text(`备注：${event.note}`)
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.text_secondary'))
+      }
+      if (event.type === TraceEventType.RETURN) {
+        Text(this.returnSourceLabel(event))
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.text_secondary'))
+        if (event.legacyAllocated === true) {
+          Text('历史归还按先借先还自动对应，请核对借用人；可用“纠正”重新指定。')
+            .fontSize($r('app.float.font_caption'))
+            .fontColor($r('app.color.text_secondary'))
+        }
+      }
+      if (event.voidedAt === undefined && (event.type === TraceEventType.BORROW || event.type === TraceEventType.RETURN)) {
+        Row({ space: $r('app.float.space_2') }) {
+          Button('纠正')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .enabled(!this.submitting)
+            .onClick(() => this.startCorrection(event))
+          Button('撤销')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .enabled(!this.submitting)
+            .onClick(() => this.confirmVoid(event))
+        }
+      }
+    }
+    .width('100%')
+    .padding($r('app.float.space_3'))
+    .backgroundColor($r('app.color.surface_card'))
+    .borderRadius($r('app.float.radius_control'))
+  }
+
   private async loadState(showLoading: boolean = true): Promise<void> {
+    const requestId = this.loadRequests.begin();
     if (showLoading) {
       this.loading = true;
       this.loadError = '';
@@ -191,85 +307,187 @@ export struct LendingPage {
     try {
       const state = await AppServices.get().lending.getState(this.itemId);
       const events = await AppServices.get().lending.getEvents(this.itemId);
+      if (!this.loadRequests.isCurrent(requestId)) {
+        return;
+      }
       if (!state.ok) {
         this.loadError = state.getError().message;
       } else if (!events.ok) {
         this.loadError = events.getError().message;
       } else {
+        this.itemName = state.getData().itemName;
+        this.unit = state.getData().unit;
+        this.totalQuantity = state.getData().totalQuantity;
+        this.availableQuantity = state.getData().availableQuantity;
         this.borrowedQuantity = state.getData().borrowedQuantity;
+        this.inventoryWarning = state.getData().inventoryWarning ?? '';
+        this.outstandingLoans = state.getData().outstandingLoans;
         this.events = events.getData();
         this.contentLoaded = true;
         this.loadError = '';
       }
     } catch (_) {
-      this.loadError = '读取借还记录失败，请稍后重试';
+      if (this.loadRequests.isCurrent(requestId)) {
+        this.loadError = '读取借还记录失败，请稍后重试';
+      }
     } finally {
-      this.loading = false;
+      if (this.loadRequests.isCurrent(requestId)) {
+        this.loading = false;
+      }
     }
   }
 
-  private async borrow(): Promise<void> {
+  private startBorrow(): void {
+    this.formMode = 'borrow';
+    this.editEventId = '';
+    this.selectedBorrowId = '';
+    this.quantityText = '1';
+    this.counterpart = '';
+    this.note = '';
+    this.actionError = '';
+  }
+
+  private startReturn(loan?: OutstandingLoan): void {
+    this.startBorrow();
+    this.formMode = 'return';
+    const selected = loan ?? (this.outstandingLoans.length === 1 ? this.outstandingLoans[0] : undefined);
+    this.selectedBorrowId = selected?.borrowEvent.id ?? '';
+    this.quantityText = selected?.remainingQuantity.toString() ?? '1';
+    this.scroller.scrollEdge(Edge.Top);
+  }
+
+  private startCorrection(event: TraceEvent): void {
+    this.editEventId = event.id;
+    this.formMode = event.type === TraceEventType.RETURN ? 'editReturn' : 'editBorrow';
+    this.selectedBorrowId = event.returnAllocations?.length === 1 ? event.returnAllocations[0].borrowEventId : '';
+    this.quantityText = event.quantity.toString();
+    this.counterpart = event.counterpart ?? '';
+    this.note = event.note ?? '';
+    this.actionError = '';
+    this.scroller.scrollEdge(Edge.Top);
+  }
+
+  private async saveOperation(): Promise<void> {
     if (this.submitting) {
       return;
     }
+    if (this.formMode === 'return' && this.selectedBorrowId.length === 0) {
+      this.actionError = '请选择这次归还对应的借出记录';
+      return;
+    }
     this.submitting = true;
-    this.pressedAction = '';
     this.actionError = '';
     try {
-      const result = await AppServices.get().lending.borrow(this.itemId, Number(this.quantityText), this.counterpart, undefined, this.note);
+      const lending = AppServices.get().lending;
+      const quantity = Number(this.quantityText);
+      const selected = this.selectedBorrowId.length > 0 ? this.selectedBorrowId : undefined;
+      const result = this.editEventId.length > 0 ?
+        await lending.correctEvent(this.itemId, this.editEventId, quantity, this.counterpart, this.note, selected) :
+        this.isReturnForm() ? await lending.returnItem(this.itemId, quantity, undefined, this.note, selected) :
+          await lending.borrow(this.itemId, quantity, this.counterpart, undefined, this.note);
       if (!result.ok) {
         this.actionError = result.getError().message;
         return;
       }
+      const message = this.editEventId.length > 0 ? '记录已纠正' : this.isReturnForm() ? '归还已记录' : '借出已记录';
+      this.startBorrow();
       this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadState(false);
-      this.showToast('借出已记录');
+      this.showToast(message);
     } catch (_) {
-      this.actionError = '借出失败，请稍后重试';
+      this.actionError = '保存失败，请稍后重试';
     } finally {
       this.submitting = false;
     }
   }
 
-  private async returnItem(): Promise<void> {
+  private async confirmVoid(event: TraceEvent): Promise<void> {
     if (this.submitting) {
       return;
     }
     this.submitting = true;
-    this.pressedAction = '';
     this.actionError = '';
     try {
-      const result = await AppServices.get().lending.returnItem(this.itemId, Number(this.quantityText), undefined, this.note);
+      const confirm = await this.getUIContext().getPromptAction().showDialog({
+        title: `撤销这笔${this.eventLabel(event.type)}？`,
+        message: `${event.quantity}${this.unit}${event.counterpart === undefined ? '' : ` · ${event.counterpart}`}。撤销后重新计算未归还和在手数量，原记录仍保留并标记为已撤销。`,
+        buttons: [{ text: '取消', color: '#777777' }, { text: '确认撤销', color: '#B42318' }]
+      });
+      if (confirm.index !== 1) {
+        return;
+      }
+      const result = await AppServices.get().lending.voidEvent(this.itemId, event.id);
       if (!result.ok) {
         this.actionError = result.getError().message;
         return;
       }
+      if (this.editEventId === event.id) {
+        this.startBorrow();
+      }
       this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadState(false);
-      this.showToast('归还已记录');
+      this.showToast('记录已撤销');
     } catch (_) {
-      this.actionError = '归还失败，请稍后重试';
+      this.actionError = '撤销失败，请稍后重试';
     } finally {
       this.submitting = false;
     }
+  }
+
+  private isReturnForm(): boolean {
+    return this.formMode === 'return' || this.formMode === 'editReturn';
+  }
+
+  private formTitle(): string {
+    return this.formMode === 'editBorrow' ? '纠正借出记录' : this.formMode === 'editReturn' ? '纠正归还记录' :
+      this.formMode === 'return' ? '记录归还' : '记录借出';
+  }
+
+  private loanLabel(loan: OutstandingLoan): string {
+    return `${loan.borrowEvent.counterpart ?? '未填写借用人'} · 未归还 ${loan.remainingQuantity}${this.unit} · ${new Date(loan.borrowEvent.createdAt).toLocaleString()}`;
+  }
+
+  private returnCandidates(): OutstandingLoan[] {
+    const candidates: OutstandingLoan[] = this.outstandingLoans.map((loan: OutstandingLoan): OutstandingLoan => {
+      return { borrowEvent: loan.borrowEvent, remainingQuantity: loan.remainingQuantity };
+    });
+    if (this.formMode !== 'editReturn') {
+      return candidates;
+    }
+    const original = this.events.find((event: TraceEvent) => event.id === this.editEventId);
+    const allocations = original?.returnAllocations ?? [];
+    for (let index = 0; index < allocations.length; index++) {
+      const allocation = allocations[index];
+      const found = candidates.find((loan: OutstandingLoan) => loan.borrowEvent.id === allocation.borrowEventId);
+      if (found !== undefined) {
+        found.remainingQuantity += allocation.quantity;
+      } else {
+        const borrow = this.events.find((event: TraceEvent) => event.id === allocation.borrowEventId && event.voidedAt === undefined);
+        if (borrow !== undefined) {
+          candidates.push({ borrowEvent: borrow, remainingQuantity: allocation.quantity });
+        }
+      }
+    }
+    return candidates;
+  }
+
+  private returnSourceLabel(event: TraceEvent): string {
+    const allocations = event.returnAllocations ?? [];
+    const sources = allocations.map((allocation: ReturnAllocation) => {
+      const borrow = this.events.find((candidate: TraceEvent) => candidate.id === allocation.borrowEventId);
+      return `${borrow?.counterpart ?? '未填写借用人'} ${allocation.quantity}${this.unit}（${new Date(borrow?.createdAt ?? event.createdAt).toLocaleString()} 借出）`;
+    });
+    return sources.length === 0 ? '尚未对应借出，请核对后纠正' : `对应借出：${sources.join('；')}`;
   }
 
   private eventLabel(type: TraceEventType): string {
-    if (type === TraceEventType.BORROW) {
-      return '借出';
-    }
-    if (type === TraceEventType.RETURN) {
-      return '归还';
-    }
-    return '记录';
+    return type === TraceEventType.BORROW ? '借出' : type === TraceEventType.RETURN ? '归还' :
+      type === TraceEventType.CONSUME ? '用掉' : '记录';
   }
 
   private showToast(message: string): void {
     try {
-      this.getUIContext().getPromptAction().showToast({
-        message: message,
-        duration: 1600
-      });
+      this.getUIContext().getPromptAction().showToast({ message: message, duration: 1600 });
     } catch (_) {
     }
   }

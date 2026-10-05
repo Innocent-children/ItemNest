@@ -73,6 +73,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onForeground(): void {
+    AppStorage.setOrCreate<boolean>('itemtrace.uiForeground', true);
     this.refreshForegroundAppearance();
     AppEventBus.notifyDataChanged();
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onForeground');
@@ -132,6 +133,9 @@ export default class EntryAbility extends UIAbility {
       await this.applySystemBarStyle(mainWindow, themeMode);
       this.updateSafeArea(mainWindow);
       this.avoidAreaChangeCallback = (options: window.AvoidAreaOptions): void => {
+        if (options.type === window.AvoidAreaType.TYPE_KEYBOARD) {
+          AppStorage.setOrCreate<boolean>('itemtrace.keyboardVisible', options.area.bottomRect.height > 0);
+        }
         if (options.type === window.AvoidAreaType.TYPE_SYSTEM ||
           options.type === window.AvoidAreaType.TYPE_CUTOUT ||
           options.type === window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR) {
@@ -171,6 +175,8 @@ export default class EntryAbility extends UIAbility {
       AppStorage.setOrCreate<number>('itemtrace.safeAreaRight', insets.right);
       AppStorage.setOrCreate<number>('itemtrace.safeAreaBottom', insets.bottom);
       AppStorage.setOrCreate<number>('itemtrace.safeAreaLeft', insets.left);
+      const keyboardArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_KEYBOARD);
+      AppStorage.setOrCreate<boolean>('itemtrace.keyboardVisible', keyboardArea.bottomRect.height > 0);
     } catch (err) {
       hilog.error(DOMAIN, 'testTag', 'Failed to update safe area. Cause: %{public}s', JSON.stringify(err));
     }
@@ -257,6 +263,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onBackground(): void {
+    AppStorage.setOrCreate<boolean>('itemtrace.uiForeground', false);
     // Ability has back to background
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onBackground');
   }

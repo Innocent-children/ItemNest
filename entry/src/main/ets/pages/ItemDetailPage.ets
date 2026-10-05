@@ -1,3 +1,4 @@
+import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { ErrorState } from '../components/ErrorState';
@@ -7,12 +8,12 @@ import { AppEventBus } from '../common/AppEventBus';
 import { LatestRequestCoordinator } from '../common/LatestRequestCoordinator';
 import { ExpiryStatus } from '../model/ExpiryStatus';
 import { Item } from '../model/Item';
-import { ReminderRecordStatus } from '../model/ReminderRecord';
 import { StockThreshold } from '../model/StockThreshold';
 import { buildItemRefreshParams, getUnhandledRouteRefreshAt } from '../navigation/RefreshContract';
 import { ItemFormRouteParams, requireItemId, RouteRefreshParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
+import { activeLocationText } from '../service/ItemFlowPresentation';
 
 interface ItemDetailParams {
   item: Item;
@@ -32,9 +33,12 @@ interface ManagementEntryParams {
 
 @Component
 export struct ItemDetailPage {
+  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
+  @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @State private loading: boolean = true;
   @State private deleting: boolean = false;
   @State private errorMessage: string = '';
@@ -48,6 +52,14 @@ export struct ItemDetailPage {
   @State private removingPhoto: boolean = false;
   @State private batchCount: number = 0;
   @State private borrowedQuantity: number = 0;
+  @State private availableQuantity: number = 0;
+  @State private inventoryWarning: string = '';
+  @State private managementLoadError: string = '';
+  @State private managementReady: boolean = false;
+  @State private consumeQuantityText: string = '1';
+  @State private consuming: boolean = false;
+  @State private deletePreviewLoading: boolean = false;
+  @State private deletePreviewDescription: string = '';
   @State private stockThreshold: StockThreshold | undefined = undefined;
   @State private thresholdText: string = '0';
   @State private thresholdEnabled: boolean = false;
@@ -137,17 +149,22 @@ export struct ItemDetailPage {
           .layoutWeight(1)
           if (this.item !== undefined) {
             Button('编辑')
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
               .fontColor($r('app.color.brand_primary'))
               .backgroundColor($r('app.color.surface_card'))
               .border({ width: 1, color: $r('app.color.border_subtle') })
               .borderRadius($r('app.float.radius_control'))
               .onClick(() => this.openEdit())
-            Button('删除')
+            Button(this.deletePreviewLoading ? '正在读取…' : '删除')
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
               .margin({ left: $r('app.float.space_2') })
               .fontColor($r('app.color.status_danger'))
               .backgroundColor($r('app.color.status_danger_soft'))
               .borderRadius($r('app.float.radius_control'))
-              .onClick(() => this.showDeleteConfirm = true)
+              .enabled(!this.deletePreviewLoading && !this.deleting && !this.consuming)
+              .onClick(() => this.prepareDeletePreview())
           }
         }
         .width('100%')
@@ -159,6 +176,8 @@ export struct ItemDetailPage {
           Column({ space: $r('app.float.space_3') }) {
             ErrorState({ message: this.errorMessage })
             Button('返回列表')
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
               .fontColor($r('app.color.brand_on_primary'))
               .backgroundColor($r('app.color.brand_primary'))
               .onClick(() => NavigationHelper.back())
@@ -171,12 +190,15 @@ export struct ItemDetailPage {
       .width('100%')
       .constraintSize({ maxWidth: 880 })
       .height('100%')
-      .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
+      .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
       .backgroundColor($r('app.color.surface_app'))
 
       DeleteConfirmDialog({
         visible: $showDeleteConfirm,
-        confirmed: $deleteRequested
+        confirmed: $deleteRequested,
+        title: this.item === undefined ? '确认删除物品？' : `删除“${this.item.name}”？`,
+        description: this.deletePreviewDescription,
+        confirmText: '删除物品及关联记录'
       })
     }
     .width('100%')
@@ -204,7 +226,7 @@ export struct ItemDetailPage {
                 .fontSize($r('app.float.font_title'))
                 .fontWeight(FontWeight.Bold)
                 .fontColor($r('app.color.text_primary'))
-              Text(`${$$.item.quantity}${$$.item.unit}`)
+              Text(`总量 ${$$.item.quantity}${$$.item.unit}（包含借出）`)
                 .fontSize($r('app.float.font_body'))
                 .fontWeight(FontWeight.Medium)
                 .fontColor($r('app.color.brand_primary'))
@@ -217,11 +239,13 @@ export struct ItemDetailPage {
         .padding($r('app.float.space_4'))
         .borderRadius($r('app.float.radius_card'))
         .backgroundColor($r('app.color.surface_card'))
+        .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
 
         if (this.actionError.length > 0) {
           this.actionErrorPanel()
         }
 
+        this.consumptionSection({ item: $$.item })
         this.managementSection({ item: $$.item })
         this.lowStockSection({ item: $$.item })
         this.locationSection({ item: $$.item })
@@ -248,6 +272,8 @@ export struct ItemDetailPage {
         .fontColor($r('app.color.status_danger'))
         .layoutWeight(1)
       Button('关闭')
+        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
         .fontColor($r('app.color.status_danger'))
         .backgroundColor($r('app.color.status_danger_soft'))
         .borderRadius($r('app.float.radius_control'))
@@ -266,7 +292,7 @@ export struct ItemDetailPage {
         .fontSize($r('app.float.font_section'))
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
-      Text('库存低于阈值时，在应用内标记为需要补货。')
+      Text('拥有的总量（包含借出）低于阈值时，在应用内标记为需要补货。')
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
       if (this.thresholdLoadError.length > 0) {
@@ -275,6 +301,8 @@ export struct ItemDetailPage {
           .fontColor($r('app.color.status_danger'))
           .width('100%')
         Button('重试读取阈值')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .width('100%')
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent'))
@@ -306,6 +334,8 @@ export struct ItemDetailPage {
           .fontColor(this.isBelowLowStockThreshold($$.item) ? $r('app.color.status_danger') : $r('app.color.text_secondary'))
           .width('100%')
         Button(this.thresholdSaving ? '正在保存…' : '保存低库存设置')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .width('100%')
           .fontColor($r('app.color.brand_on_primary'))
           .backgroundColor($r('app.color.brand_primary'))
@@ -318,6 +348,7 @@ export struct ItemDetailPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
   }
 
   @Builder
@@ -327,13 +358,18 @@ export struct ItemDetailPage {
         .fontSize($r('app.float.font_section'))
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
-      this.detailRow({ label: '位置', value: $$.item.locationPath ?? '未设置' })
+      this.detailRow({ label: '现存位置', value: this.activeLocationText($$.item) })
+      this.detailRow({ label: '默认位置', value: $$.item.locationPath ?? '未设置' })
+      Text('找物使用仍有数量的批次位置；批次未填写位置时使用默认位置。')
+        .fontSize($r('app.float.font_caption'))
+        .fontColor($r('app.color.text_secondary'))
       this.detailRow({ label: '分类', value: $$.item.category ?? '未设置' })
     }
     .width('100%')
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
   }
 
   @Builder
@@ -351,8 +387,10 @@ export struct ItemDetailPage {
           .fontColor($r('app.color.text_secondary'))
           .width('100%')
       }
-      if (this.reminderMessage.includes('失败')) {
-        Button(this.reminderRetrying ? '正在重试…' : '重试创建提醒')
+      if (this.reminderMessage.length > 0) {
+        Button(this.reminderRetrying ? '正在同步…' : '重新同步系统提醒')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent'))
           .borderRadius($r('app.float.radius_control'))
@@ -364,6 +402,7 @@ export struct ItemDetailPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
   }
 
   @Builder
@@ -388,6 +427,7 @@ export struct ItemDetailPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
   }
 
   @Builder
@@ -404,6 +444,8 @@ export struct ItemDetailPage {
           .objectFit(ImageFit.Cover)
           .borderRadius($r('app.float.radius_control'))
         Button(this.removingPhoto ? '正在移除照片…' : '移除照片')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .fontColor($r('app.color.status_danger'))
           .backgroundColor($r('app.color.status_danger_soft'))
           .borderRadius($r('app.float.radius_control'))
@@ -419,6 +461,7 @@ export struct ItemDetailPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
   }
 
   @Builder
@@ -525,23 +568,8 @@ export struct ItemDetailPage {
       return;
     }
     const record = result.getData();
-    if (record === undefined) {
-      this.reminderMessage = '尚未创建系统提醒';
-      return;
-    }
-    if (record.status === ReminderRecordStatus.SCHEDULED) {
-      this.reminderMessage = '系统提醒已安排';
-      return;
-    }
-    if (record.status === ReminderRecordStatus.FAILED) {
-      this.reminderMessage = `系统提醒创建失败：${record.errorSummary ?? '请检查通知授权后重试'}`;
-      return;
-    }
-    if (record.status === ReminderRecordStatus.NOT_REQUIRED) {
-      this.reminderMessage = '当前日期不需要创建系统提醒';
-      return;
-    }
-    this.reminderMessage = '系统提醒已取消';
+    this.reminderMessage = record === undefined ? '尚未创建系统提醒，可在下方同步；系统提醒需在设置中启用。' :
+      AppServices.get().reminders.describeRecord(record);
   }
 
   private async retryReminder(): Promise<void> {
@@ -552,7 +580,7 @@ export struct ItemDetailPage {
     this.reminderRetrying = true;
     this.actionError = '';
     try {
-      const result = await AppServices.get().reminders.reconcile(item);
+      const result = await AppServices.get().reminders.reconcileLatest(item.id);
       await this.loadReminderState(item);
       if (!result.ok) {
         this.actionError = result.getError().message;
@@ -573,6 +601,141 @@ export struct ItemDetailPage {
       this.photoPath = result.getData() ?? '';
     } else {
       this.photoPath = '';
+    }
+  }
+
+  @Builder
+  private consumptionSection($$: ItemDetailParams) {
+    Column({ space: $r('app.float.space_3') }) {
+      Text('数量与使用')
+        .fontSize($r('app.float.font_section'))
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('app.color.text_primary'))
+      if (this.managementReady) {
+        Text(`总量 ${$$.item.quantity}${$$.item.unit} · 在手 ${this.availableQuantity}${$$.item.unit} · 借出 ${this.borrowedQuantity}${$$.item.unit}`)
+          .fontSize($r('app.float.font_body'))
+          .fontColor($r('app.color.text_primary'))
+        Text('总量包含借出；归还只增加在手量，不重复增加总量。')
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.text_secondary'))
+      }
+      if (this.inventoryWarning.length > 0) {
+        Text(this.inventoryWarning)
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.status_danger'))
+      }
+      if (this.managementLoadError.length > 0) {
+        Text(this.managementLoadError)
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.status_danger'))
+        Button('重试读取数量')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .onClick(() => this.loadDetailForCurrentRevision(false))
+      }
+      TextInput({ text: this.consumeQuantityText, placeholder: '这次用掉多少，例如：1' })
+        .type(InputType.NUMBER_DECIMAL)
+        .backgroundColor($r('app.color.surface_app'))
+        .border({ width: 1, color: $r('app.color.border_subtle') })
+        .borderRadius($r('app.float.radius_control'))
+        .enabled(!this.consuming && !this.deleting)
+        .onChange((value: string) => this.consumeQuantityText = value)
+      Text('填写这次用掉的数量，按最早到期的批次扣减；借出部分不能消耗。')
+        .fontSize($r('app.float.font_caption'))
+        .fontColor($r('app.color.text_secondary'))
+      Button(this.consuming ? '正在记录…' : '记录消耗')
+        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
+        .width('100%')
+        .fontColor($r('app.color.brand_on_primary'))
+        .backgroundColor($r('app.color.brand_primary'))
+        .borderRadius($r('app.float.radius_control'))
+        .enabled(this.managementReady && this.availableQuantity > 0 && !this.consuming && !this.deleting)
+        .onClick(() => this.consume())
+    }
+    .width('100%')
+    .padding($r('app.float.space_4'))
+    .borderRadius($r('app.float.radius_card'))
+    .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+  }
+
+  private activeLocationText(item: Item): string {
+    return activeLocationText(item.activeLocationPaths, item.locationPath, item.quantity);
+  }
+
+  private async consume(): Promise<void> {
+    if (this.consuming || this.deleting || !this.managementReady) {
+      return;
+    }
+    const value = this.consumeQuantityText.trim();
+    const quantity = Number(value);
+    if (value.length === 0 || !Number.isFinite(quantity) || quantity <= 0) {
+      this.actionError = '请输入这次用掉的数量，必须大于 0';
+      return;
+    }
+    this.consuming = true;
+    this.actionError = '';
+    try {
+      const result = await AppServices.get().batches.consume(this.itemId, quantity);
+      if (!result.ok) {
+        this.actionError = result.getError().message;
+        return;
+      }
+      let notice = '消耗已记录，库存已扣减';
+      try {
+        const reminderResult = await AppServices.get().reminders.reconcileLatest(this.itemId);
+        if (!reminderResult.ok) {
+          this.actionError = '消耗已记录，系统提醒更新失败，可在下方重试同步';
+          notice += '，提醒更新失败';
+        }
+      } catch (_) {
+        this.actionError = '消耗已记录，系统提醒更新失败，可在下方重试同步';
+        notice += '，提醒更新失败';
+      }
+      this.consumeQuantityText = '1';
+      this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
+      await this.loadDetail(false);
+      this.showToast(notice);
+    } catch (_) {
+      this.actionError = '记录消耗失败，请重试';
+    } finally {
+      this.consuming = false;
+    }
+  }
+
+  private async prepareDeletePreview(): Promise<void> {
+    if (this.deletePreviewLoading || this.deleting || this.consuming) {
+      return;
+    }
+    this.deletePreviewLoading = true;
+    this.actionError = '';
+    try {
+      const itemResult = await AppServices.get().detailItem.getDetail(this.itemId);
+      if (!itemResult.ok) {
+        this.actionError = itemResult.getError().message;
+        return;
+      }
+      const batchResult = await AppServices.get().batches.listByItemId(this.itemId);
+      const eventsResult = await AppServices.get().lending.getEvents(this.itemId);
+      const stateResult = await AppServices.get().lending.getState(this.itemId);
+      const reminderResult = await AppServices.get().reminders.getRecord(this.itemId);
+      const thresholdResult = await AppServices.get().lowStock.getThreshold(this.itemId);
+      if (!batchResult.ok || !eventsResult.ok || !stateResult.ok || !reminderResult.ok || !thresholdResult.ok) {
+        this.actionError = '关联记录未能完整读取，暂未删除。请重试读取删除信息。';
+        return;
+      }
+      const item = itemResult.getData();
+      const outstanding = stateResult.getData().borrowedQuantity;
+      const warning = outstanding > 0 ? `
+还有 ${outstanding}${item.unit} 尚未归还，删除后无法再追查这些借还记录。` : '';
+      this.item = item;
+      this.deletePreviewDescription = `将删除 ${batchResult.getData().length} 个批次、${eventsResult.getData().length} 条使用与借还记录、${item.photoLocalId === undefined ? 0 : 1} 张照片、${reminderResult.getData() === undefined ? 0 : 1} 条提醒记录、${thresholdResult.getData() === undefined ? 0 : 1} 条低库存设置。${warning}
+删除后不可恢复；点取消会保留物品及全部记录。`;
+      this.showDeleteConfirm = true;
+    } catch (_) {
+      this.actionError = '读取删除信息失败，物品已保留，请重试';
+    } finally {
+      this.deletePreviewLoading = false;
     }
   }
 
@@ -599,6 +762,7 @@ export struct ItemDetailPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
   }
 
   @Builder
@@ -624,19 +788,36 @@ export struct ItemDetailPage {
   }
 
   private async loadManagementState(item: Item, requestId?: number): Promise<void> {
-    const batchResult = await AppServices.get().batches.listByItemId(item.id);
     if (!this.canApplyLoadResult(requestId)) {
       return;
     }
-    if (batchResult.ok) {
-      this.batchCount = batchResult.getData().length;
-    }
-    const lendingResult = await AppServices.get().lending.getState(item.id);
-    if (!this.canApplyLoadResult(requestId)) {
-      return;
-    }
-    if (lendingResult.ok) {
-      this.borrowedQuantity = lendingResult.getData().borrowedQuantity;
+    this.managementReady = false;
+    this.managementLoadError = '';
+    try {
+      const batchResult = await AppServices.get().batches.listByItemId(item.id);
+      if (!this.canApplyLoadResult(requestId)) {
+        return;
+      }
+      if (batchResult.ok) {
+        this.batchCount = batchResult.getData().length;
+      }
+      const lendingResult = await AppServices.get().lending.getState(item.id);
+      if (!this.canApplyLoadResult(requestId)) {
+        return;
+      }
+      this.managementReady = batchResult.ok && lendingResult.ok;
+      if (lendingResult.ok) {
+        const state = lendingResult.getData();
+        this.borrowedQuantity = state.borrowedQuantity;
+        this.availableQuantity = state.availableQuantity;
+        this.inventoryWarning = state.inventoryWarning ?? '';
+      }
+      this.managementLoadError = !batchResult.ok ? batchResult.getError().message :
+        (!lendingResult.ok ? lendingResult.getError().message : '');
+    } catch (_) {
+      if (this.canApplyLoadResult(requestId)) {
+        this.managementLoadError = '读取批次和借还数量失败，请重试';
+      }
     }
   }
 
@@ -712,9 +893,9 @@ export struct ItemDetailPage {
       return `已保存阈值 ${this.stockThreshold.threshold}${item.unit}，提醒当前停用。`;
     }
     if (this.isBelowLowStockThreshold(item)) {
-      return `当前库存 ${item.quantity}${item.unit}，低于阈值 ${this.stockThreshold.threshold}${item.unit}。`;
+      return `当前总量 ${item.quantity}${item.unit}（包含借出），低于阈值 ${this.stockThreshold.threshold}${item.unit}。`;
     }
-    return `当前库存 ${item.quantity}${item.unit}，未低于阈值 ${this.stockThreshold.threshold}${item.unit}。`;
+    return `当前总量 ${item.quantity}${item.unit}（包含借出），未低于阈值 ${this.stockThreshold.threshold}${item.unit}。`;
   }
 
   private isBelowLowStockThreshold(item: Item): boolean {

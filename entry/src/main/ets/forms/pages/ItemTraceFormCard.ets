@@ -20,7 +20,7 @@ struct ItemTraceFormCard {
           .fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.brand_primary'))
         Row({ space: 12 }) {
-          this.countBlock(this.dueSoonCount, '即将到期')
+          this.countBlock(this.dueSoonCount, '到期待处理')
           this.countBlock(this.todayReminderCount, '今日提醒')
         }
         Text('点击打开应用，快速记录物品')

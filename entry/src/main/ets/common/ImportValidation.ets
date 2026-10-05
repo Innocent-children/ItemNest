@@ -22,13 +22,23 @@ export class ImportPreview {
   readonly locationCount: number;
   readonly categoryCount: number;
   readonly traceEventCount: number;
+  readonly exportedAt?: number;
+  readonly photoCount: number;
+  readonly thresholdCount: number;
+  readonly sampleNames: string[];
 
-  constructor(itemCount: number, batchCount: number, locationCount: number, categoryCount: number, traceEventCount: number) {
+  constructor(itemCount: number, batchCount: number, locationCount: number, categoryCount: number,
+    traceEventCount: number, exportedAt?: number, photoCount: number = 0, thresholdCount: number = 0,
+    sampleNames: string[] = []) {
     this.itemCount = itemCount;
     this.batchCount = batchCount;
     this.locationCount = locationCount;
     this.categoryCount = categoryCount;
     this.traceEventCount = traceEventCount;
+    this.exportedAt = exportedAt;
+    this.photoCount = photoCount;
+    this.thresholdCount = thresholdCount;
+    this.sampleNames = sampleNames.slice(0, 5);
   }
 }
 
@@ -51,6 +61,7 @@ export class ImportValidation {
 
   preview(payload: ItemTraceExportPayload): ImportPreview {
     return new ImportPreview(payload.items.length, payload.batches.length, payload.locations.length,
-      payload.categories.length, payload.traceEvents.length);
+      payload.categories.length, payload.traceEvents.length, payload.exportedAt, 0, 0,
+      payload.items.slice(0, 5).map((item: Item) => item.name));
   }
 }

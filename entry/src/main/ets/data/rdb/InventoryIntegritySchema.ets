@@ -248,3 +248,86 @@ export async function createInventoryIntegritySchema(store: relationalStore.Tran
     await SchemaExecutor.execute(store, INVENTORY_V10_MIGRATION_STATEMENTS[index]);
   }
 }
+
+export function inventoryOutstandingSql(itemExpression: string): string {
+  return `ROUND(COALESCE((
+    SELECT SUM(MAX(0, borrowed.quantity - COALESCE((
+      SELECT SUM(CAST(json_extract(allocation.value, '$.quantity') AS REAL))
+      FROM trace_event returned, json_each(returned.return_allocations_json) allocation
+      WHERE returned.item_id = borrowed.item_id AND returned.type = 'RETURN' AND returned.voided_at IS NULL
+        AND json_extract(allocation.value, '$.borrowEventId') = borrowed.id
+    ), 0)))
+    FROM trace_event borrowed
+    WHERE borrowed.item_id = ${itemExpression} AND borrowed.type = 'BORROW' AND borrowed.voided_at IS NULL
+  ), 0), 2)`;
+}
+
+const CREATE_ITEM_UNIT_SYNC_TRIGGER: string = `
+  CREATE TRIGGER IF NOT EXISTS trg_item_after_update_sync_batch_unit
+  AFTER UPDATE OF unit ON item
+  WHEN NEW.unit <> OLD.unit
+  BEGIN
+    UPDATE batch SET unit = NEW.unit,
+      updated_at = CASE WHEN NEW.updated_at > updated_at THEN NEW.updated_at ELSE updated_at END
+    WHERE item_id = NEW.id;
+  END
+`;
+
+const CREATE_ITEM_STOCK_GUARD_TRIGGER: string = `
+  CREATE TRIGGER IF NOT EXISTS trg_item_before_update_preserve_outstanding_stock
+  BEFORE UPDATE OF quantity ON item
+  WHEN NEW.quantity < OLD.quantity - 0.000000001
+    AND NEW.quantity < (${inventoryOutstandingSql('NEW.id')}) - 0.000000001
+  BEGIN
+    SELECT RAISE(ABORT, 'inventory quantity below outstanding loans');
+  END
+`;
+
+const CREATE_BATCH_QUANTITY_INSERT_GUARD: string = `
+  CREATE TRIGGER IF NOT EXISTS trg_batch_before_insert_validate_quantity
+  BEFORE INSERT ON batch
+  WHEN NEW.quantity < 0 OR ABS(NEW.quantity * 100 - ROUND(NEW.quantity * 100)) >= 0.000000001
+  BEGIN
+    SELECT RAISE(ABORT, 'invalid batch quantity');
+  END
+`;
+
+const CREATE_BATCH_QUANTITY_UPDATE_GUARD: string = `
+  CREATE TRIGGER IF NOT EXISTS trg_batch_before_update_validate_quantity
+  BEFORE UPDATE OF quantity ON batch
+  WHEN NEW.quantity < 0 OR ABS(NEW.quantity * 100 - ROUND(NEW.quantity * 100)) >= 0.000000001
+  BEGIN
+    SELECT RAISE(ABORT, 'invalid batch quantity');
+  END
+`;
+
+function withActiveExpiration(sql: string): string {
+  return sql.split('AND batch.expiration_date IS NOT NULL')
+    .join('AND batch.quantity > 0 AND batch.expiration_date IS NOT NULL')
+    .split('AND current_batch.expiration_date IS NOT NULL')
+    .join('AND current_batch.quantity > 0 AND current_batch.expiration_date IS NOT NULL');
+}
+
+export const INVENTORY_V12_MIGRATION_STATEMENTS: string[] = [
+  ...INVENTORY_V10_TRIGGER_NAMES.map((name: string) => `DROP TRIGGER IF EXISTS ${name}`),
+  withActiveExpiration(REPAIR_ITEM_ROLLUPS),
+  CREATE_ITEM_DEFAULT_BATCH_TRIGGER,
+  CREATE_BATCH_INSERT_GUARD_TRIGGER,
+  CREATE_BATCH_UPDATE_GUARD_TRIGGER,
+  withActiveExpiration(CREATE_BATCH_INSERT_ROLLUP_TRIGGER),
+  withActiveExpiration(CREATE_BATCH_UPDATE_ROLLUP_TRIGGER),
+  CREATE_BATCH_TRACE_CLEANUP_TRIGGER,
+  withActiveExpiration(CREATE_BATCH_DELETE_ROLLUP_TRIGGER),
+  withActiveExpiration(CREATE_ITEM_ROLLUP_GUARD_TRIGGER),
+  CREATE_ITEM_DELETE_CLEANUP_TRIGGER,
+  CREATE_ITEM_UNIT_SYNC_TRIGGER,
+  CREATE_ITEM_STOCK_GUARD_TRIGGER,
+  CREATE_BATCH_QUANTITY_INSERT_GUARD,
+  CREATE_BATCH_QUANTITY_UPDATE_GUARD
+];
+
+export async function updateInventoryIntegritySchema(store: relationalStore.Transaction): Promise<void> {
+  for (let index = 0; index < INVENTORY_V12_MIGRATION_STATEMENTS.length; index++) {
+    await SchemaExecutor.execute(store, INVENTORY_V12_MIGRATION_STATEMENTS[index]);
+  }
+}

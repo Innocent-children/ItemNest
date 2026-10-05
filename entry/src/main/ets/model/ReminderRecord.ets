@@ -1,5 +1,6 @@
 export enum ReminderRecordStatus {
   SCHEDULED = 'SCHEDULED',
+  DUE = 'DUE',
   FAILED = 'FAILED',
   CANCELLED = 'CANCELLED',
   NOT_REQUIRED = 'NOT_REQUIRED'
@@ -11,5 +12,7 @@ export interface ReminderRecord {
   systemReminderId?: number;
   status: ReminderRecordStatus;
   errorSummary?: string;
+  planKey?: string;
+  contentSignature?: string;
   updatedAt: number;
 }

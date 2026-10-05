@@ -38,12 +38,11 @@ export class ItemUpdateService {
         return failure<Item>(batchResult.getError());
       }
       const data = validated.getData();
-      const aggregateChanged = data.quantity !== existing.quantity || data.unit !== existing.unit ||
-        data.expirationDate !== existing.expirationDate;
+      const aggregateChanged = data.quantity !== existing.quantity || data.expirationDate !== existing.expirationDate;
       if (batchResult.getData().length > 0 && aggregateChanged) {
         return failure<Item>(new AppError(
           AppErrorCode.VALIDATION,
-          '物品已有批次，请在批次管理中修改数量、单位和到期日'
+          '物品已有批次，请在批次管理中修改数量和到期日；单位可在此统一纠正，数量数值保持不变'
         ));
       }
     }

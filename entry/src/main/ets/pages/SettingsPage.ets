@@ -1,20 +1,25 @@
+import { RoundedButtonStyle, dockContentInset, uiSpring } from '../ui/VisualStyle';
 import { notificationManager } from '@kit.NotificationKit';
 import { common, ConfigurationConstant } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
 import { resourceManager } from '@kit.LocalizationKit';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { LoadingState } from '../components/LoadingState';
-import { MainEntryBar } from '../components/MainEntryBar';
 import { AppEventBus } from '../common/AppEventBus';
 import { ItemSortMode, ThemeMode, UserPreferences } from '../model/UserPreferences';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
+import { ImportPreview } from '../common/ImportValidation';
 
 @Component
 export struct SettingsPage {
+  @Prop isMainTab: boolean = false;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
-  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
+  @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemtrace.mainDockVisible') private dockVisible: boolean = true;
+  @StorageLink('itemtrace.keyboardVisible') private keyboardVisible: boolean = false;
   @State private defaultReminderDays: string = '7';
   @State private defaultSort: ItemSortMode = ItemSortMode.UPDATED_DESC;
   @State private showRecentSection: boolean = true;
@@ -23,6 +28,9 @@ export struct SettingsPage {
   @State private themeMode: ThemeMode = ThemeMode.SYSTEM;
   @State private reminderEnabled: boolean = false;
   @State private persistedReminderEnabled: boolean = false;
+  @State private reminderSyncing: boolean = false;
+  @State private reminderMessage: string = '';
+  @State private restorePreviewReady: boolean = false;
   @State private notificationStatus: string = '';
   @State private notificationBusy: boolean = false;
   @State private loading: boolean = false;
@@ -52,11 +60,15 @@ export struct SettingsPage {
             .fontColor($r('app.color.text_secondary'))
         }
         .layoutWeight(1)
-        Button('返回')
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_accent'))
-          .borderRadius($r('app.float.radius_control'))
-          .onClick(() => NavigationHelper.back())
+        if (!this.isMainTab) {
+          Button('返回')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
+            .fontColor($r('app.color.brand_primary'))
+            .backgroundColor($r('app.color.surface_accent'))
+            .borderRadius($r('app.float.radius_control'))
+            .onClick(() => NavigationHelper.back())
+        }
       }
       .width('100%')
       .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
@@ -82,16 +94,18 @@ export struct SettingsPage {
                   .backgroundColor($r('app.color.status_danger_soft'))
               }
               Button(this.saving ? '正在保存…' : '保存设置')
+                .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
                 .width('100%')
                 .fontColor($r('app.color.brand_on_primary'))
                 .backgroundColor($r('app.color.brand_primary'))
                 .borderRadius($r('app.float.radius_control'))
-                .enabled(!this.saving)
+                .enabled(!this.saving && !this.reminderSyncing)
                 .onClick(() => this.save())
             }
             .width('100%')
             .constraintSize({ maxWidth: 880 })
-            .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
+            .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: dockContentInset(this.dockVisible, this.keyboardVisible) })
           }
           .width('100%')
           .justifyContent(FlexAlign.Center)
@@ -99,11 +113,13 @@ export struct SettingsPage {
         .layoutWeight(1)
       }
 
-      MainEntryBar({ activeRoute: RouteName.SETTINGS })
+      if (this.loading) {
+        Blank().layoutWeight(1)
+      }
     }
     .width('100%')
     .height('100%')
-    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom })
+    .padding({ top: this.safeAreaTop, left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
   }
 
@@ -124,7 +140,7 @@ export struct SettingsPage {
   @Builder
   private reminderCard() {
     Column({ space: $r('app.float.space_3') }) {
-      this.cardTitle('提醒', '系统提醒只在保存物品后按项目单独创建。')
+      this.cardTitle('提醒', '保存设置会同步已有物品。已进入提醒期的库存会安排在下一分钟；已过期或无库存的物品不再创建提醒。')
       Text('默认提前提醒天数')
         .fontSize($r('app.float.font_body'))
         .fontColor($r('app.color.text_primary'))
@@ -133,13 +149,18 @@ export struct SettingsPage {
         .backgroundColor($r('app.color.surface_app'))
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
+        .enabled(!this.saving && !this.reminderSyncing)
         .onChange((value: string) => this.defaultReminderDays = value)
+      Text('默认天数用于新物品和未单独设置提前天数的物品；已有物品保留各自的提前天数，保存设置后会重新同步提醒。')
+        .fontSize($r('app.float.font_caption'))
+        .fontColor($r('app.color.text_secondary'))
       Row() {
         Text('允许创建系统提醒')
           .layoutWeight(1)
           .fontSize($r('app.float.font_body'))
           .fontColor($r('app.color.text_primary'))
         Toggle({ type: ToggleType.Switch, isOn: this.reminderEnabled })
+          .enabled(!this.saving && !this.reminderSyncing)
           .onChange((value: boolean) => this.reminderEnabled = value)
       }
       .width('100%')
@@ -147,21 +168,39 @@ export struct SettingsPage {
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
       Button(this.notificationBusy ? '正在打开…' : '管理系统通知授权')
+        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
         .fontColor($r('app.color.brand_primary'))
         .backgroundColor($r('app.color.surface_accent'))
-        .enabled(!this.notificationBusy)
+        .enabled(!this.notificationBusy && !this.saving && !this.reminderSyncing)
         .onClick(() => this.manageNotificationPermission())
+      Button(this.reminderSyncing ? '正在同步提醒…' : '重新同步已有物品的提醒')
+        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
+        .fontColor($r('app.color.brand_primary'))
+        .backgroundColor($r('app.color.surface_accent'))
+        .enabled(!this.reminderSyncing && !this.saving && !this.notificationBusy)
+        .onClick(() => this.synchronizeReminders())
+      Text('重新同步使用已保存的设置；修改上方选项后请先保存设置。')
+        .fontSize($r('app.float.font_caption'))
+        .fontColor($r('app.color.text_secondary'))
+      if (this.reminderMessage.length > 0) {
+        Text(this.reminderMessage)
+          .fontSize($r('app.float.font_caption'))
+          .fontColor($r('app.color.text_secondary'))
+      }
     }
     .width('100%')
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
   }
 
   private async loadNotificationStatus(): Promise<void> {
     try {
       this.notificationStatus = await notificationManager.isNotificationEnabled()
-        ? '系统通知已授权，允许创建提醒后需保存对应物品。'
+        ? '系统通知已授权，保存设置或重新同步即可处理已有物品。'
         : '系统通知尚未授权；到期提醒需要系统通知授权。';
     } catch (_) {
       this.notificationStatus = '暂时无法读取系统通知授权状态。';
@@ -181,6 +220,9 @@ export struct SettingsPage {
     try {
       await notificationManager.openNotificationSettingsWithResult(context);
       await this.loadNotificationStatus();
+      if (this.persistedReminderEnabled) {
+        await this.synchronizeReminders();
+      }
     } catch (_) {
       await this.loadNotificationStatus();
     } finally {
@@ -203,6 +245,7 @@ export struct SettingsPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
   }
 
   @Builder
@@ -210,13 +253,14 @@ export struct SettingsPage {
     Column({ space: $r('app.float.space_3') }) {
       this.cardTitle('首页内容', '关闭分区不会删除任何本地物品。')
       this.switchRow('最近添加', this.showRecentSection, (value: boolean) => this.showRecentSection = value)
-      this.switchRow('即将到期', this.showExpirySection, (value: boolean) => this.showExpirySection = value)
+      this.switchRow('到期待处理', this.showExpirySection, (value: boolean) => this.showExpirySection = value)
       this.switchRow('待补货', this.showStockSection, (value: boolean) => this.showStockSection = value)
     }
     .width('100%')
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
   }
 
   @Builder
@@ -234,6 +278,7 @@ export struct SettingsPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
   }
 
   @Builder
@@ -242,12 +287,16 @@ export struct SettingsPage {
       this.cardTitle('数据管理', '维护常用位置和分类，不影响已有物品记录。')
       Row({ space: $r('app.float.space_2') }) {
         Button('位置管理')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .layoutWeight(1)
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent'))
           .borderRadius($r('app.float.radius_control'))
           .onClick(() => NavigationHelper.pushUrl({ url: RouteName.LOCATION_MANAGEMENT }))
         Button('分类管理')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .layoutWeight(1)
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent'))
@@ -260,6 +309,7 @@ export struct SettingsPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
   }
 
   @Builder
@@ -267,12 +317,16 @@ export struct SettingsPage {
     Column({ space: $r('app.float.space_3') }) {
       this.cardTitle('本地备份与恢复', '备份包含物品、批次、位置、分类、借还记录、库存阈值和照片；不包含系统提醒或偏好设置。')
       Button(this.backupBusy ? '正在处理…' : '保存备份文件')
+        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
         .width('100%')
         .fontColor($r('app.color.brand_primary'))
         .backgroundColor($r('app.color.surface_accent'))
         .enabled(!this.backupBusy)
         .onClick(() => this.saveBackupFile())
       Button('选择备份文件并预览')
+        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
         .width('100%')
         .fontColor($r('app.color.brand_primary'))
         .backgroundColor($r('app.color.surface_accent'))
@@ -284,10 +338,12 @@ export struct SettingsPage {
             .fontSize($r('app.float.font_body'))
             .fontColor($r('app.color.text_primary'))
           Button('确认覆盖当前数据并恢复')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
             .width('100%')
             .fontColor($r('app.color.brand_on_primary'))
             .backgroundColor($r('app.color.status_danger'))
-            .enabled(!this.backupBusy && !this.confirmingRestore)
+            .enabled(!this.backupBusy && !this.confirmingRestore && this.restorePreviewReady)
             .onClick(() => this.confirmBackupRestore())
         }
         .width('100%')
@@ -296,9 +352,11 @@ export struct SettingsPage {
         .backgroundColor($r('app.color.status_warning_soft'))
         .transition(TransitionEffect.OPACITY
           .combine(TransitionEffect.translate({ y: 10 }))
-          .animation({ duration: this.reduceAnimation ? 0 : 240, curve: Curve.EaseOut }))
+          .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
       }
       Button('导出最近一次恢复前的安全备份')
+        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
         .width('100%')
         .fontColor($r('app.color.brand_primary'))
         .backgroundColor($r('app.color.surface_accent'))
@@ -314,6 +372,7 @@ export struct SettingsPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
   }
 
   private async saveBackupFile(): Promise<void> {
@@ -342,6 +401,7 @@ export struct SettingsPage {
     this.backupBusy = true;
     this.selectedBackupText = '';
     this.backupPreview = '';
+    this.restorePreviewReady = false;
     try {
       const selected = await AppServices.get().portableBackup.selectUserFile(context);
       if (!selected.ok) {
@@ -350,10 +410,19 @@ export struct SettingsPage {
         const text = selected.getData() ?? '';
         const preview = AppServices.get().portableBackup.preview(text);
         if (preview.ok) {
-          this.selectedBackupText = text;
-          const counts = preview.getData();
-          this.backupPreview = `将覆盖当前数据：${counts.itemCount} 个物品、${counts.batchCount} 个批次、${counts.locationCount} 个位置、${counts.categoryCount} 个分类、${counts.traceEventCount} 条借还记录。`;
-          this.backupMessage = '请核对预览后再确认恢复。';
+          const source = preview.getData();
+          this.backupPreview = this.describeBackup(source);
+          const current = await AppServices.get().portableBackup.previewCurrent();
+          if (current.ok) {
+            this.backupPreview += `\n\n当前将被替换的数据：${this.describeCounts(current.getData())}\n` +
+              '恢复会用备份整体替换当前物品、批次、位置、分类、借还记录、库存阈值和照片，不会合并；' +
+              '偏好设置保留，系统提醒会按当前设置重新检查。';
+            this.selectedBackupText = text;
+            this.restorePreviewReady = true;
+            this.backupMessage = '请核对备份时间、物品示例及被替换的数据后再确认；恢复前会保存安全备份。';
+          } else {
+            this.backupMessage = `备份可读取，但无法核对当前数据：${current.getError().message}。请重新选择并预览后再恢复。`;
+          }
         } else {
           this.backupMessage = preview.getError().message;
         }
@@ -366,14 +435,14 @@ export struct SettingsPage {
   }
 
   private async confirmBackupRestore(): Promise<void> {
-    if (this.confirmingRestore || this.backupBusy || this.selectedBackupText.length === 0) {
+    if (this.confirmingRestore || this.backupBusy || this.selectedBackupText.length === 0 || !this.restorePreviewReady) {
       return;
     }
     this.confirmingRestore = true;
     try {
       const result = await this.getUIContext().getPromptAction().showDialog({
         title: '确认恢复备份？',
-        message: '当前物品和照片将被备份中的内容覆盖。应用会先保存一份恢复前的安全备份。',
+        message: `${this.backupPreview}\n\n应用会先保存一份恢复前的安全备份，再覆盖以上数据。`,
         buttons: [{ text: '取消', color: '#777777' }, { text: '确认恢复', color: '#B42318' }]
       });
       if (result.index === 1) {
@@ -387,7 +456,7 @@ export struct SettingsPage {
   }
 
   private async restoreSelectedBackup(): Promise<void> {
-    if (this.selectedBackupText.length === 0 || this.backupBusy) {
+    if (this.selectedBackupText.length === 0 || this.backupBusy || !this.restorePreviewReady) {
       return;
     }
     this.backupBusy = true;
@@ -399,6 +468,7 @@ export struct SettingsPage {
     } finally {
       this.selectedBackupText = '';
       this.backupPreview = '';
+      this.restorePreviewReady = false;
       this.backupBusy = false;
     }
   }
@@ -423,6 +493,8 @@ export struct SettingsPage {
   @Builder
   private sortChoiceButton(label: string, mode: ItemSortMode) {
     Button(label)
+      .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+      .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
       .type(ButtonType.Capsule)
       .fontSize($r('app.float.font_caption'))
       .fontColor(this.defaultSort === mode ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
@@ -434,6 +506,8 @@ export struct SettingsPage {
   @Builder
   private themeChoiceButton(label: string, mode: ThemeMode) {
     Button(label)
+      .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+      .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
       .type(ButtonType.Capsule)
       .fontSize($r('app.float.font_caption'))
       .fontColor(this.themeMode === mode ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
@@ -463,11 +537,7 @@ export struct SettingsPage {
       if (result.ok) {
         this.applyPreferences(result.getData());
         if (!result.getData().reminderEnabled) {
-          const cancelledResult = await AppServices.get().reminders.cancelAllForDisabledPreference();
-          if (!cancelledResult.ok) {
-            this.errorMessage = `提醒已关闭，但${cancelledResult.getError().message}`;
-            this.persistedReminderEnabled = true;
-          }
+          await this.synchronizeReminders();
         }
       } else {
         this.errorMessage = result.getError().message;
@@ -491,7 +561,7 @@ export struct SettingsPage {
   }
 
   private async save(): Promise<void> {
-    if (this.saving) {
+    if (this.saving || this.reminderSyncing) {
       return;
     }
     this.errorMessage = '';
@@ -504,7 +574,6 @@ export struct SettingsPage {
       themeMode: this.themeMode,
       reminderEnabled: this.reminderEnabled
     };
-    const wasReminderEnabled = this.persistedReminderEnabled;
     this.saving = true;
     try {
       const result = await AppServices.get().preferences.save(preferences);
@@ -513,15 +582,12 @@ export struct SettingsPage {
         this.applyColorMode(result.getData().themeMode);
         await this.applySystemBarStyle(result.getData().themeMode);
         AppEventBus.notifyPreferencesChanged();
-        if (!this.reminderEnabled && wasReminderEnabled) {
-          const cancelledResult = await AppServices.get().reminders.cancelAllForDisabledPreference();
-          if (!cancelledResult.ok) {
-            this.errorMessage = `设置已保存，但${cancelledResult.getError().message}`;
-            this.persistedReminderEnabled = true;
-            return;
-          }
+        const remindersSucceeded = await this.synchronizeReminders();
+        if (remindersSucceeded) {
+          this.showSavedToast();
+        } else {
+          this.errorMessage = '设置已保存；部分提醒未能同步，请查看上方结果并重新同步。';
         }
-        this.showSavedToast();
       } else {
         this.errorMessage = result.getError().message;
       }
@@ -530,6 +596,53 @@ export struct SettingsPage {
     } finally {
       this.saving = false;
     }
+  }
+
+  private async synchronizeReminders(): Promise<boolean> {
+    if (this.reminderSyncing) {
+      return false;
+    }
+    this.reminderSyncing = true;
+    this.reminderMessage = '正在检查已有物品的系统提醒…';
+    try {
+      const result = await AppServices.get().reminders.reconcileAll();
+      if (!result.ok) {
+        this.reminderMessage = `提醒同步失败：${result.getError().message}。可重新同步；已保存的设置和物品不会丢失。`;
+        return false;
+      }
+      this.reminderMessage = AppServices.get().reminders.describeSummary(result.getData());
+      if (result.getData().failed === 0 && this.errorMessage.startsWith('设置已保存；部分提醒')) {
+        this.errorMessage = '';
+      }
+      return result.getData().failed === 0;
+    } catch (_) {
+      this.reminderMessage = '提醒同步中断，可重新同步；已保存的设置和物品不会丢失。';
+      return false;
+    } finally {
+      this.reminderSyncing = false;
+    }
+  }
+
+  private describeBackup(preview: ImportPreview): string {
+    const backupTime = preview.exportedAt === undefined ? '未知，请核对物品示例' : this.formatBackupTime(preview.exportedAt);
+    const examples = preview.sampleNames.length === 0 ? '（无物品）' : preview.sampleNames.join('、');
+    return `备份时间：${backupTime}\n备份内容：${this.describeCounts(preview)}\n物品示例：${examples}`;
+  }
+
+  private describeCounts(preview: ImportPreview): string {
+    return `${preview.itemCount} 个物品、${preview.batchCount} 个批次、${preview.locationCount} 个位置、` +
+      `${preview.categoryCount} 个分类、${preview.traceEventCount} 条借还记录、` +
+      `${preview.thresholdCount} 个库存阈值、${preview.photoCount} 张照片。`;
+  }
+
+  private formatBackupTime(timestamp: number): string {
+    const date = new Date(timestamp);
+    return `${date.getFullYear()}-${this.padTime(date.getMonth() + 1)}-${this.padTime(date.getDate())} ` +
+      `${this.padTime(date.getHours())}:${this.padTime(date.getMinutes())}:${this.padTime(date.getSeconds())}`;
+  }
+
+  private padTime(value: number): string {
+    return value < 10 ? `0${value}` : value.toString();
   }
 
   private applyColorMode(themeMode: ThemeMode): void {
