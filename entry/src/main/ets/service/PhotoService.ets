@@ -2,7 +2,7 @@ import { AppError, AppErrorCode } from '../common/AppError';
 import { failure, Result, success } from '../common/Result';
 import { AssetRepositoryPort } from '../data/repository/AssetRepository';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
-import { Item, PhotoState } from '../model/Item';
+import { Item, ItemSummary, PhotoState } from '../model/Item';
 import { AssetSource, ItemAsset } from '../model/ItemAsset';
 import { LocalAssetStorage } from './LocalAssetStorage';
 
@@ -72,6 +72,27 @@ export class PhotoService {
       return failure<string | undefined>(assetResult.getError());
     }
     return success<string | undefined>(assetResult.getData()?.localPath);
+  }
+
+  /**
+   * 首页多个分区可能包含同一照片，一次加载中按资产标识合并查询。
+   * 照片读取失败时保留物品本身，由界面展示占位图。
+   */
+  async loadThumbnails(items: ItemSummary[]): Promise<void> {
+    const paths = new Map<string, Promise<string | undefined>>();
+    await Promise.all(items.map(async (item: ItemSummary) => {
+      const assetId = item.photoLocalId;
+      if (assetId === undefined) {
+        return;
+      }
+      let request = paths.get(assetId);
+      if (request === undefined) {
+        request = this.assets.getById(assetId).then((result: Result<ItemAsset | undefined>) =>
+          result.ok ? result.getData()?.localPath : undefined).catch(() => undefined);
+        paths.set(assetId, request);
+      }
+      item.photoPath = await request;
+    }));
   }
 
   async remove(item: Item): Promise<Result<Item>> {

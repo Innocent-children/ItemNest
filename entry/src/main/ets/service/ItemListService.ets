@@ -1,5 +1,5 @@
 import { failure, Result, success } from '../common/Result';
-import { Item, ItemSummary } from '../model/Item';
+import { Item, ItemSummary, PhotoState } from '../model/Item';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
 import { ExpiryService } from './ExpiryService';
 
@@ -32,6 +32,7 @@ export class ItemListService {
       expirationDate: item.expirationDate,
       expiryStatus: this.expiryService.getExpiryStatus(item, now),
       stockStatus: this.expiryService.getStockStatus(item),
+      photoLocalId: item.photoState === PhotoState.LOCAL ? item.photoLocalId : undefined,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt
     };

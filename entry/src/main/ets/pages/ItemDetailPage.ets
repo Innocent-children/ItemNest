@@ -1,6 +1,9 @@
+import { localImageSource } from '../ui/ImageSource';
+import { ItemHeroMotion } from '../ui/ItemHeroMotion';
+import { PhotoViewer } from '../components/PhotoViewer';
 import { InventoryMetrics } from '../components/InventoryMetrics';
 import { PageHeader } from '../components/PageHeader';
-import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
+import { RoundedButtonStyle, uiSpring, nativeTitleOptions, nativeSheetOptions } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { ErrorState } from '../components/ErrorState';
@@ -9,7 +12,7 @@ import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
 import { LatestRequestCoordinator } from '../common/LatestRequestCoordinator';
 import { ExpiryStatus } from '../model/ExpiryStatus';
-import { Item } from '../model/Item';
+import { Item, ItemSummary } from '../model/Item';
 import { StockThreshold } from '../model/StockThreshold';
 import { buildItemRefreshParams, getUnhandledRouteRefreshAt } from '../navigation/RefreshContract';
 import { ItemFormRouteParams, requireItemId, RouteRefreshParams } from '../navigation/RouteContract';
@@ -26,6 +29,12 @@ interface DetailRowParams {
   value: string;
 }
 
+interface DetailIdentityParams {
+  name: string;
+  category: string;
+  path: string;
+}
+
 interface ManagementEntryParams {
   title: string;
   description: string;
@@ -35,10 +44,16 @@ interface ManagementEntryParams {
 
 @Component
 export struct ItemDetailPage {
+  @State private heroPreview: ItemSummary | undefined = undefined;
+  @State private showPhotoViewer: boolean = false;
+  @StorageLink('itemtrace.heroActiveItem') private heroActiveItem: string = '';
+  @StorageLink('itemtrace.heroContentOpacity') private heroContentOpacity: number = 1;
+  private pageScroller: Scroller = new Scroller();
   @State private viewportWidth: number = 360;
   @State private showActionSheet: boolean = false;
   @State private actionSheetMode: string = 'consume';
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @State private focusedField: string = '';
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
@@ -92,6 +107,7 @@ export struct ItemDetailPage {
       return;
     }
     this.itemId = itemIdResult.getData();
+    this.heroPreview = ItemHeroMotion.preview(this.itemId);
     this.loadDetailForCurrentRevision(true);
   }
 
@@ -139,13 +155,37 @@ export struct ItemDetailPage {
   }
 
   build() {
+    NavDestination() {
+      this.pageContent()
+    }
+    .title({ builder: this.pageHeader, height: 76 }, nativeTitleOptions(this.reduceAnimation))
+    .hideBackButton(true)
+    .bindToScrollable([this.pageScroller])
+    .backgroundColor($r('app.color.surface_app'))
+    .onBackPressed(() => NavigationHelper.handleBackPressed())
+    .onShown(() => { this.heroPreview = ItemHeroMotion.preview(this.itemId); })
+  }
+
+  @Builder
+  private pageHeader() {
+    PageHeader({ title: '物品档案', showBack: true, actionText: this.item === undefined ? '' : '编辑',
+          actionEnabled: !this.deleting && !this.consuming, onAction: () => this.openEdit() })
+  }
+
+  @Builder
+  private pageContent() {
     Stack({ alignContent: Alignment.Center }) {
       Column() {
-        PageHeader({ title: '物品档案', showBack: true, actionText: this.item === undefined ? '' : '编辑',
-          actionEnabled: !this.deleting && !this.consuming, onAction: () => this.openEdit() })
 
         if (this.loading) {
-          LoadingState({ text: '正在读取物品详情…' })
+          Column({ space: 20 }) {
+            if (this.heroPreview !== undefined) {
+              Column() {
+                this.detailIdentity({ name: this.heroPreview.name, category: this.heroPreview.category ?? '我的物品', path: this.heroPreview.photoPath ?? '' })
+              }.width('100%').padding(24).borderRadius(22).backgroundColor($r('app.color.surface_card'))
+            }
+            LoadingState({ text: '正在读取物品详情…' })
+          }.width('100%').padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter') })
         } else if (this.errorMessage.length > 0) {
           Column({ space: $r('app.float.space_3') }) {
             ErrorState({ message: this.errorMessage })
@@ -164,8 +204,12 @@ export struct ItemDetailPage {
       .width('100%')
       .constraintSize({ maxWidth: 880 })
       .height('100%')
-      .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
+      .padding({ bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
       .backgroundColor($r('app.color.surface_app'))
+
+      if (this.showPhotoViewer) {
+        PhotoViewer({ path: this.photoPath, visible: $showPhotoViewer, transitionId: `photo-viewer:${this.itemId}` })
+      }
 
       DeleteConfirmDialog({
         visible: $showDeleteConfirm,
@@ -178,7 +222,7 @@ export struct ItemDetailPage {
     .width('100%')
     .height('100%').backgroundColor($r('app.color.surface_app'))
     .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
-    .bindSheet($$this.showActionSheet, this.actionSheet(), {
+    .bindSheet($$this.showActionSheet, this.actionSheet(), nativeSheetOptions({
       height: SheetSize.FIT_CONTENT, dragBar: true, showClose: true,
       title: { title: this.actionSheetMode === 'consume' ? '记录这次用量' : '补货提醒' },
       backgroundColor: $r('app.color.surface_app'), preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
@@ -186,31 +230,54 @@ export struct ItemDetailPage {
       onWillDismiss: (action: DismissSheetAction) => {
         if (!this.consuming && !this.thresholdSaving) { action.dismiss(); }
       }
-    })
+    }, this.reduceAnimation))
+  }
+
+  @Builder
+  private detailIdentity($$: DetailIdentityParams) {
+    Row({ space: 18 }) {
+      Stack() {
+        if ($$.path.length > 0) {
+          if (!this.showPhotoViewer) {
+            Image(localImageSource($$.path)).width('100%').height('100%').objectFit(ImageFit.Cover)
+              .onError(() => { this.photoPath = ''; ItemHeroMotion.updatePhoto(this.itemId, ''); })
+              .geometryTransition(this.reduceAnimation ? '' : `photo-viewer:${this.itemId}`)
+          }
+        } else {
+          Image($r('app.media.ui_box')).width(38).height(38).fillColor($r('app.color.brand_primary'))
+        }
+      }.width(84).height(96).borderRadius(18).clip(true)
+        .backgroundColor($r('app.color.surface_accent'))
+        .id(`item-detail-photo:${this.itemId}`)
+        .opacity(this.heroActiveItem === this.itemId ? 0 : 1)
+        .onAreaChange(() => ItemHeroMotion.reportTarget(this.getUIContext(), this.itemId, `item-detail-photo:${this.itemId}`))
+        .onClick(() => { if (this.photoPath.length > 0) {
+          this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.42, 0.85), () => this.showPhotoViewer = true);
+        } })
+        .accessibilityText($$.path.length > 0 ? '查看物品照片' : '物品图标')
+      Column({ space: 10 }) {
+        Text($$.category).fontSize(12).fontColor($r('app.color.text_secondary'))
+        Text($$.name).fontSize(27).fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.text_primary')).width('100%')
+        ExpiryStatusTag({ status: this.expiryStatus })
+        if (!this.reduceAnimation && this.heroPreview !== undefined) {
+          Text('向右滑动返回').fontSize(10).fontColor($r('app.color.text_tertiary'))
+        }
+      }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+    }.width('100%')
+      .gesture(PanGesture({ direction: PanDirection.Right, distance: 16 })
+        .onActionStart(() => { if (!this.reduceAnimation && !this.deleting && !this.consuming) { ItemHeroMotion.startReturn(this.itemId); } })
+        .onActionUpdate((event: GestureEvent) => ItemHeroMotion.updateReturn(event.offsetX / this.viewportWidth))
+        .onActionEnd((event: GestureEvent) => ItemHeroMotion.endReturn(event.offsetX / this.viewportWidth > 0.3 || event.velocityX > 700))
+        .onActionCancel(() => ItemHeroMotion.endReturn(false)))
   }
 
   @Builder
   private detailContent($$: ItemDetailParams) {
-    Scroll() {
+    Scroll(this.pageScroller) {
       Column({ space: $r('app.float.space_4') }) {
         Column({ space: 20 }) {
-          Row({ space: 18 }) {
-            if (this.photoPath.length > 0) {
-              Image(this.photoPath).width(84).height(96).objectFit(ImageFit.Cover).borderRadius(18)
-                .accessibilityText('物品照片')
-            } else {
-              Stack() {
-                Image($r('app.media.ui_box')).width(38).height(38)
-                  .fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
-              }.width(84).height(96).borderRadius(18).backgroundColor($r('app.color.surface_accent'))
-            }
-            Column({ space: 10 }) {
-              Text($$.item.category ?? '我的物品').fontSize(12).fontColor($r('app.color.text_secondary'))
-              Text($$.item.name).fontSize(27).fontWeight(FontWeight.Bold)
-                .fontColor($r('app.color.text_primary')).width('100%')
-              ExpiryStatusTag({ status: this.expiryStatus })
-            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-          }.width('100%')
+          this.detailIdentity({ name: $$.item.name, category: $$.item.category ?? '我的物品', path: this.photoPath })
           Divider().color($r('app.color.border_subtle'))
           InventoryMetrics({ total: $$.item.quantity, unit: $$.item.unit,
             available: this.managementReady ? this.availableQuantity : undefined,
@@ -222,6 +289,7 @@ export struct ItemDetailPage {
           if (this.managementLoadError.length > 0) {
             ErrorState({ message: this.managementLoadError })
             Button('重试读取数量').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
               .onClick(() => this.loadDetailForCurrentRevision(false))
           }
         }.width('100%').padding(24).borderRadius(22).backgroundColor($r('app.color.surface_card'))
@@ -250,7 +318,9 @@ export struct ItemDetailPage {
             Image($r('app.media.ui_chevron')).width(14).height(14)
               .fillColor($r('app.color.text_secondary')).accessibilityLevel('no')
           }.width('100%')
-        }.width('100%').padding(20).borderRadius(20).backgroundColor($r('app.color.surface_card'))
+        }
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).width('100%').padding(20).borderRadius(20).backgroundColor($r('app.color.surface_card'))
+          .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
           .onClick(() => { this.actionSheetMode = 'stock'; this.showActionSheet = true; })
         if (this.photoPath.length > 0 || $$.item.photoLocalId !== undefined) {
           this.photoSection({ item: $$.item })
@@ -260,6 +330,7 @@ export struct ItemDetailPage {
           .width('100%').fontSize(13).fontColor($r('app.color.status_danger'))
           .backgroundColor(Color.Transparent)
           .enabled(!this.deletePreviewLoading && !this.deleting && !this.consuming)
+          .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
           .onClick(() => this.prepareDeletePreview())
 
         if (this.deleting) {
@@ -269,7 +340,8 @@ export struct ItemDetailPage {
       .width('100%')
       .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
       .alignItems(HorizontalAlign.Start)
-    }
+      .opacity(this.heroContentOpacity)
+    }.clip(false)
     .layoutWeight(1)
   }
 
@@ -338,11 +410,18 @@ export struct ItemDetailPage {
           .fontSize($r('app.float.font_body'))
           .fontColor($r('app.color.text_primary'))
         TextInput({ text: this.thresholdText, placeholder: '例如：2' })
+          .borderWidth(1)
+          .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'thresholdText'))
+          .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
+            if (this.focusedField === 'thresholdText') { this.focusedField = ''; }
+          }))
           .type(InputType.NUMBER_DECIMAL)
           .backgroundColor($r('app.color.surface_app'))
           .border({ width: 1, color: $r('app.color.border_subtle') })
           .borderRadius($r('app.float.radius_control'))
           .enabled(!this.thresholdSaving)
+          .borderColor(this.focusedField === 'thresholdText' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
+          .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
           .onChange((value: string) => this.thresholdText = value)
         Row() {
           Text('启用低库存标记')
@@ -627,6 +706,7 @@ export struct ItemDetailPage {
     } else {
       this.photoPath = '';
     }
+    ItemHeroMotion.updatePhoto(this.itemId, this.photoPath);
   }
 
   @Builder
@@ -655,14 +735,22 @@ export struct ItemDetailPage {
           .fontColor($r('app.color.status_danger'))
         Button('重试读取数量')
           .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
           .onClick(() => this.loadDetailForCurrentRevision(false))
       }
       TextInput({ text: this.consumeQuantityText, placeholder: '这次用掉多少，例如：1' })
+        .borderWidth(1)
+        .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'consumeQuantityText'))
+        .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
+          if (this.focusedField === 'consumeQuantityText') { this.focusedField = ''; }
+        }))
         .type(InputType.NUMBER_DECIMAL)
         .backgroundColor($r('app.color.surface_app'))
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
         .enabled(!this.consuming && !this.deleting)
+        .borderColor(this.focusedField === 'consumeQuantityText' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
+        .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
         .onChange((value: string) => this.consumeQuantityText = value)
       Text('填写这次用掉的数量，按最早到期的批次扣减；借出部分不能消耗。')
         .fontSize($r('app.float.font_caption'))
@@ -774,8 +862,10 @@ export struct ItemDetailPage {
           Image($r('app.media.ui_minus')).width(22).height(22).fillColor($r('app.color.brand_on_primary'))
           Text('记录用量').fontSize(13).fontWeight(FontWeight.Medium).fontColor($r('app.color.brand_on_primary'))
         }.width('100%')
-      }.layoutWeight(1).padding(18).borderRadius(18).backgroundColor($r('app.color.brand_primary'))
+      }
+        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1).padding(18).borderRadius(18).backgroundColor($r('app.color.brand_primary'))
         .enabled(this.managementReady && this.availableQuantity > 0 && !this.consuming && !this.deleting)
+        .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
         .onClick(() => { this.actionError = ''; this.actionSheetMode = 'consume'; this.showActionSheet = true; })
       this.managementEntry({ title: '批次管理', description: `${this.batchCount} 个批次`,
         route: RouteName.BATCH_LIST, itemId: $$.item.id })
@@ -791,8 +881,10 @@ export struct ItemDetailPage {
           .width(22).height(22).fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
         Text($$.title).fontSize(13).fontWeight(FontWeight.Medium).fontColor($r('app.color.brand_primary'))
       }.width('100%')
-    }.layoutWeight(1).padding(18).borderRadius(18).backgroundColor($r('app.color.surface_card'))
+    }
+      .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1).padding(18).borderRadius(18).backgroundColor($r('app.color.surface_card'))
       .accessibilityText($$.title + '，' + $$.description)
+      .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
       .onClick(() => NavigationHelper.pushUrl({ url: $$.route, params: { itemId: $$.itemId } }))
   }
 

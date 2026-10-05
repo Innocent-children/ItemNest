@@ -1,5 +1,6 @@
+import { NavigationHelper } from '../navigation/NavigationHelper';
 import { PageHeader } from '../components/PageHeader';
-import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
+import { RoundedButtonStyle, uiSpring, nativeTitleOptions, nativeSheetOptions } from '../ui/VisualStyle';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
@@ -8,6 +9,7 @@ import { AppServices } from '../service/AppServices';
 
 @Component
 export struct CategoryManagementPage {
+  private pageScroller: Scroller = new Scroller();
   @State private showCreateSheet: boolean = false;
   @State private viewportWidth: number = 360;
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
@@ -16,6 +18,7 @@ export struct CategoryManagementPage {
   @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
   @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @State private focusedField: string = '';
   @State private loading: boolean = true;
   @State private operating: boolean = false;
   @State private loadError: string = '';
@@ -52,14 +55,31 @@ export struct CategoryManagementPage {
   }
 
   build() {
-    Column() {
-      PageHeader({ title: '物品分类', subtitle: '按你的习惯，把物品整理好。', showBack: true,
+    NavDestination() {
+      this.pageContent()
+    }
+    .title({ builder: this.pageHeader, height: 76 }, nativeTitleOptions(this.reduceAnimation))
+    .hideBackButton(true)
+    .bindToScrollable([this.pageScroller])
+    .backgroundColor($r('app.color.surface_app'))
+    .onBackPressed(() => NavigationHelper.handleBackPressed())
+  }
+
+  @Builder
+  private pageHeader() {
+    PageHeader({ title: '物品分类', subtitle: '按你的习惯，把物品整理好。', showBack: true,
         actionText: '新增分类', actionIcon: $r('app.media.dock_add'), actionEnabled: !this.operating && !this.loading,
         onAction: () => { this.actionError = ''; this.showCreateSheet = true; } })
+  }
+
+  @Builder
+  private pageContent() {
+    Column() {
+
       if (this.loading) {
         LoadingState({ text: '正在读取分类…' })
       } else {
-        Scroll() {
+        Scroll(this.pageScroller) {
           Column({ space: $r('app.float.space_4') }) {
             if (this.actionError.length > 0) {
               ErrorState({ message: this.actionError })
@@ -103,22 +123,22 @@ export struct CategoryManagementPage {
           }
           .width('100%')
           .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
-        }
+        }.clip(false)
         .layoutWeight(1)
       }
     }
     .width('100%')
     .height('100%').constraintSize({ maxWidth: 960 })
-    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
+    .padding({ bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
     .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
-    .bindSheet($$this.showCreateSheet, this.createSheet(), {
+    .bindSheet($$this.showCreateSheet, this.createSheet(), nativeSheetOptions({
       height: SheetSize.FIT_CONTENT, dragBar: true, showClose: true,
       title: { title: '新增分类' }, backgroundColor: $r('app.color.surface_app'),
       preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
       width: this.viewportWidth >= 700 ? 560 : undefined,
       onWillDismiss: (action: DismissSheetAction) => { if (!this.operating) { action.dismiss(); } }
-    })
+    }, this.reduceAnimation))
   }
 
   @Builder
@@ -127,10 +147,17 @@ export struct CategoryManagementPage {
       Scroll() {
         Column({ space: 16 }) {
           TextInput({ text: this.name, placeholder: '新增分类名称' })
+            .borderWidth(1)
+            .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'name'))
+            .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
+              if (this.focusedField === 'name') { this.focusedField = ''; }
+            }))
             .backgroundColor($r('app.color.surface_card'))
             .border({ width: 1, color: $r('app.color.border_subtle') })
             .borderRadius($r('app.float.radius_control'))
             .enabled(!this.operating)
+            .borderColor(this.focusedField === 'name' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
+            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
             .onChange((value: string) => this.name = value)
 
           if (this.actionError.length > 0) { ErrorState({ message: this.actionError }) }

@@ -1,5 +1,6 @@
+import { NavigationHelper } from '../navigation/NavigationHelper';
 import { PageHeader } from '../components/PageHeader';
-import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
+import { RoundedButtonStyle, uiSpring, uiReveal, nativeTitleOptions, nativeSheetOptions } from '../ui/VisualStyle';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
@@ -8,6 +9,7 @@ import { AppServices } from '../service/AppServices';
 
 @Component
 export struct LocationManagementPage {
+  private pageScroller: Scroller = new Scroller();
   @State private showCreateSheet: boolean = false;
   @State private viewportWidth: number = 360;
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
@@ -16,6 +18,7 @@ export struct LocationManagementPage {
   @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
   @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @State private focusedField: string = '';
   @State private loading: boolean = true;
   @State private operating: boolean = false;
   @State private loadError: string = '';
@@ -23,6 +26,7 @@ export struct LocationManagementPage {
   @State private pressedAction: string = '';
   @State private name: string = '';
   @State private selectedParentId: string = '';
+  @State private collapsedLocations: string[] = [];
   @State private locations: LocationRecord[] = [];
   private lastHandledDataRevision: number = -1;
 
@@ -53,14 +57,31 @@ export struct LocationManagementPage {
   }
 
   build() {
-    Column() {
-      PageHeader({ title: '存放位置', subtitle: '给每个角落一个名字。', showBack: true,
+    NavDestination() {
+      this.pageContent()
+    }
+    .title({ builder: this.pageHeader, height: 76 }, nativeTitleOptions(this.reduceAnimation))
+    .hideBackButton(true)
+    .bindToScrollable([this.pageScroller])
+    .backgroundColor($r('app.color.surface_app'))
+    .onBackPressed(() => NavigationHelper.handleBackPressed())
+  }
+
+  @Builder
+  private pageHeader() {
+    PageHeader({ title: '存放位置', subtitle: '给每个角落一个名字。', showBack: true,
         actionText: '新增位置', actionIcon: $r('app.media.dock_add'), actionEnabled: !this.operating && !this.loading,
         onAction: () => { this.actionError = ''; this.showCreateSheet = true; } })
+  }
+
+  @Builder
+  private pageContent() {
+    Column() {
+
       if (this.loading) {
         LoadingState({ text: '正在读取位置…' })
       } else {
-        Scroll() {
+        Scroll(this.pageScroller) {
           Column({ space: $r('app.float.space_4') }) {
             if (this.actionError.length > 0) {
               ErrorState({ message: this.actionError })
@@ -68,8 +89,17 @@ export struct LocationManagementPage {
               ErrorState({ message: this.loadError })
             }
             Text('全部位置').fontSize(18).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary')).width('100%').margin({ top: 12 })
-            ForEach(this.locations, (location: LocationRecord) => {
+            ForEach(this.visibleLocations(), (location: LocationRecord) => {
               Row() {
+                if (this.locations.some((child: LocationRecord) => child.parentId === location.id)) {
+                  Button({ type: ButtonType.Normal }) {
+                    Image($r('app.media.ui_chevron')).width(16).height(16).fillColor($r('app.color.brand_primary'))
+                      .rotate({ angle: this.collapsedLocations.indexOf(location.id) >= 0 ? 0 : 90 })
+                      .animation(uiSpring(this.reduceAnimation))
+                  }.width(44).height(44).backgroundColor(Color.Transparent)
+                    .accessibilityText(this.collapsedLocations.indexOf(location.id) >= 0 ? '展开子位置' : '收起子位置')
+                    .onClick(() => this.toggleChildren(location.id))
+                }
                 Image($r('app.media.ui_location')).width(24).height(24)
                   .fillColor($r('app.color.brand_primary')).margin({ right: 14 }).accessibilityLevel('no')
                 Column({ space: $r('app.float.space_1') }) {
@@ -100,26 +130,47 @@ export struct LocationManagementPage {
               .padding($r('app.float.space_3'))
               .backgroundColor($r('app.color.surface_card'))
               .borderRadius($r('app.float.radius_control'))
+              .transition(uiReveal(this.reduceAnimation))
             }, (location: LocationRecord) => `${location.id}:${location.updatedAt}:${location.active}`)
           }
           .width('100%')
           .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
-        }
+        }.clip(false)
         .layoutWeight(1)
       }
     }
     .width('100%')
     .height('100%').constraintSize({ maxWidth: 960 })
-    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
+    .padding({ bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
     .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
-    .bindSheet($$this.showCreateSheet, this.createSheet(), {
+    .bindSheet($$this.showCreateSheet, this.createSheet(), nativeSheetOptions({
       height: SheetSize.LARGE, dragBar: true, showClose: true,
       title: { title: '新增位置' }, backgroundColor: $r('app.color.surface_app'),
       preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
       width: this.viewportWidth >= 700 ? 560 : undefined,
       onWillDismiss: (action: DismissSheetAction) => { if (!this.operating) { action.dismiss(); } }
-    })
+    }, this.reduceAnimation))
+    }
+
+  private visibleLocations(): LocationRecord[] {
+    const records = new Map<string, LocationRecord>();
+    this.locations.forEach((location: LocationRecord) => records.set(location.id, location));
+    return this.locations.filter((location: LocationRecord) => {
+      let parentId = location.parentId;
+      while (parentId !== undefined && parentId.length > 0) {
+        if (this.collapsedLocations.indexOf(parentId) >= 0) { return false; }
+        parentId = records.get(parentId)?.parentId;
+      }
+      return true;
+    });
+  }
+
+  private toggleChildren(locationId: string): void {
+    this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.4, 0.85), () => {
+      this.collapsedLocations = this.collapsedLocations.indexOf(locationId) >= 0 ?
+        this.collapsedLocations.filter((id: string) => id !== locationId) : this.collapsedLocations.concat([locationId]);
+    });
   }
 
   @Builder
@@ -128,10 +179,17 @@ export struct LocationManagementPage {
       Scroll() {
         Column({ space: 16 }) {
           TextInput({ text: this.name, placeholder: '新增位置名称' })
+            .borderWidth(1)
+            .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'name'))
+            .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
+              if (this.focusedField === 'name') { this.focusedField = ''; }
+            }))
             .backgroundColor($r('app.color.surface_card'))
             .border({ width: 1, color: $r('app.color.border_subtle') })
             .borderRadius($r('app.float.radius_control'))
             .enabled(!this.operating)
+            .borderColor(this.focusedField === 'name' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
+            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
             .onChange((value: string) => this.name = value)
           Text('放在哪个位置下面？').fontSize(13).fontColor($r('app.color.text_secondary')).width('100%')
           Flex({ wrap: FlexWrap.Wrap }) {

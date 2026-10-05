@@ -1,6 +1,6 @@
 import { InventoryMetrics } from '../components/InventoryMetrics';
 import { PageHeader } from '../components/PageHeader';
-import { RoundedButtonStyle } from '../ui/VisualStyle';
+import { RoundedButtonStyle, uiSpring, nativeTitleOptions, nativeSheetOptions } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
@@ -13,6 +13,7 @@ import { AppServices } from '../service/AppServices';
 
 @Component
 export struct LendingPage {
+  private pageScroller: Scroller = new Scroller();
   @State private viewportWidth: number = 360;
   @State private showOperationSheet: boolean = false;
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
@@ -21,6 +22,7 @@ export struct LendingPage {
   @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
   @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @State private focusedField: string = '';
   @State private loading: boolean = true;
   @State private contentLoaded: boolean = false;
   @State private submitting: boolean = false;
@@ -88,14 +90,32 @@ export struct LendingPage {
   }
 
   build() {
+    NavDestination() {
+      this.pageContent()
+    }
+    .title({ builder: this.pageHeader, height: 76 }, nativeTitleOptions(this.reduceAnimation))
+    .hideBackButton(true)
+    .bindToScrollable([this.pageScroller])
+    .backgroundColor($r('app.color.surface_app'))
+    .onBackPressed(() => NavigationHelper.handleBackPressed())
+  }
+
+  @Builder
+  private pageHeader() {
+    PageHeader({ title: '借出与归还', subtitle: '记清借给谁，也记得收回来。', showBack: true })
+  }
+
+  @Builder
+  private pageContent() {
     Column() {
-      PageHeader({ title: '借出与归还', subtitle: '记清借给谁，也记得收回来。', showBack: true })
+
       if (this.loading) {
         LoadingState({ text: '正在读取借还记录…' })
       } else if (!this.contentLoaded && this.loadError.length > 0) {
         ErrorState({ message: this.loadError })
         Button('重新加载')
           .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
           .onClick(() => this.loadStateForCurrentRevision(true))
       } else {
         Scroll(this.scroller) {
@@ -125,12 +145,14 @@ export struct LendingPage {
                 .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
                 .layoutWeight(1)
                 .enabled(!this.submitting)
+                .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
                 .onClick(() => { this.startBorrow(); this.showOperationSheet = true; })
               Button('记录归还')
                 .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_card'))
                 .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
                 .layoutWeight(1)
                 .enabled(!this.submitting && this.outstandingLoans.length > 0)
+                .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
                 .onClick(() => { this.startReturn(); this.showOperationSheet = true; })
             }
             .width('100%')
@@ -142,6 +164,7 @@ export struct LendingPage {
               ErrorState({ message: this.loadError })
               Button('重新加载')
                 .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
                 .onClick(() => this.loadStateForCurrentRevision(false))
             }
 
@@ -169,6 +192,7 @@ export struct LendingPage {
                   .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
                   .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
                   .enabled(!this.submitting)
+                  .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
                   .onClick(() => { this.startReturn(loan); this.showOperationSheet = true; })
               }
               .width('100%')
@@ -188,21 +212,22 @@ export struct LendingPage {
           .width('100%')
           .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
         }
+        .clip(false)
         .layoutWeight(1)
       }
     }
     .width('100%')
     .height('100%').constraintSize({ maxWidth: 960 })
-    .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
+    .padding({ bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
     .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
-    .bindSheet($$this.showOperationSheet, this.operationSheet(), {
+    .bindSheet($$this.showOperationSheet, this.operationSheet(), nativeSheetOptions({
       height: SheetSize.LARGE, dragBar: true, showClose: true,
       title: { title: this.formTitle() }, preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
       width: this.viewportWidth >= 700 ? 560 : undefined,
       backgroundColor: $r('app.color.surface_app'),
       onWillDismiss: (action: DismissSheetAction) => { if (!this.submitting) { action.dismiss(); } }
-    })
+    }, this.reduceAnimation))
   }
 
   @Builder
@@ -218,30 +243,52 @@ export struct LendingPage {
               .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
               .width('100%')
               .enabled(!this.submitting)
+              .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
               .onClick(() => {
                 this.selectedBorrowId = loan.borrowEvent.id;
               })
           }, (loan: OutstandingLoan) => `${loan.borrowEvent.id}-${loan.remainingQuantity}-${loan.borrowEvent.counterpart ?? ''}-${loan.borrowEvent.note ?? ''}`)
         } else {
           TextInput({ text: this.counterpart, placeholder: '借给谁，可选' })
+            .borderWidth(1)
+            .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'counterpart'))
+            .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
+              if (this.focusedField === 'counterpart') { this.focusedField = ''; }
+            }))
             .backgroundColor($r('app.color.surface_card'))
             .border({ width: 1, color: $r('app.color.border_subtle') })
             .borderRadius($r('app.float.radius_control'))
             .enabled(!this.submitting)
+            .borderColor(this.focusedField === 'counterpart' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
+            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
             .onChange((value: string) => this.counterpart = value)
         }
         TextInput({ text: this.quantityText, placeholder: `数量（${this.unit}）` })
+          .borderWidth(1)
+          .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'quantityText'))
+          .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
+            if (this.focusedField === 'quantityText') { this.focusedField = ''; }
+          }))
           .type(InputType.NUMBER_DECIMAL)
           .backgroundColor($r('app.color.surface_card'))
           .border({ width: 1, color: $r('app.color.border_subtle') })
           .borderRadius($r('app.float.radius_control'))
           .enabled(!this.submitting)
+          .borderColor(this.focusedField === 'quantityText' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
+          .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
           .onChange((value: string) => this.quantityText = value)
         TextInput({ text: this.note, placeholder: '备注，可选' })
+          .borderWidth(1)
+          .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'note'))
+          .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
+            if (this.focusedField === 'note') { this.focusedField = ''; }
+          }))
           .backgroundColor($r('app.color.surface_card'))
           .border({ width: 1, color: $r('app.color.border_subtle') })
           .borderRadius($r('app.float.radius_control'))
           .enabled(!this.submitting)
+          .borderColor(this.focusedField === 'note' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
+          .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
           .onChange((value: string) => this.note = value)
         Row({ space: $r('app.float.space_2') }) {
           if (this.editEventId.length > 0 || this.isReturnForm()) {
@@ -249,6 +296,7 @@ export struct LendingPage {
               .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
               .layoutWeight(1)
               .enabled(!this.submitting)
+              .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
               .onClick(() => this.showOperationSheet = false)
           }
           Button(this.submitting ? '正在保存…' : this.editEventId.length > 0 ? '保存纠正' : this.isReturnForm() ? '确认归还' : '确认借出')
@@ -258,6 +306,7 @@ export struct LendingPage {
             .backgroundColor($r('app.color.brand_primary'))
             .borderRadius($r('app.float.radius_control'))
             .enabled(!this.submitting && this.loadError.length === 0)
+            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
             .onClick(() => this.saveOperation())
         }
         .width('100%')
@@ -297,11 +346,13 @@ export struct LendingPage {
             .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
             .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
             .enabled(!this.submitting)
+            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
             .onClick(() => { this.startCorrection(event); this.showOperationSheet = true; })
           Button('撤销')
             .fontColor($r('app.color.text_secondary')).backgroundColor($r('app.color.surface_input'))
             .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
             .enabled(!this.submitting)
+            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
             .onClick(() => this.confirmVoid(event))
         }
       }

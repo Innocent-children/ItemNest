@@ -1,11 +1,14 @@
-import { HdsTabs, HdsBarStyle, HdsBarLayoutMode, hdsMaterial, DividerMode } from '@kit.UIDesignKit';
-import { RoundedButtonStyle, dockContentInset, uiSpring } from '../ui/VisualStyle';
+import { localImageSource } from '../ui/ImageSource';
+import { ItemHeroMotion, ItemHeroSource } from '../ui/ItemHeroMotion';
+import { PageHeader } from '../components/PageHeader';
+import { RoundedButtonStyle, dockContentInset, uiSpring, FloatingTabsStyle, nativeTitleOptions, numericMotion } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { accessibility } from '@kit.AccessibilityKit';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
+import { MainDock } from '../components/MainDock';
 import { AppEventBus } from '../common/AppEventBus';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
@@ -26,6 +29,12 @@ import { LocationManagementPage } from './LocationManagementPage';
 import { SearchPage } from './SearchPage';
 import { SettingsPage } from './SettingsPage';
 
+interface AttentionMetricParams {
+  count: number;
+  label: string;
+  icon: Resource;
+}
+
 interface HomeSummarySectionParams {
   title: string;
   items: ItemSummary[];
@@ -45,9 +54,8 @@ struct Index {
   @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @State private mainTabIndex: number = 0;
-  @State private viewportWidth: number = 360;
+  @State private selectedTabIndex: number = 0;
   @State private navigationRootVisible: boolean = true;
-  @StorageLink('itemtrace.mainDockVisible') private dockVisible: boolean = true;
   @StorageLink('itemtrace.keyboardVisible') private keyboardVisible: boolean = false;
   @State private dockRoute: string = RouteName.HOME;
   private mainTabRoutes: string[] = [RouteName.HOME, RouteName.ITEM_LIST, RouteName.SEARCH, RouteName.SETTINGS];
@@ -73,6 +81,18 @@ struct Index {
   private lastHandledDataRevision: number = -1;
   private lastHandledPreferenceRevision: number = -1;
   private pathStack: NavPathStack = new NavPathStack();
+  @State private searchEntryVisible: boolean = true;
+  private searchTransition: boolean = false;
+  @State private heroVisible: boolean = false;
+  @State private heroPhoto: string = '';
+  @State private heroX: number = 0;
+  @State private heroY: number = 0;
+  @State private heroWidth: number = 52;
+  @State private heroHeight: number = 60;
+  @State private heroRadius: number = 14;
+  private homeScroller: Scroller = new Scroller();
+  @State private homeScrolled: boolean = false;
+  private tabsController: TabsController = new TabsController();
   private animationReduceListener: (enabled: boolean) => void = (enabled: boolean) => {
     this.applyAnimationPreference(enabled);
   };
@@ -83,8 +103,14 @@ struct Index {
       accessibility.onAnimationReduceStateChange(this.animationReduceListener);
     } catch (_) {
     }
-    this.dockVisible = true;
     NavigationHelper.registerPathStack(this.pathStack);
+    ItemHeroMotion.register((source, proxy, operation, interactive) =>
+      this.animateHero(source, proxy, operation, interactive), () => {
+        this.heroVisible = false;
+        AppStorage.setOrCreate<string>('itemtrace.heroSourceKey', '');
+        AppStorage.setOrCreate<string>('itemtrace.heroActiveItem', '');
+        AppStorage.setOrCreate<number>('itemtrace.heroContentOpacity', 1);
+      });
     this.subscribeDataRefresh();
     this.subscribeRouteResultRefresh();
     this.refreshSummaryForCurrentRevision(true);
@@ -105,6 +131,7 @@ struct Index {
       this.routeResultListenerId = 0;
     }
     NavigationHelper.unregisterPathStack(this.pathStack);
+    ItemHeroMotion.unregister();
   }
 
   onPageShow(): void {
@@ -122,6 +149,10 @@ struct Index {
     this.reduceAnimation = enabled;
     AppStorage.setOrCreate<boolean>('itemtrace.reduceAnimation', enabled);
     this.pathStack.disableAnimation(enabled);
+    if (enabled) {
+      this.searchEntryVisible = true;
+      AppStorage.setOrCreate<boolean>('itemtrace.searchExpanded', true);
+    }
   }
 
   private onRevisionChanged(): void {
@@ -206,12 +237,11 @@ struct Index {
     if (index < 0 || route === this.dockRoute) {
       return;
     }
-    this.mainTabIndex = index;
-    this.dockRoute = route;
+    this.tabsController.changeIndex(index);
   }
 
   onBackPress(): boolean {
-    if (this.pathStack.size() === 0 && this.mainTabIndex !== 0) {
+    if (this.pathStack.size() === 0 && this.selectedTabIndex !== 0) {
       this.selectMainTab(RouteName.HOME);
       return true;
     }
@@ -219,97 +249,186 @@ struct Index {
   }
 
   build() {
-    Navigation(this.pathStack) {
-      this.mainTabs()
-    }
-    .hideTitleBar(true)
-    .onNavBarStateChange((visible: boolean) => {
-      this.navigationRootVisible = visible;
-      if (visible) {
-        this.dockVisible = true;
-        this.dockRoute = this.mainTabRoutes[this.mainTabIndex];
-        this.refreshSummaryForCurrentRevision(false);
+    Stack({ alignContent: Alignment.Bottom }) {
+      Navigation(this.pathStack) {
+        this.mainTabs()
       }
-    })
-    .navDestination(this.navDestinationBuilder)
+      .title({ builder: this.mainHeader, height: this.mainTabIndex === 0 ? 100 : 76 },
+        nativeTitleOptions(this.reduceAnimation))
+      .hideBackButton(true)
+      .mode(NavigationMode.Auto)
+      .navBarWidthRange([320, 420])
+      .minContentWidth(420)
+      .onNavBarStateChange((visible: boolean) => {
+        this.navigationRootVisible = visible;
+        if (visible) {
+          this.dockRoute = this.mainTabRoutes[this.mainTabIndex];
+          this.refreshSummaryForCurrentRevision(false);
+        }
+      })
+      .navDestination(this.navDestinationBuilder)
+      .customNavContentTransition((from, to, operation) =>
+        this.reduceAnimation ? undefined : (ItemHeroMotion.transition(from, to, operation) ?? this.searchMotion(from, to, operation)))
+      .width('100%').height('100%')
+      .backgroundColor($r('app.color.surface_app'))
+
+      if (this.heroVisible) {
+        this.heroOverlay()
+      }
+    }
     .width('100%')
     .height('100%')
-    .padding({ bottom: this.dockVisible && !this.keyboardVisible ? this.safeAreaBottom : 0 })
+    .id('itemtrace-motion-root')
+    .padding({ top: this.safeAreaTop })
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     .backgroundColor($r('app.color.surface_app'))
+  }
+
+
+  private openSearch(): void {
+    this.searchTransition = !this.reduceAnimation;
+    AppStorage.setOrCreate<boolean>('itemtrace.searchExpanded', this.reduceAnimation);
+    NavigationHelper.pushUrl({ url: RouteName.SEARCH,
+      params: { source: this.searchTransition ? 'home-search' : 'search' } });
+  }
+
+  private searchMotion(from: NavContentInfo, to: NavContentInfo,
+    operation: NavigationOperation): NavigationAnimatedTransition | undefined {
+    if (!this.searchTransition ||
+      !((operation === NavigationOperation.PUSH && to.name === RouteName.SEARCH && !from.name) ||
+        (operation === NavigationOperation.POP && from.name === RouteName.SEARCH && !to.name))) {
+      return undefined;
+    }
+    const push = operation === NavigationOperation.PUSH;
+    return {
+      timeout: 1000,
+      transition: (proxy: NavigationTransitionProxy) => {
+        this.getUIContext().animateTo({ duration: 360, curve: Curve.Friction,
+          onFinish: () => proxy.finishTransition() }, () => {
+          this.searchEntryVisible = !push;
+          AppStorage.setOrCreate<boolean>('itemtrace.searchExpanded', push);
+        });
+      },
+      onTransitionEnd: (success: boolean) => {
+        if (success && push) { this.getUIContext().getFocusController().requestFocus('itemtrace-search-input'); }
+        if (success && !push) { this.searchTransition = false; }
+      }
+    };
+  }
+
+  private animateHero(source: ItemHeroSource, proxy: NavigationTransitionProxy,
+    operation: NavigationOperation, interactive: boolean): void {
+    const target = source.target;
+    if (target === undefined) { proxy.finishTransition(); return; }
+    const push = operation === NavigationOperation.PUSH;
+    const start = push ? source.frame : target;
+    const end = push ? target : source.frame;
+    const root = ItemHeroMotion.frame(this.getUIContext(), 'itemtrace-motion-root');
+    const rootX = root?.x ?? 0;
+    const rootY = (root?.y ?? 0) + this.safeAreaTop;
+    this.heroPhoto = source.photoPath ?? '';
+    this.heroX = start.x - rootX;
+    this.heroY = start.y - rootY;
+    this.heroWidth = start.width;
+    this.heroHeight = start.height;
+    this.heroRadius = push ? 14 : 18;
+    this.heroVisible = true;
+    AppStorage.setOrCreate<string>('itemtrace.heroSourceKey', source.key);
+    AppStorage.setOrCreate<string>('itemtrace.heroActiveItem', source.item.id);
+    AppStorage.setOrCreate<number>('itemtrace.heroContentOpacity', push ? 0 : 1);
+    this.getUIContext().animateTo({ duration: 420, curve: interactive ? Curve.Linear : Curve.Friction,
+      onFinish: () => { if (!interactive) { proxy.finishTransition(); } } }, () => {
+      this.heroX = end.x - rootX;
+      this.heroY = end.y - rootY;
+      this.heroWidth = end.width;
+      this.heroHeight = end.height;
+      this.heroRadius = push ? 18 : 14;
+      AppStorage.setOrCreate<number>('itemtrace.heroContentOpacity', push ? 1 : 0);
+    });
+  }
+
+  @Builder
+  private heroOverlay() {
+    Stack() {
+      if (this.heroPhoto.length > 0) {
+        Image(localImageSource(this.heroPhoto)).width('100%').height('100%').objectFit(ImageFit.Cover)
+      } else {
+        Image($r('app.media.ui_box')).width('46%').height('46%').fillColor($r('app.color.brand_primary'))
+      }
+    }.width(this.heroWidth).height(this.heroHeight).position({ x: this.heroX, y: this.heroY })
+      .backgroundColor($r('app.color.surface_accent')).borderRadius(this.heroRadius).clip(true)
+      .hitTestBehavior(HitTestMode.None).accessibilityLevel('no').zIndex(10)
+  }
+
+  @Builder
+  private tabLabel(label: string, symbol: Resource, index: number) {
+    MainDock({ label: label, symbol: symbol, selected: this.selectedTabIndex === index })
+  }
+
+  @Builder
+  private mainHeader() {
+    PageHeader({ title: this.mainTabIndex === 0 ? '物品，都有去处。' : this.mainTabIndex === 1 ? '我的物品' :
+      this.mainTabIndex === 2 ? '查找物品' : '我的空间',
+      subtitle: this.mainTabIndex === 0 ? 'ITEMTRACE / 物品收纳' : this.mainTabIndex === 1 ? '每一件，都好好收着。' :
+        this.mainTabIndex === 2 ? '知道放在哪里，就少一点寻找。' : '让整理，更合你的习惯。',
+      largeTitle: this.mainTabIndex === 0 && !this.homeScrolled,
+      actionText: '记录新物品', actionIcon: $r('app.media.dock_add'),
+      onAction: () => this.openCreateMenu() })
+  }
+
+  private async openCreateMenu(): Promise<void> {
+    const result = await this.getUIContext().getPromptAction().showActionMenu({
+      title: '记录新物品', buttons: [
+        { text: '手动记录', color: $r('app.color.brand_primary') },
+        { text: '扫码录入', color: $r('app.color.brand_primary') },
+        { text: '拍照记录', color: $r('app.color.brand_primary') }
+      ]
+    }).catch(() => undefined);
+    if (result !== undefined) {
+      NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM,
+        params: { mode: 'create', returnTo: this.dockRoute,
+          source: result.index === 1 ? 'scan' : result.index === 2 ? 'camera' : 'manual' } });
+    }
   }
 
   @Builder
   private mainTabs() {
-    HdsTabs({ index: this.mainTabIndex, barPosition: BarPosition.End }) {
+    Tabs({ index: this.mainTabIndex, controller: this.tabsController }) {
       TabContent() {
         this.homeContent()
-      }.tabBar(this.tabLabel('首页', $r('app.media.dock_home'), 0))
+      }.tabBar(this.tabLabel('首页', $r('sys.symbol.house'), 0))
       TabContent() {
         ItemListPage({ isMainTab: true })
-      }.tabBar(this.tabLabel('物品', $r('app.media.dock_items'), 1))
+      }.tabBar(this.tabLabel('物品', $r('sys.symbol.archivebox'), 1))
       TabContent() {
         SearchPage({ isMainTab: true })
-      }.tabBar(this.tabLabel('查找', $r('app.media.dock_search'), 2))
+      }.tabBar(this.tabLabel('查找', $r('sys.symbol.magnifyingglass'), 2))
       TabContent() {
         SettingsPage({ isMainTab: true })
-      }.tabBar(this.tabLabel('我的', $r('app.media.dock_settings'), 3))
+      }.tabBar(this.tabLabel('我的', $r('sys.symbol.person'), 3))
     }
-    .barHeight(this.keyboardVisible ? 0 : 64)
+    .attributeModifier(new FloatingTabsStyle(this.reduceAnimation))
+    .barPosition(BarPosition.End)
     .barOverlap(true)
-    .divider({ mode: DividerMode.NONE })
-    .barBackgroundColor($r('app.color.dock_glass'))
-    .barFloatingStyle(this.keyboardVisible ? undefined : {
-      barSideMargin: 16, barBottomMargin: 12,
-      barWidth: { smallWidth: Math.max(200, this.viewportWidth - 104),
-        mediumWidth: Math.min(400, this.viewportWidth - 104), largeWidth: 480 },
-      systemMaterialEffect: { materialType: hdsMaterial.MaterialType.ADAPTIVE,
-        materialLevel: hdsMaterial.MaterialLevel.GENTLE },
-      lightColor: $r('app.color.accent_warm'), thermoCtrl: true,
-      miniBar: { miniBarBuilder: () => this.quickAddButton(),
-        miniBarWidth: { smallWidth: 56, mediumWidth: 56, largeWidth: 56 },
-        miniBarStyle: HdsBarStyle.COLLAPSE, enableMiniBarBackground: false,
-        barLayoutMode: HdsBarLayoutMode.HORIZONTAL }
-    })
-    .animationDuration(0)
-    .scrollable(false)
+    .barHeight(this.keyboardVisible ? 0 : 64)
+    .animationMode(AnimationMode.CONTENT_FIRST_WITH_JUMP)
+    .animationCurve(Curve.EaseOut)
+    .animationDuration(this.reduceAnimation ? 0 : 180)
+    .scrollable(true)
     .width('100%')
     .height('100%')
-    .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+    .backgroundColor($r('app.color.surface_app'))
+    .onSelected((index: number) => {
+      this.selectedTabIndex = index;
+      this.dockRoute = this.mainTabRoutes[index];
+    })
     .onChange((index: number) => {
       this.mainTabIndex = index;
       if (this.navigationRootVisible) {
         this.dockRoute = this.mainTabRoutes[index];
       }
     })
-  }
-
-  @Builder
-  private tabLabel(label: string, icon: Resource, index: number) {
-    Column({ space: 4 }) {
-      Image(icon).width(22).height(22)
-        .fillColor(this.mainTabIndex === index ? $r('app.color.brand_primary') : $r('app.color.text_secondary'))
-        .accessibilityLevel('no')
-      Text(label).fontSize(11).maxFontScale(1.4)
-        .fontWeight(this.mainTabIndex === index ? FontWeight.Bold : FontWeight.Regular)
-        .fontColor(this.mainTabIndex === index ? $r('app.color.brand_primary') : $r('app.color.text_secondary'))
-    }
-    .width('100%').padding({ top: 9, bottom: 9 }).borderRadius(28)
-    .backgroundColor(this.mainTabIndex === index ? $r('app.color.dock_selected') : Color.Transparent)
-    .accessibilityText(label).accessibilitySelected(this.mainTabIndex === index)
-  }
-
-  @Builder
-  private quickAddButton() {
-    Button({ type: ButtonType.Normal }) {
-      Image($r('app.media.dock_add')).width(26).height(26)
-        .fillColor($r('app.color.brand_on_primary')).accessibilityLevel('no')
-    }
-    .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-    .width(56).height(56).borderRadius(28).padding(0)
-    .backgroundColor($r('app.color.brand_primary'))
-    .accessibilityText('记录新物品')
-    .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM,
-      params: { mode: 'create', returnTo: this.dockRoute } }))
   }
 
   @Builder
@@ -329,7 +448,7 @@ struct Index {
         }
         .padding($r('app.float.space_4'))
       } else {
-        Scroll() {
+        Scroll(this.homeScroller) {
           Row() {
             Column({ space: $r('app.float.space_5') }) {
               this.homeHeader()
@@ -354,11 +473,13 @@ struct Index {
             }
             .width('100%')
             .constraintSize({ maxWidth: 960 })
-            .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), top: 8, bottom: dockContentInset(this.dockVisible, this.keyboardVisible) })
+            .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), top: 8, bottom: dockContentInset(true, this.keyboardVisible, this.safeAreaBottom) })
           }
           .width('100%')
           .justifyContent(FlexAlign.Center)
         }
+        .clip(false)
+        .onDidScroll(() => { this.homeScrolled = this.homeScroller.currentOffset().yOffset > 32; })
         .layoutWeight(1)
       }
 
@@ -368,13 +489,12 @@ struct Index {
     }
     .width('100%')
     .height('100%')
-    .padding({ top: this.safeAreaTop, left: this.safeAreaLeft, right: this.safeAreaRight })
+    .padding({ left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
   }
 
   @Builder
   private navDestinationBuilder(name: string, param: Object) {
-    NavDestination() {
       if (name === RouteName.ITEM_LIST) {
         ItemListPage()
       } else if (name === RouteName.ITEM_DETAIL) {
@@ -398,27 +518,12 @@ struct Index {
       } else {
         ErrorState({ message: '页面不存在，请返回首页后重试' })
       }
-    }
-    .hideTitleBar(true)
-    .onWillShow(() => {
-      this.dockVisible = false;
-    })
-    .onBackPressed(() => NavigationHelper.handleBackPressed())
   }
 
   @Builder
   private homeHeader() {
     Column({ space: 24 }) {
-      Row() {
-        Column({ space: 8 }) {
-          Text('ITEMTRACE  /  物品收纳').fontSize(11).letterSpacing(2)
-            .fontWeight(FontWeight.Medium).fontColor($r('app.color.text_secondary'))
-          Text('物品，都有去处。').fontSize($r('app.float.font_title'))
-            .fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Image($r('app.media.ui_trace')).width(28).height(28)
-          .fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
-      }.width('100%').margin({ top: 12 })
+      if (this.searchEntryVisible) {
       Button({ type: ButtonType.Normal }) {
         Row({ space: 12 }) {
           Image($r('app.media.dock_search')).width(20).height(20)
@@ -427,10 +532,14 @@ struct Index {
           Text('名称 / 条码').fontSize(11).fontColor($r('app.color.text_tertiary'))
         }.width('100%')
       }
+        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
       .width('100%').height(54).padding({ left: 18, right: 18 }).borderRadius(16)
       .backgroundColor($r('app.color.surface_card'))
       .accessibilityText('搜索物品名称或条码')
-      .onClick(() => this.selectMainTab(RouteName.SEARCH))
+      .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
+      .geometryTransition(this.reduceAnimation ? '' : 'itemtrace-home-search')
+      .onClick(() => this.openSearch())
+      }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
@@ -448,9 +557,9 @@ struct Index {
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       }.width('100%')
       Row() {
-        this.attentionMetric(this.dueSoonCount, '到期待处理', $r('app.media.ui_clock'))
+        this.attentionMetric({ count: this.dueSoonCount, label: '到期待处理', icon: $r('app.media.ui_clock') })
         Divider().vertical(true).height(42).color($r('app.color.hero_line')).margin({ left: 12, right: 20 })
-        this.attentionMetric(this.outOfStockCount, '需要补货', $r('app.media.ui_box'))
+        this.attentionMetric({ count: this.outOfStockCount, label: '需要补货', icon: $r('app.media.ui_box') })
       }.width('100%')
     }
     .width('100%').alignItems(HorizontalAlign.Start).padding(24)
@@ -458,16 +567,16 @@ struct Index {
   }
 
   @Builder
-  private attentionMetric(count: number, label: string, icon: Resource) {
+  private attentionMetric($$: AttentionMetricParams) {
     Column({ space: 8 }) {
       Row({ space: 5 }) {
-        Text(count.toString()).fontSize(34).fontWeight(FontWeight.Medium)
+        Text($$.count.toString()).contentTransition(numericMotion(this.reduceAnimation, $$.count)).fontSize(34).fontWeight(FontWeight.Medium)
           .fontColor($r('app.color.hero_text'))
         Text('项').fontSize(12).fontColor($r('app.color.hero_secondary')).margin({ top: 12 })
       }
       Row({ space: 6 }) {
-        Image(icon).width(14).height(14).fillColor($r('app.color.hero_secondary')).accessibilityLevel('no')
-        Text(label).fontSize(12).fontColor($r('app.color.hero_secondary'))
+        Image($$.icon).width(14).height(14).fillColor($r('app.color.hero_secondary')).accessibilityLevel('no')
+        Text($$.label).fontSize(12).fontColor($r('app.color.hero_secondary'))
       }
     }.layoutWeight(1).alignItems(HorizontalAlign.Start)
   }
@@ -478,8 +587,10 @@ struct Index {
       Row() {
         Text('按位置找').fontSize($r('app.float.font_section')).fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.text_primary')).layoutWeight(1)
-        Button('管理位置').fontSize(12).fontColor($r('app.color.text_secondary'))
+        Button('管理位置')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).fontSize(12).fontColor($r('app.color.text_secondary'))
           .height(44).backgroundColor(Color.Transparent).padding(0)
+          .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
           .onClick(() => NavigationHelper.pushUrl({ url: RouteName.LOCATION_MANAGEMENT }))
       }.width('100%')
       Scroll() {
@@ -494,8 +605,10 @@ struct Index {
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
               }.alignItems(HorizontalAlign.Start).width('100%')
             }
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
             .width(130).constraintSize({ minHeight: 110 }).padding(16).borderRadius(18)
             .backgroundColor($r('app.color.surface_card')).accessibilityText(`查看${location}的物品`)
+            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
             .onClick(() => this.openLocationList(location))
           }, (location: string) => location)
         }
@@ -522,7 +635,10 @@ struct Index {
             .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
             .fontColor($r('app.color.brand_primary'))
             .backgroundColor($r('app.color.surface_accent'))
-            .onClick(() => this.showAllExpiryItems = !this.showAllExpiryItems)
+            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
+            .onClick(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.9), () => {
+              this.showAllExpiryItems = !this.showAllExpiryItems;
+            }))
         }
       }
       if ($$.items.length === 0) {
@@ -539,8 +655,8 @@ struct Index {
         }
       } else {
         ForEach($$.items, (item: ItemSummary) => {
-          ItemCard({ item: item })
-        }, (item: ItemSummary) => `${item.id}:${item.updatedAt}:${item.expiryStatus}:${item.quantity}`)
+          ItemCard({ item: $$.items.find((current: ItemSummary) => current.id === item.id) ?? item, heroKey: $$.title })
+        }, (item: ItemSummary) => item.id)
       }
     }
     .width('100%')
@@ -573,7 +689,7 @@ struct Index {
         .transition(TransitionEffect.OPACITY
           .combine(TransitionEffect.translate({ y: 10 }))
           .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
-        .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_DETAIL, params: { itemId: item.itemId } }))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_DETAIL, params: { itemId: item.itemId } }))
       }, (item: LowStockItem) => item.itemId)
     }
     .width('100%')
@@ -607,6 +723,8 @@ struct Index {
       }
       this.errorMessage = '';
       const summary = result.getData();
+      await AppServices.get().photos.loadThumbnails(summary.recentItems.concat(summary.expiryAttentionItems, summary.outOfStockItems));
+      if (loadId !== this.summaryLoadId) { return; }
       this.recentItems = summary.recentItems;
       this.dueSoonItems = summary.dueSoonItems;
       this.expiryAttentionItems = summary.expiryAttentionItems;

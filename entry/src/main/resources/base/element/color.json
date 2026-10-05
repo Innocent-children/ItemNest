@@ -1,5 +1,12 @@
 {
   "color": [
+    { "name": "motion_glow", "value": "#88264D3C" },
+    { "name": "chrome_glass", "value": "#A6F5F4F0" },
+    { "name": "header_glass", "value": "#C7F5F4F0" },
+    { "name": "dock_particle", "value": "#91B89C" },
+    { "name": "dock_particle_highlight", "value": "#E4CD91" },
+    { "name": "chrome_button", "value": "#9FFFFFFF" },
+    { "name": "chrome_border", "value": "#70FFFFFF" },
     {
       "name": "surface_app",
       "value": "#F5F4F0"

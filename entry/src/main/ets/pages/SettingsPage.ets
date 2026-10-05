@@ -1,5 +1,5 @@
 import { PageHeader } from '../components/PageHeader';
-import { RoundedButtonStyle, dockContentInset, uiSpring } from '../ui/VisualStyle';
+import { RoundedButtonStyle, dockContentInset, uiSpring, nativeTitleOptions, nativeSheetOptions, uiReveal } from '../ui/VisualStyle';
 import { notificationManager } from '@kit.NotificationKit';
 import { common, ConfigurationConstant } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
@@ -14,16 +14,18 @@ import { ImportPreview } from '../common/ImportValidation';
 
 @Component
 export struct SettingsPage {
+  private pageScroller: Scroller = new Scroller();
   @State private viewportWidth: number = 360;
   @State private showReminderSettings: boolean = false;
   @State private savedPreferenceSignature: string = '';
   @State private preferencesReady: boolean = false;
   @Prop isMainTab: boolean = false;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
+  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
   @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
-  @StorageLink('itemtrace.mainDockVisible') private dockVisible: boolean = true;
+  @State private focusedField: string = '';
   @StorageLink('itemtrace.keyboardVisible') private keyboardVisible: boolean = false;
   @State private defaultReminderDays: string = '7';
   @State private defaultSort: ItemSortMode = ItemSortMode.UPDATED_DESC;
@@ -53,14 +55,34 @@ export struct SettingsPage {
   }
 
   build() {
-    Column() {
-      PageHeader({ title: '我的空间', subtitle: '让整理，更合你的习惯。',
+    if (this.isMainTab) {
+      this.pageContent()
+    } else {
+      NavDestination() {
+        this.pageContent()
+      }
+      .title({ builder: this.pageHeader, height: 76 }, nativeTitleOptions(this.reduceAnimation))
+      .hideBackButton(true)
+      .bindToScrollable([this.pageScroller])
+      .backgroundColor($r('app.color.surface_app'))
+      .onBackPressed(() => NavigationHelper.handleBackPressed())
+    }
+  }
+
+  @Builder
+  private pageHeader() {
+    PageHeader({ title: '我的空间', subtitle: '让整理，更合你的习惯。',
         eyebrow: this.isMainTab ? 'MAKE IT YOURS' : '', showBack: !this.isMainTab })
+  }
+
+  @Builder
+  private pageContent() {
+    Column() {
 
       if (this.loading) {
         LoadingState({ text: '正在读取设置…' })
       } else {
-        Scroll() {
+        Scroll(this.pageScroller) {
           Row() {
             Column({ space: $r('app.float.space_4') }) {
               this.themeCard()
@@ -81,11 +103,11 @@ export struct SettingsPage {
             }
             .width('100%')
             .constraintSize({ maxWidth: 880 })
-            .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: dockContentInset(this.dockVisible, this.keyboardVisible) })
+            .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: dockContentInset(this.isMainTab, this.keyboardVisible, this.safeAreaBottom) })
           }
           .width('100%')
           .justifyContent(FlexAlign.Center)
-        }
+        }.clip(false)
         .layoutWeight(1)
       }
 
@@ -96,10 +118,12 @@ export struct SettingsPage {
             .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
             .width('100%').height(48).fontColor($r('app.color.brand_on_primary'))
             .backgroundColor($r('app.color.brand_primary'))
-            .enabled(this.preferencesReady && !this.saving && !this.reminderSyncing).onClick(() => this.save())
+            .enabled(this.preferencesReady && !this.saving && !this.reminderSyncing).animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
+            .onClick(() => this.save())
         }.width('100%').constraintSize({ maxWidth: 880 })
-          .padding({ left: 24, right: 24, top: 12, bottom: dockContentInset(this.dockVisible, this.keyboardVisible) })
+          .padding({ left: 24, right: 24, top: 12, bottom: dockContentInset(this.isMainTab, this.keyboardVisible, this.safeAreaBottom) })
           .backgroundColor($r('app.color.surface_card'))
+          .transition(uiReveal(this.reduceAnimation))
       }
       if (this.loading) {
         Blank().layoutWeight(1)
@@ -107,15 +131,15 @@ export struct SettingsPage {
     }
     .width('100%')
     .height('100%')
-    .padding({ top: this.safeAreaTop, left: this.safeAreaLeft, right: this.safeAreaRight })
+    .padding({ left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
     .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
-    .bindSheet($$this.showReminderSettings, this.reminderSettingsSheet(), {
+    .bindSheet($$this.showReminderSettings, this.reminderSettingsSheet(), nativeSheetOptions({
       height: SheetSize.LARGE, dragBar: true, showClose: true,
       title: { title: '到期提醒', subtitle: '提前一步，减少遗忘' },
       backgroundColor: $r('app.color.surface_app'), preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
       width: this.viewportWidth >= 700 ? 560 : undefined
-    })
+    }, this.reduceAnimation))
   }
 
   @Builder
@@ -132,7 +156,9 @@ export struct SettingsPage {
         Image($r('app.media.ui_chevron')).width(14).height(14)
           .fillColor($r('app.color.text_secondary')).accessibilityLevel('no')
       }.width('100%')
-    }.width('100%').padding(22).borderRadius(20).backgroundColor($r('app.color.surface_card'))
+    }
+      .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).width('100%').padding(22).borderRadius(20).backgroundColor($r('app.color.surface_card'))
+      .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
       .onClick(() => this.showReminderSettings = true)
   }
 
@@ -153,6 +179,7 @@ export struct SettingsPage {
         .width('100%').height(48).fontColor($r('app.color.brand_on_primary'))
         .backgroundColor($r('app.color.brand_primary'))
         .enabled(this.hasPreferenceChanges() && this.preferencesReady && !this.saving && !this.reminderSyncing)
+        .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
         .onClick(() => this.save())
       }.width('100%').padding({ left: 24, right: 24, bottom: 24 })
     }.width('100%').height('100%')
@@ -189,11 +216,18 @@ export struct SettingsPage {
         .fontSize($r('app.float.font_body'))
         .fontColor($r('app.color.text_primary'))
       TextInput({ text: this.defaultReminderDays, placeholder: '7' })
+        .borderWidth(1)
+        .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'defaultReminderDays'))
+        .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
+          if (this.focusedField === 'defaultReminderDays') { this.focusedField = ''; }
+        }))
         .type(InputType.Number)
         .backgroundColor($r('app.color.surface_app'))
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
         .enabled(!this.saving && !this.reminderSyncing)
+        .borderColor(this.focusedField === 'defaultReminderDays' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
+        .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
         .onChange((value: string) => this.defaultReminderDays = value)
       Text('默认天数用于新物品和未单独设置提前天数的物品；已有物品保留各自的提前天数，保存设置后会重新同步提醒。')
         .fontSize($r('app.float.font_caption'))
@@ -357,7 +391,9 @@ export struct SettingsPage {
         Image($r('app.media.ui_chevron')).width(14).height(14)
           .fillColor($r('app.color.text_secondary')).accessibilityLevel('no')
       }.width('100%')
-    }.width('100%').padding({ top: 12, bottom: 12 }).backgroundColor(Color.Transparent)
+    }
+      .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).width('100%').padding({ top: 12, bottom: 12 }).backgroundColor(Color.Transparent)
+      .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
       .onClick(() => NavigationHelper.pushUrl({ url: route }))
   }
 
@@ -564,7 +600,9 @@ export struct SettingsPage {
       .fontColor(this.themeMode === mode ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
       .backgroundColor(this.themeMode === mode ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
       .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-      .onClick(() => this.themeMode = mode)
+      .onClick(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.9), () => {
+        this.themeMode = mode;
+      }))
   }
 
   @Builder
@@ -723,8 +761,6 @@ export struct SettingsPage {
             resourceManager.ColorMode.DARK);
       const contentColor = useLightIcon ? '#FFFFFF' : '#000000';
       const mainWindow = await window.getLastWindow(hostContext);
-      await mainWindow.setWindowLayoutFullScreen(true);
-      mainWindow.setImmersiveModeEnabledState(true);
       await mainWindow.setWindowSystemBarProperties({
         statusBarColor: '#00000000',
         navigationBarColor: '#00000000',
@@ -733,10 +769,7 @@ export struct SettingsPage {
         statusBarContentColor: contentColor,
         navigationBarContentColor: contentColor
       });
-      const avoidArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
-      const uiContext = mainWindow.getUIContext();
-      AppStorage.setOrCreate<number>('itemtrace.safeAreaTop', Math.max(0, uiContext.px2vp(avoidArea.topRect.height)));
-      AppStorage.setOrCreate<number>('itemtrace.safeAreaBottom', Math.max(0, uiContext.px2vp(avoidArea.bottomRect.height)));
+      await mainWindow.setSpecificSystemBarEnabled('navigationIndicator', true);
     } catch (_) {
     }
   }

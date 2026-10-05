@@ -67,6 +67,8 @@ export interface ItemSummary {
   expirationDate?: string;
   expiryStatus: ExpiryStatus;
   stockStatus: StockStatus;
+  photoLocalId?: string;
+  photoPath?: string;
   createdAt: number;
   updatedAt: number;
 }

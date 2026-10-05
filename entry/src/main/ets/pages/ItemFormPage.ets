@@ -1,5 +1,5 @@
 import { PageHeader } from '../components/PageHeader';
-import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
+import { RoundedButtonStyle, uiSpring, nativeTitleOptions } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { LocationInput } from '../components/LocationInput';
@@ -18,12 +18,15 @@ import { activeCategoryNames, refreshedUnit } from '../service/ItemFlowPresentat
 
 @Component
 export struct ItemFormPage {
+  private pageScroller: Scroller = new Scroller();
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemtrace.keyboardVisible') private keyboardVisible: boolean = false;
   @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
   @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @State private focusedField: string = '';
   @State private name: string = '';
   @State private quantityText: string = '1';
   @State private unit: ItemUnit = ItemUnit.PIECE;
@@ -94,17 +97,50 @@ export struct ItemFormPage {
   }
 
   build() {
-    Stack({ alignContent: Alignment.Center }) {
-      Column() {
-        PageHeader({ title: this.editMode ? '编辑物品' : '记录新物品', showBack: true,
+    NavDestination() {
+      this.pageContent()
+    }
+    .title({ builder: this.pageHeader, height: 76 }, nativeTitleOptions(this.reduceAnimation))
+    .hideBackButton(true)
+    .bindToScrollable([this.pageScroller])
+    .backgroundColor($r('app.color.surface_app'))
+    .onBackPressed(() => NavigationHelper.handleBackPressed())
+    .systemTransition(NavigationSystemTransitionType.SLIDE_BOTTOM)
+    .onShown(() => this.openQuickEntry())
+  }
+
+  private quickEntryHandled: boolean = false;
+
+  private openQuickEntry(): void {
+    if (this.quickEntryHandled || this.editMode) { return; }
+    this.quickEntryHandled = true;
+    const params = NavigationHelper.getParams() as ItemFormRouteParams | undefined;
+    if (params?.source === 'scan') {
+      this.showNotesSection = true;
+      this.scanBarcode();
+    } else if (params?.source === 'camera') {
+      this.showPhotoSection = true;
+      this.capturePhoto();
+    }
+  }
+
+  @Builder
+  private pageHeader() {
+    PageHeader({ title: this.editMode ? '编辑物品' : '记录新物品', showBack: true,
           subtitle: this.editMode ? '为物品更新一份档案。' : '记下名称和位置，下次一找就到。',
           actionText: '扫码', actionIcon: $r('app.media.ui_scan'), actionEnabled: !this.saving && !this.scanning,
           onBack: () => this.requestClose(), onAction: () => { this.showNotesSection = true; this.scanBarcode(); } })
+  }
+
+  @Builder
+  private pageContent() {
+    Stack({ alignContent: Alignment.Center }) {
+      Column() {
 
         if (this.loading) {
           LoadingState({ text: '正在读取物品…' })
         } else {
-          Scroll() {
+          Scroll(this.pageScroller) {
             Column({ space: $r('app.float.space_4') }) {
               this.coreSection()
               this.locationSection()
@@ -136,7 +172,7 @@ export struct ItemFormPage {
             }
             .width('100%')
             .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_4') })
-          }
+          }.clip(false)
           .layoutWeight(1)
 
           this.saveBar()
@@ -145,7 +181,7 @@ export struct ItemFormPage {
       .width('100%')
       .constraintSize({ maxWidth: 800 })
       .height('100%')
-      .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
+      .padding({ left: this.safeAreaLeft, right: this.safeAreaRight })
       .backgroundColor($r('app.color.surface_app'))
 
       DeleteConfirmDialog({
@@ -179,10 +215,17 @@ export struct ItemFormPage {
     Column({ space: $r('app.float.space_4') }) {
       this.fieldTitle('这是什么物品？', this.editMode ? '数量和到期日可在批次管理中修改。' : '先给它一个容易找到的名字。')
       TextInput({ text: this.name, placeholder: '例如：感冒药' })
+        .borderWidth(1)
+        .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'name'))
+        .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
+          if (this.focusedField === 'name') { this.focusedField = ''; }
+        }))
         .maxLength(80)
         .backgroundColor($r('app.color.surface_app'))
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
+        .borderColor(this.focusedField === 'name' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
+        .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
         .onChange((value: string) => this.name = value)
       if (this.editMode) {
         Text(`总量 ${this.quantityText}${this.unit}（包含借出）`)
@@ -287,6 +330,7 @@ export struct ItemFormPage {
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent'))
           .enabled(!this.categoryLoading)
+          .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
           .onClick(() => this.loadCategoryOptions())
       } else if (this.categoryOptions.length === 0) {
         Text(this.categoryLoading ? '正在读取分类…' : '暂无启用的分类，可在设置中管理。')
@@ -299,6 +343,7 @@ export struct ItemFormPage {
           .fontColor($r('app.color.text_secondary'))
         Button('清除原分类')
           .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
           .onClick(() => this.categoryValue = '')
       }
       Flex({ wrap: FlexWrap.Wrap }) {
@@ -321,8 +366,9 @@ export struct ItemFormPage {
     .backgroundColor($r('app.color.surface_card'))
 
     .transition(TransitionEffect.OPACITY
-      .combine(TransitionEffect.translate({ y: 12 }))
-      .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
+      .combine(TransitionEffect.translate({ y: this.reduceAnimation ? 0 : 28 }))
+      .combine(TransitionEffect.scale({ x: this.reduceAnimation ? 1 : 0.92, y: this.reduceAnimation ? 1 : 0.92 }))
+      .animation(uiSpring(this.reduceAnimation, 0.48, 0.58)))
   }
 
   @Builder
@@ -355,34 +401,38 @@ export struct ItemFormPage {
         .onClick(() => this.save())
     }
     .width('100%')
-    .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), top: $r('app.float.space_3'), bottom: $r('app.float.space_4') })
+    .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), top: $r('app.float.space_3'), bottom: 16 + (this.keyboardVisible ? 0 : this.safeAreaBottom) })
     .backgroundColor($r('app.color.surface_card'))
   }
 
   @Builder
   private sectionToggle(title: string, description: string, section: string) {
-    Row({ space: 14 }) {
-      Image(section === 'category' ? $r('app.media.ui_category') : section === 'expiry' ? $r('app.media.ui_clock') : section === 'photo' ? $r('app.media.ui_photo') : $r('app.media.ui_scan'))
-        .width(22).height(22).fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
-      Column({ space: $r('app.float.space_1') }) {
-        Text(title)
-          .fontSize($r('app.float.font_body'))
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
-        Text(description)
-          .fontSize($r('app.float.font_caption'))
-          .fontColor($r('app.color.text_secondary'))
-      }
-      .layoutWeight(1).alignItems(HorizontalAlign.Start)
-      Text(this.isSectionExpanded(section) ? '−' : '+')
-        .fontSize(22)
-        .fontColor($r('app.color.brand_primary'))
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 14 }) {
+        Image(section === 'category' ? $r('app.media.ui_category') : section === 'expiry' ? $r('app.media.ui_clock') : section === 'photo' ? $r('app.media.ui_photo') : $r('app.media.ui_scan'))
+          .width(22).height(22).fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
+        Column({ space: $r('app.float.space_1') }) {
+          Text(title)
+            .fontSize($r('app.float.font_body'))
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.text_primary'))
+          Text(description)
+            .fontSize($r('app.float.font_caption'))
+            .fontColor($r('app.color.text_secondary'))
+        }
+        .layoutWeight(1).alignItems(HorizontalAlign.Start)
+        Image($r('app.media.ui_chevron')).width(16).height(16)
+          .fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
+          .rotate({ angle: this.isSectionExpanded(section) ? 90 : 0 })
+          .animation(uiSpring(this.reduceAnimation, 0.38, 0.58))
+      }.width('100%')
     }
+    .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
     .width('100%')
     .padding(20)
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-
+    .animation(uiSpring(this.reduceAnimation, 0.38, 0.58))
     .accessibilityText(title + '，' + (this.isSectionExpanded(section) ? '收起' : '展开'))
     .accessibilityGroup(true)
     .onClick(() => this.toggleSection(section))
@@ -426,10 +476,17 @@ export struct ItemFormPage {
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
       TextInput({ text: this.reminderDaysText, placeholder: '未填写时按 7 天计算状态' })
+        .borderWidth(1)
+        .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'reminderDaysText'))
+        .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
+          if (this.focusedField === 'reminderDaysText') { this.focusedField = ''; }
+        }))
         .type(InputType.Number)
         .backgroundColor($r('app.color.surface_app'))
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
+        .borderColor(this.focusedField === 'reminderDaysText' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
+        .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
         .onChange((value: string) => this.reminderDaysText = value)
       Flex({ wrap: FlexWrap.Wrap }) {
         this.reminderShortcut('当天', '0')
@@ -443,8 +500,9 @@ export struct ItemFormPage {
     .backgroundColor($r('app.color.surface_card'))
 
     .transition(TransitionEffect.OPACITY
-      .combine(TransitionEffect.translate({ y: 12 }))
-      .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
+      .combine(TransitionEffect.translate({ y: this.reduceAnimation ? 0 : 28 }))
+      .combine(TransitionEffect.scale({ x: this.reduceAnimation ? 1 : 0.92, y: this.reduceAnimation ? 1 : 0.92 }))
+      .animation(uiSpring(this.reduceAnimation, 0.48, 0.58)))
   }
 
   @Builder
@@ -490,20 +548,34 @@ export struct ItemFormPage {
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
       TextArea({ text: this.notes, placeholder: '写下重要说明' })
+        .borderWidth(1)
+        .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'notes'))
+        .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
+          if (this.focusedField === 'notes') { this.focusedField = ''; }
+        }))
         .maxLength(500)
         .backgroundColor($r('app.color.surface_app'))
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
+        .borderColor(this.focusedField === 'notes' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
+        .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
         .onChange((value: string) => this.notes = value)
       Text('条码或二维码（可选）')
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
       TextInput({ text: this.scanText, placeholder: '扫描或手动输入' })
+        .borderWidth(1)
+        .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'scanText'))
+        .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
+          if (this.focusedField === 'scanText') { this.focusedField = ''; }
+        }))
         .maxLength(256)
         .backgroundColor($r('app.color.surface_app'))
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
+        .borderColor(this.focusedField === 'scanText' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
+        .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
         .onChange((value: string) => this.scanText = value)
       Button(this.scanning ? '正在打开扫码…' : '扫描条码或二维码')
         .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
@@ -522,8 +594,9 @@ export struct ItemFormPage {
     .backgroundColor($r('app.color.surface_card'))
 
     .transition(TransitionEffect.OPACITY
-      .combine(TransitionEffect.translate({ y: 12 }))
-      .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
+      .combine(TransitionEffect.translate({ y: this.reduceAnimation ? 0 : 28 }))
+      .combine(TransitionEffect.scale({ x: this.reduceAnimation ? 1 : 0.92, y: this.reduceAnimation ? 1 : 0.92 }))
+      .animation(uiSpring(this.reduceAnimation, 0.48, 0.58)))
   }
 
   @Builder
@@ -569,8 +642,9 @@ export struct ItemFormPage {
     .backgroundColor($r('app.color.surface_card'))
 
     .transition(TransitionEffect.OPACITY
-      .combine(TransitionEffect.translate({ y: 12 }))
-      .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
+      .combine(TransitionEffect.translate({ y: this.reduceAnimation ? 0 : 28 }))
+      .combine(TransitionEffect.scale({ x: this.reduceAnimation ? 1 : 0.92, y: this.reduceAnimation ? 1 : 0.92 }))
+      .animation(uiSpring(this.reduceAnimation, 0.48, 0.58)))
   }
 
   private readRoute(): void {

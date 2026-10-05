@@ -1,5 +1,5 @@
 import { PageHeader } from '../components/PageHeader';
-import { RoundedButtonStyle, dockContentInset, uiSpring } from '../ui/VisualStyle';
+import { RoundedButtonStyle, dockContentInset, uiSpring, nativeTitleOptions } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
@@ -17,15 +17,16 @@ import { AppServices } from '../service/AppServices';
 
 @Component
 export struct ItemListPage {
+  private pageScroller: Scroller = new Scroller();
   @Prop isMainTab: boolean = false;
   @State private contentWidth: number = 0;
   @State private selectedSort: ItemSortMode | undefined = undefined;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
-  @StorageLink('itemtrace.mainDockVisible') private dockVisible: boolean = true;
   @StorageLink('itemtrace.keyboardVisible') private keyboardVisible: boolean = false;
   @StorageLink('itemtrace.dataRevision') @Watch('onRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.preferenceRevision') @Watch('onRevisionChanged') private preferenceRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
+  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
   @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @State private loading: boolean = true;
@@ -84,15 +85,41 @@ export struct ItemListPage {
   }
 
   build() {
-    Column() {
-      PageHeader({ title: this.query.isEmpty() ? '我的物品' : '筛选结果',
+    if (this.isMainTab) {
+      this.pageContent()
+    } else {
+      NavDestination() {
+        this.pageContent()
+      }
+      .title({ builder: this.pageHeader, height: 76 }, nativeTitleOptions(this.reduceAnimation))
+      .hideBackButton(true)
+      .bindToScrollable([this.pageScroller])
+      .backgroundColor($r('app.color.surface_app'))
+      .onBackPressed(() => NavigationHelper.handleBackPressed())
+    }
+  }
+
+  private currentItem(itemId: string, fallback: ItemSummary): ItemSummary {
+    return this.items.find((current: ItemSummary) => current.id === itemId) ?? fallback;
+  }
+
+  @Builder
+  private pageHeader() {
+    PageHeader({ title: this.query.isEmpty() ? '我的物品' : '筛选结果',
         subtitle: '每一件，都好好收着。', eyebrow: this.isMainTab ? 'YOUR COLLECTION' : '',
         showBack: !this.isMainTab, actionText: '查找与筛选', actionIcon: $r('app.media.dock_search'),
         onAction: () => NavigationHelper.pushUrl({ url: RouteName.SEARCH, params: { query: this.query } }) })
+  }
+
+  @Builder
+  private pageContent() {
+    Column() {
+
       Row() {
         Text(this.loading ? '正在整理物品' : `共 ${this.items.length} 件物品`)
           .fontSize(13).fontColor($r('app.color.text_secondary')).layoutWeight(1)
         Button(this.sortDescription.replace('按', '').replace('排序', '') + '⌄')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
           .height(44).fontSize(12).padding(0).fontColor($r('app.color.brand_primary'))
           .backgroundColor(Color.Transparent)
           .bindMenu([
@@ -100,20 +127,23 @@ export struct ItemListPage {
             { value: '最近添加', action: () => this.changeSort(ItemSortMode.CREATED_DESC) },
             { value: '名称 A-Z', action: () => this.changeSort(ItemSortMode.NAME_ASC) }
           ])
+          .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
       }.width('100%').constraintSize({ maxWidth: 960 })
         .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: 6 })
       if (!this.query.isEmpty()) {
         Row({ space: 8 }) {
           Text([this.query.name, this.query.locationPath ?? '', this.query.category ?? ''].filter((value: string) => value.length > 0).join(' · '))
             .fontSize(12).fontColor($r('app.color.brand_primary')).layoutWeight(1)
-          Button('清除').height(44).fontSize(12).fontColor($r('app.color.brand_primary'))
-            .backgroundColor(Color.Transparent).onClick(() => this.handleEmptyAction())
+          Button('清除')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).height(44).fontSize(12).fontColor($r('app.color.brand_primary'))
+            .backgroundColor(Color.Transparent).animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
+            .onClick(() => this.handleEmptyAction())
         }.width('100%').constraintSize({ maxWidth: 960 })
           .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter') })
       }
 
       if (this.loading || this.errorMessage.length > 0 || this.items.length === 0) {
-        Scroll() {
+        Scroll(this.pageScroller) {
           Column({ space: $r('app.float.space_3') }) {
             if (this.loading) {
               LoadingState({ text: '正在加载物品…' })
@@ -155,19 +185,19 @@ export struct ItemListPage {
             }
           }
           .width('100%')
-          .padding({ bottom: dockContentInset(this.dockVisible, this.keyboardVisible) })
-        }
+          .padding({ bottom: dockContentInset(this.isMainTab, this.keyboardVisible, this.safeAreaBottom) })
+        }.clip(false)
         .width('100%')
         .layoutWeight(1)
       } else {
-        List({ space: 10 }) {
+        List({ space: 10, scroller: this.pageScroller }) {
           ForEach(this.items, (item: ItemSummary) => {
             ListItem() {
-              ItemCard({ item: item })
+              ItemCard({ item: this.currentItem(item.id, item), heroKey: this.isMainTab ? 'collection' : 'filtered' })
             }
-          }, (item: ItemSummary) => `${item.id}:${item.updatedAt}:${item.expiryStatus}:${item.quantity}`)
+          }, (item: ItemSummary) => item.id)
           ListItem() {
-            Row().width('100%').height(dockContentInset(this.dockVisible, this.keyboardVisible))
+            Row().width('100%').height(dockContentInset(this.isMainTab, this.keyboardVisible, this.safeAreaBottom))
           }
           .accessibilityLevel('no')
         }
@@ -180,10 +210,10 @@ export struct ItemListPage {
     }
     .width('100%')
     .height('100%')
-    .padding({ top: this.safeAreaTop, left: this.safeAreaLeft, right: this.safeAreaRight })
+    .padding({ left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
     .onAreaChange((_old: Area, area: Area) => this.contentWidth = Number(area.width))
-  }
+    }
 
   private readQuery(): void {
     try {
@@ -214,10 +244,11 @@ export struct ItemListPage {
         }
         if (result.ok) {
           const sortedItems = await this.applyDefaultSort(result.getData());
+          await AppServices.get().photos.loadThumbnails(sortedItems);
           if (!this.loadRequestCoordinator.isCurrent(requestId)) {
             return;
           }
-          this.items = sortedItems;
+          this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.4, 0.85), () => { this.items = sortedItems; });
           this.errorMessage = '';
         } else {
           if (showLoading || this.items.length === 0) {
@@ -231,10 +262,11 @@ export struct ItemListPage {
         }
         if (result.ok) {
           const sortedItems = await this.applyDefaultSort(result.getData().items);
+          await AppServices.get().photos.loadThumbnails(sortedItems);
           if (!this.loadRequestCoordinator.isCurrent(requestId)) {
             return;
           }
-          this.items = sortedItems;
+          this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.4, 0.85), () => { this.items = sortedItems; });
           this.errorMessage = '';
         } else {
           if (showLoading || this.items.length === 0) {
@@ -264,7 +296,8 @@ export struct ItemListPage {
 
   private async changeSort(mode: ItemSortMode): Promise<void> {
     this.selectedSort = mode;
-    this.items = await this.applyDefaultSort(this.items);
+    const items = await this.applyDefaultSort(this.items);
+    this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.4, 0.85), () => this.items = items);
   }
 
   private async applyDefaultSort(items: ItemSummary[]): Promise<ItemSummary[]> {

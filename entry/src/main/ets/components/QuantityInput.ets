@@ -1,9 +1,10 @@
-import { RoundedButtonStyle } from '../ui/VisualStyle';
+import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { ITEM_UNIT_OPTIONS, ItemUnit } from '../model/Item';
 
 @Component
 export struct QuantityInput {
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @State private focusedField: string = '';
   @Link quantityText: string;
   @Link unit: ItemUnit;
   @Link errorMessage: string;
@@ -16,16 +17,25 @@ export struct QuantityInput {
         Button('−').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
           .width(44).height(48).fontSize(22).fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent')).accessibilityText('数量减少一')
-          .enabled(this.inputEnabled && Number(this.quantityText) > 0).onClick(() => this.adjustQuantity(-1))
+          .enabled(this.inputEnabled && Number(this.quantityText) > 0).animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
+          .onClick(() => this.adjustQuantity(-1))
         TextInput({ text: this.quantityText, placeholder: '1' })
+          .borderWidth(1)
+          .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'quantityText'))
+          .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
+            if (this.focusedField === 'quantityText') { this.focusedField = ''; }
+          }))
           .type(InputType.NUMBER_DECIMAL).height(48).layoutWeight(1).fontSize(20).textAlign(TextAlign.Center)
           .fontColor($r('app.color.text_primary')).backgroundColor($r('app.color.surface_input')).borderRadius(14)
           .enabled(this.inputEnabled).accessibilityText('物品总数量')
+          .borderColor(this.focusedField === 'quantityText' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
+          .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
           .onChange((value: string) => { this.quantityText = value; this.errorMessage = this.validateQuantity(value); })
         Button('+').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
           .width(44).height(48).fontSize(22).fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent')).accessibilityText('数量增加一')
-          .enabled(this.inputEnabled).onClick(() => this.adjustQuantity(1))
+          .enabled(this.inputEnabled).animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
+          .onClick(() => this.adjustQuantity(1))
         Select(ITEM_UNIT_OPTIONS.map((unit: ItemUnit): SelectOption => { return { value: unit }; }))
           .selected(ITEM_UNIT_OPTIONS.indexOf(this.unit)).value(this.unit).font({ size: 14 })
           .fontColor($r('app.color.text_primary')).backgroundColor($r('app.color.surface_input'))

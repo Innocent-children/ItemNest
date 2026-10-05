@@ -160,6 +160,7 @@ export default class EntryAbility extends UIAbility {
         statusBarContentColor: contentColor,
         navigationBarContentColor: contentColor
       });
+      await mainWindow.setSpecificSystemBarEnabled('navigationIndicator', true);
     } catch (err) {
       hilog.error(DOMAIN, 'testTag', 'Failed to apply system bar style. Cause: %{public}s', JSON.stringify(err));
     }

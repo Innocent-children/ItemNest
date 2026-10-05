@@ -9,6 +9,7 @@ export interface ItemRouteParams {
 export interface ItemFormRouteParams extends ItemRouteParams {
   mode?: 'create' | 'edit';
   returnTo?: string;
+  source?: 'manual' | 'scan' | 'camera';
 }
 
 export interface RouteRefreshParams {

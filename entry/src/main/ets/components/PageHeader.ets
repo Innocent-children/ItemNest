@@ -1,9 +1,10 @@
 import { NavigationHelper } from '../navigation/NavigationHelper';
-import { RoundedButtonStyle } from '../ui/VisualStyle';
+import { MaterialButtonStyle, uiSpring } from '../ui/VisualStyle';
 
 @Component
 export struct PageHeader {
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @Prop largeTitle: boolean = false;
   @Prop title: string = '';
   @Prop subtitle: string = '';
   @Prop eyebrow: string = '';
@@ -21,10 +22,13 @@ export struct PageHeader {
           Image($r('app.media.ui_back')).width(22).height(22)
             .fillColor($r('app.color.text_primary')).accessibilityLevel('no')
         }
+        .attributeModifier(new MaterialButtonStyle(this.reduceAnimation))
         .width(44).height(44).padding(0).borderRadius(22)
-        .backgroundColor($r('app.color.surface_card'))
+
+        .borderRadius(22)
         .accessibilityText('返回上一页')
         .enabled(this.actionEnabled)
+        .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
         .onClick(() => this.onBack())
       }
       Column({ space: 6 }) {
@@ -33,10 +37,10 @@ export struct PageHeader {
             .fontWeight(FontWeight.Medium).fontColor($r('app.color.text_secondary'))
         }
         Text(this.title)
-          .fontSize(this.showBack ? 23 : $r('app.float.font_title'))
+          .fontSize(this.largeTitle ? 30 : 21).animation(uiSpring(this.reduceAnimation, 0.35, 0.82)).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           .fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
         if (this.subtitle.length > 0) {
-          Text(this.subtitle).fontSize($r('app.float.font_caption'))
+          Text(this.subtitle).fontSize(11).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
             .fontColor($r('app.color.text_secondary'))
         }
       }
@@ -51,14 +55,18 @@ export struct PageHeader {
               .fontColor($r('app.color.brand_primary'))
           }
         }
-        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        .attributeModifier(new MaterialButtonStyle(this.reduceAnimation))
         .padding({ left: 14, right: 14 }).height(44)
-        .borderRadius(22).backgroundColor($r('app.color.surface_card'))
+        .borderRadius(22)
+
+        .borderRadius(22)
         .accessibilityText(this.actionText)
-        .enabled(this.actionEnabled).onClick(() => this.onAction())
+        .enabled(this.actionEnabled).animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
+        .onClick(() => this.onAction())
       }
     }
     .width('100%').constraintSize({ maxWidth: 960 })
-    .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), top: 20, bottom: 20 })
+    .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+    .height('100%')
   }
 }

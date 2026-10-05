@@ -1,5 +1,5 @@
 import { PageHeader } from '../components/PageHeader';
-import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
+import { RoundedButtonStyle, uiSpring, nativeTitleOptions } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
@@ -14,6 +14,7 @@ import { AppServices } from '../service/AppServices';
 
 @Component
 export struct BatchListPage {
+  private pageScroller: Scroller = new Scroller();
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
@@ -72,12 +73,28 @@ export struct BatchListPage {
   }
 
   build() {
-    Stack({ alignContent: Alignment.Center }) {
-      Column() {
-        PageHeader({ title: '批次管理', subtitle: '分清位置、数量与到期日期。', showBack: true,
+    NavDestination() {
+      this.pageContent()
+    }
+    .title({ builder: this.pageHeader, height: 76 }, nativeTitleOptions(this.reduceAnimation))
+    .hideBackButton(true)
+    .bindToScrollable([this.pageScroller])
+    .backgroundColor($r('app.color.surface_app'))
+    .onBackPressed(() => NavigationHelper.handleBackPressed())
+  }
+
+  @Builder
+  private pageHeader() {
+    PageHeader({ title: '批次管理', subtitle: '分清位置、数量与到期日期。', showBack: true,
           actionText: '新增批次', actionIcon: $r('app.media.dock_add'),
           onAction: () => NavigationHelper.pushUrl({ url: RouteName.BATCH_FORM,
             params: { mode: 'create', itemId: this.itemId } }) })
+  }
+
+  @Builder
+  private pageContent() {
+    Stack({ alignContent: Alignment.Center }) {
+      Column() {
 
         if (this.actionError.length > 0 || (this.errorMessage.length > 0 && this.batches.length > 0)) {
           Column({ space: $r('app.float.space_2') }) {
@@ -92,6 +109,7 @@ export struct BatchListPage {
               .fontColor($r('app.color.brand_primary'))
               .backgroundColor($r('app.color.surface_accent'))
               .enabled(!this.deleting)
+              .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
               .onClick(() => this.loadBatchesForCurrentRevision(false))
           }
           .padding($r('app.float.space_3'))
@@ -102,6 +120,7 @@ export struct BatchListPage {
           ErrorState({ message: this.errorMessage })
           Button('重试读取批次')
             .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
             .onClick(() => this.loadBatchesForCurrentRevision(true))
         } else if (this.batches.length === 0) {
           EmptyState({ title: '暂无批次', description: '新增批次后，物品总量和最早到期日会自动汇总。' })
@@ -126,7 +145,8 @@ export struct BatchListPage {
                     Button({ type: ButtonType.Normal }) {
                       Image($r('app.media.ui_more')).width(22).height(22)
                         .fillColor($r('app.color.text_secondary')).accessibilityLevel('no')
-                    }.width(44).height(44).padding(0).borderRadius(22)
+                    }
+                      .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).width(44).height(44).padding(0).borderRadius(22)
                       .backgroundColor($r('app.color.surface_input')).accessibilityText('批次操作')
                       .enabled(!this.deleting)
                       .bindMenu([
@@ -134,6 +154,7 @@ export struct BatchListPage {
                           params: { mode: 'edit', itemId: this.itemId, batchId: batch.id } }) },
                         { value: this.batches.length === 1 ? '清空数量' : '删除批次', action: () => this.requestDeleteBatch(batch.id) }
                       ])
+                      .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
                   }
                   Text(`到期：${batch.expirationDate ?? '未设置'} · 位置：${batch.locationPath ?? '未设置'}`)
                     .fontSize($r('app.float.font_caption'))
@@ -152,13 +173,14 @@ export struct BatchListPage {
               }
             }, (batch: Batch) => `${batch.id}:${batch.updatedAt}:${batch.quantity}:${batch.expirationDate ?? ''}`)
           }
+          .clip(false)
           .layoutWeight(1)
           .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
         }
       }
       .width('100%')
       .height('100%').constraintSize({ maxWidth: 960 })
-      .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
+      .padding({ bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
       .backgroundColor($r('app.color.surface_app'))
 
       DeleteConfirmDialog({
@@ -171,7 +193,7 @@ export struct BatchListPage {
     }
     .width('100%')
     .height('100%')
-  }
+    }
 
   private async loadBatches(showLoading: boolean = true): Promise<void> {
     const requestId = this.loadRequestCoordinator.begin();
