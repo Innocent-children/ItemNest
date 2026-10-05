@@ -266,9 +266,9 @@ struct Index {
 
   @Builder
   private mainHeader() {
-    PageHeader({ title: this.mainTabIndex === 0 ? '一览无遗' : this.mainTabIndex === 1 ? '我的物品' :
+    PageHeader({ title: this.mainTabIndex === 0 ? 'ItemTrace' : this.mainTabIndex === 1 ? '我的物品' :
       this.mainTabIndex === 2 ? '查找物品' : '我的空间',
-      subtitle: this.mainTabIndex === 0 ? 'ITEMTRACE / 物品收纳' : this.mainTabIndex === 1 ? '每一件，都好好收着。' :
+      subtitle: this.mainTabIndex === 0 ? '你的物品，井井有条' : this.mainTabIndex === 1 ? '每一件，都好好收着。' :
         this.mainTabIndex === 2 ? '知道放在哪里，就少一点寻找。' : '让整理，更合你的习惯。',
       largeTitle: this.mainTabIndex === 0 && !this.homeScrolled,
       actionText: '记录新物品', actionIcon: $r('app.media.dock_add'),
