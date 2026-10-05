@@ -15,22 +15,23 @@ struct ItemTraceFormCard {
       params: new QuickAddFormLinkParams()
     }) {
       Column({ space: 8 }) {
-        Text('ItemTrace')
-          .fontSize(20)
+        Text('ITEMTRACE').letterSpacing(2)
+          .fontSize(12)
           .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.brand_primary'))
+          .fontColor($r('app.color.hero_text'))
         Row({ space: 12 }) {
           this.countBlock(this.dueSoonCount, '到期待处理')
           this.countBlock(this.todayReminderCount, '今日提醒')
         }
-        Text('点击打开应用，快速记录物品')
+        Text('+ 记录一件物品')
           .fontSize(13)
-          .fontColor($r('app.color.text_secondary'))
+          .fontColor($r('app.color.hero_secondary'))
       }
       .width('100%')
       .height('100%')
-      .padding(16)
-      .backgroundColor($r('app.color.surface_card'))
+      .padding(20)
+      .alignItems(HorizontalAlign.Start)
+      .backgroundColor($r('app.color.hero_start'))
     }
   }
 
@@ -40,11 +41,11 @@ struct ItemTraceFormCard {
       Text(count)
         .fontSize(26)
         .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.text_primary'))
+        .fontColor($r('app.color.hero_text'))
       Text(label)
         .fontSize(12)
-        .fontColor($r('app.color.text_secondary'))
+        .fontColor($r('app.color.hero_secondary'))
     }
-    .layoutWeight(1)
+    .layoutWeight(1).alignItems(HorizontalAlign.Start)
   }
 }

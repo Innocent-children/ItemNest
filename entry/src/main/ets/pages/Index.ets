@@ -1,4 +1,4 @@
-import { AmbientParticles } from '../components/AmbientParticles';
+import { HdsTabs, HdsBarStyle, HdsBarLayoutMode, hdsMaterial, DividerMode } from '@kit.UIDesignKit';
 import { RoundedButtonStyle, dockContentInset, uiSpring } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { accessibility } from '@kit.AccessibilityKit';
@@ -6,7 +6,6 @@ import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
-import { MainEntryBar } from '../components/MainEntryBar';
 import { AppEventBus } from '../common/AppEventBus';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
@@ -27,20 +26,10 @@ import { LocationManagementPage } from './LocationManagementPage';
 import { SearchPage } from './SearchPage';
 import { SettingsPage } from './SettingsPage';
 
-interface HomeMetricParams {
-  label: string;
-  count: number;
-  background: ResourceColor;
-  textColor: ResourceColor;
-}
-
 interface HomeSummarySectionParams {
   title: string;
-  subtitle: string;
   items: ItemSummary[];
   emptyText: string;
-  actionRoute: string;
-  actionReturnTo?: string;
   expandableExpiry?: boolean;
 }
 
@@ -55,8 +44,8 @@ struct Index {
   @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
   @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
-  @State private homeVisible: boolean = true;
   @State private mainTabIndex: number = 0;
+  @State private viewportWidth: number = 360;
   @State private navigationRootVisible: boolean = true;
   @StorageLink('itemtrace.mainDockVisible') private dockVisible: boolean = true;
   @StorageLink('itemtrace.keyboardVisible') private keyboardVisible: boolean = false;
@@ -209,7 +198,9 @@ struct Index {
     });
   }
 
-  // Main columns are peers, not push/pop destinations. Their cached views and Dock stay in place.
+  /**
+   * 主栏目切换保留各页面内容；详情、表单和筛选列表使用导航栈。
+   */
   private selectMainTab(route: string): void {
     const index = this.mainTabRoutes.indexOf(route);
     if (index < 0 || route === this.dockRoute) {
@@ -217,11 +208,6 @@ struct Index {
     }
     this.mainTabIndex = index;
     this.dockRoute = route;
-    if (this.pathStack.size() > 0) {
-      // Leave a filtered main-column destination without replaying navigation transitions.
-      this.pathStack.clear(false);
-    }
-    this.homeVisible = index === 0 && this.navigationRootVisible;
   }
 
   onBackPress(): boolean {
@@ -233,29 +219,19 @@ struct Index {
   }
 
   build() {
-    Stack({ alignContent: Alignment.Bottom }) {
-      Navigation(this.pathStack) {
-        this.mainTabs()
-      }
-      .hideTitleBar(true)
-      .onNavBarStateChange((visible: boolean) => {
-        this.navigationRootVisible = visible;
-        this.homeVisible = visible && this.mainTabIndex === 0;
-        if (visible) {
-          this.dockVisible = true;
-          this.dockRoute = this.mainTabRoutes[this.mainTabIndex];
-          this.refreshSummaryForCurrentRevision(false);
-        }
-      })
-      .navDestination(this.navDestinationBuilder)
-      .width('100%')
-      .height('100%')
-      .backgroundColor($r('app.color.surface_app'))
-
-      MainEntryBar({ activeRoute: this.dockRoute, onTabSelected: (route: string) => this.selectMainTab(route) })
-        .visibility(this.dockVisible ? Visibility.Visible : Visibility.None)
-        .padding({ left: this.safeAreaLeft, right: this.safeAreaRight })
+    Navigation(this.pathStack) {
+      this.mainTabs()
     }
+    .hideTitleBar(true)
+    .onNavBarStateChange((visible: boolean) => {
+      this.navigationRootVisible = visible;
+      if (visible) {
+        this.dockVisible = true;
+        this.dockRoute = this.mainTabRoutes[this.mainTabIndex];
+        this.refreshSummaryForCurrentRevision(false);
+      }
+    })
+    .navDestination(this.navDestinationBuilder)
     .width('100%')
     .height('100%')
     .padding({ bottom: this.dockVisible && !this.keyboardVisible ? this.safeAreaBottom : 0 })
@@ -264,32 +240,76 @@ struct Index {
 
   @Builder
   private mainTabs() {
-    Tabs({ index: $$this.mainTabIndex }) {
+    HdsTabs({ index: this.mainTabIndex, barPosition: BarPosition.End }) {
       TabContent() {
         this.homeContent()
-      }
+      }.tabBar(this.tabLabel('首页', $r('app.media.dock_home'), 0))
       TabContent() {
-        ItemListPage()
-      }
+        ItemListPage({ isMainTab: true })
+      }.tabBar(this.tabLabel('物品', $r('app.media.dock_items'), 1))
       TabContent() {
-        SearchPage()
-      }
+        SearchPage({ isMainTab: true })
+      }.tabBar(this.tabLabel('查找', $r('app.media.dock_search'), 2))
       TabContent() {
         SettingsPage({ isMainTab: true })
-      }
+      }.tabBar(this.tabLabel('我的', $r('app.media.dock_settings'), 3))
     }
-    .barHeight(0, true)
+    .barHeight(this.keyboardVisible ? 0 : 64)
+    .barOverlap(true)
+    .divider({ mode: DividerMode.NONE })
+    .barBackgroundColor($r('app.color.dock_glass'))
+    .barFloatingStyle(this.keyboardVisible ? undefined : {
+      barSideMargin: 16, barBottomMargin: 12,
+      barWidth: { smallWidth: Math.max(200, this.viewportWidth - 104),
+        mediumWidth: Math.min(400, this.viewportWidth - 104), largeWidth: 480 },
+      systemMaterialEffect: { materialType: hdsMaterial.MaterialType.ADAPTIVE,
+        materialLevel: hdsMaterial.MaterialLevel.GENTLE },
+      lightColor: $r('app.color.accent_warm'), thermoCtrl: true,
+      miniBar: { miniBarBuilder: () => this.quickAddButton(),
+        miniBarWidth: { smallWidth: 56, mediumWidth: 56, largeWidth: 56 },
+        miniBarStyle: HdsBarStyle.COLLAPSE, enableMiniBarBackground: false,
+        barLayoutMode: HdsBarLayoutMode.HORIZONTAL }
+    })
     .animationDuration(0)
     .scrollable(false)
     .width('100%')
     .height('100%')
+    .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
     .onChange((index: number) => {
       this.mainTabIndex = index;
       if (this.navigationRootVisible) {
         this.dockRoute = this.mainTabRoutes[index];
-        this.homeVisible = index === 0;
       }
     })
+  }
+
+  @Builder
+  private tabLabel(label: string, icon: Resource, index: number) {
+    Column({ space: 4 }) {
+      Image(icon).width(22).height(22)
+        .fillColor(this.mainTabIndex === index ? $r('app.color.brand_primary') : $r('app.color.text_secondary'))
+        .accessibilityLevel('no')
+      Text(label).fontSize(11).maxFontScale(1.4)
+        .fontWeight(this.mainTabIndex === index ? FontWeight.Bold : FontWeight.Regular)
+        .fontColor(this.mainTabIndex === index ? $r('app.color.brand_primary') : $r('app.color.text_secondary'))
+    }
+    .width('100%').padding({ top: 9, bottom: 9 }).borderRadius(28)
+    .backgroundColor(this.mainTabIndex === index ? $r('app.color.dock_selected') : Color.Transparent)
+    .accessibilityText(label).accessibilitySelected(this.mainTabIndex === index)
+  }
+
+  @Builder
+  private quickAddButton() {
+    Button({ type: ButtonType.Normal }) {
+      Image($r('app.media.dock_add')).width(26).height(26)
+        .fillColor($r('app.color.brand_on_primary')).accessibilityLevel('no')
+    }
+    .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+    .width(56).height(56).borderRadius(28).padding(0)
+    .backgroundColor($r('app.color.brand_primary'))
+    .accessibilityText('记录新物品')
+    .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM,
+      params: { mode: 'create', returnTo: this.dockRoute } }))
   }
 
   @Builder
@@ -313,19 +333,20 @@ struct Index {
           Row() {
             Column({ space: $r('app.float.space_5') }) {
               this.homeHeader()
-              this.hero()
-              this.overview()
+              if (this.recentItems.length > 0 || this.locationPaths.length > 0 || this.dueSoonCount + this.outOfStockCount > 0) {
+                this.hero()
+              }
               if (this.locationPaths.length > 0) {
                 this.locationShortcutSection()
               }
               if (shouldShowRecentSection(this.showRecentSection)) {
-                this.summarySection({ title: '最近添加', subtitle: '刚记录的物品', items: this.recentItems, emptyText: '暂无物品', actionRoute: RouteName.ITEM_FORM, actionReturnTo: RouteName.HOME })
+                this.summarySection({ title: '最近添加', items: this.recentItems, emptyText: '暂无物品' })
               }
               if (this.showExpirySection) {
-                this.summarySection({ title: '到期待处理', subtitle: '包含已过期和即将到期，按到期日排列', items: this.showAllExpiryItems ? this.expiryAttentionItems : this.dueSoonItems, emptyText: '暂无到期待处理物品', actionRoute: RouteName.ITEM_LIST, expandableExpiry: true })
+                this.summarySection({ title: '到期待处理', items: this.showAllExpiryItems ? this.expiryAttentionItems : this.dueSoonItems, emptyText: '暂无到期待处理物品', expandableExpiry: true })
               }
               if (this.showStockSection) {
-                this.summarySection({ title: '待补货', subtitle: '数量为 0 的物品', items: this.outOfStockItems, emptyText: '暂无待补货物品', actionRoute: RouteName.ITEM_LIST })
+                this.summarySection({ title: '待补货', items: this.outOfStockItems, emptyText: '暂无待补货物品' })
                 if (this.lowStockItems.length > 0) {
                   this.lowStockSection()
                 }
@@ -333,7 +354,7 @@ struct Index {
             }
             .width('100%')
             .constraintSize({ maxWidth: 960 })
-            .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: dockContentInset(this.dockVisible, this.keyboardVisible) })
+            .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), top: 8, bottom: dockContentInset(this.dockVisible, this.keyboardVisible) })
           }
           .width('100%')
           .justifyContent(FlexAlign.Center)
@@ -380,214 +401,106 @@ struct Index {
     }
     .hideTitleBar(true)
     .onWillShow(() => {
-      this.dockVisible = this.mainTabRoutes.indexOf(name) >= 0;
-      if (this.dockVisible) {
-        this.dockRoute = name;
-      }
+      this.dockVisible = false;
     })
     .onBackPressed(() => NavigationHelper.handleBackPressed())
   }
 
   @Builder
   private homeHeader() {
-    Row({ space: $r('app.float.space_3') }) {
-      Column({ space: $r('app.float.space_1') }) {
-        Text('首页')
-          .fontSize($r('app.float.font_title'))
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-        Text('位置、数量与到期，一目了然')
-          .fontSize($r('app.float.font_caption'))
-          .fontColor($r('app.color.text_secondary'))
+    Column({ space: 24 }) {
+      Row() {
+        Column({ space: 8 }) {
+          Text('ITEMTRACE  /  物品收纳').fontSize(11).letterSpacing(2)
+            .fontWeight(FontWeight.Medium).fontColor($r('app.color.text_secondary'))
+          Text('物品，都有去处。').fontSize($r('app.float.font_title'))
+            .fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        Image($r('app.media.ui_trace')).width(28).height(28)
+          .fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
+      }.width('100%').margin({ top: 12 })
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 12 }) {
+          Image($r('app.media.dock_search')).width(20).height(20)
+            .fillColor($r('app.color.text_secondary')).accessibilityLevel('no')
+          Text('找找你的物品').fontSize(15).fontColor($r('app.color.text_secondary')).layoutWeight(1)
+          Text('名称 / 条码').fontSize(11).fontColor($r('app.color.text_tertiary'))
+        }.width('100%')
       }
-      .layoutWeight(1)
-      Image($r('app.media.ui_trace'))
-        .width(24).height(24)
-        .fillColor($r('app.color.brand_primary'))
-        .padding(12)
-        .width(48).height(48)
-        .backgroundColor($r('app.color.surface_card'))
-        .border({ width: 0.8, color: $r('app.color.glass_border') })
-        .borderRadius(24)
-        .accessibilityLevel('no')
-    }
-    .width('100%')
+      .width('100%').height(54).padding({ left: 18, right: 18 }).borderRadius(16)
+      .backgroundColor($r('app.color.surface_card'))
+      .accessibilityText('搜索物品名称或条码')
+      .onClick(() => this.selectMainTab(RouteName.SEARCH))
+    }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
   @Builder
   private hero() {
-    Stack({ alignContent: Alignment.TopStart }) {
+    Column({ space: 22 }) {
+      Row({ space: 10 }) {
+        Image($r('app.media.ui_check')).width(20).height(20)
+          .fillColor($r('app.color.hero_action')).accessibilityLevel('no')
+        Column({ space: 5 }) {
+          Text(this.dueSoonCount + this.outOfStockCount === 0 ? '生活，有条不紊。' : '有些物品，需要留意。')
+            .fontSize(19).fontWeight(FontWeight.Medium).fontColor($r('app.color.hero_text'))
+          Text(this.dueSoonCount + this.outOfStockCount === 0 ? '到期与补货，我们帮你记着。' : '到期与库存信息，已为你整理好。')
+            .fontSize(12).fontColor($r('app.color.hero_secondary'))
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+      }.width('100%')
       Row() {
-        Stack() {
-          Shape() {
-            Circle().width(158).height(158)
-          }
-          .width(158).height(158)
-          .fill(Color.Transparent).stroke($r('app.color.border_subtle')).strokeWidth(1)
-          Shape() {
-            Circle().width(112).height(112)
-          }
-          .width(112).height(112)
-          .fill($r('app.color.surface_accent')).stroke($r('app.color.border_subtle')).strokeWidth(1)
-          Image($r('app.media.ui_trace')).width(46).height(46)
-            .fillColor($r('app.color.hero_action')).opacity(0.65)
-        }
-        .width(158).height(158)
-      }
-      .width('100%').justifyContent(FlexAlign.End)
-      .padding({ top: 10, right: 10 })
-      .hitTestBehavior(HitTestMode.None)
-      .accessibilityLevel('no')
-
-      AmbientParticles({ active: this.homeVisible })
-
-      Column({ space: $r('app.float.space_4') }) {
-        Row({ space: $r('app.float.space_2') }) {
-          Image($r('app.media.ui_trace'))
-            .width(20).height(20).fillColor($r('app.color.hero_action'))
-            .accessibilityLevel('no')
-          Text('ITEMTRACE')
-            .fontSize($r('app.float.font_caption'))
-            .fontWeight(FontWeight.Bold)
-            .letterSpacing(2)
-            .fontColor($r('app.color.hero_text'))
-        }
-        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-        .borderRadius(20)
-        .backgroundColor($r('app.color.hero_chip'))
-
-        Column({ space: 8 }) {
-          Text('物品，有迹可循。')
-            .fontSize($r('app.float.font_title'))
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.hero_text'))
-          Text('把位置、数量和到期日记下来；需要时，随时找到。')
-            .fontSize($r('app.float.font_body'))
-            .fontColor($r('app.color.hero_secondary'))
-            .width('100%')
-        }
-        .alignItems(HorizontalAlign.Start)
-        .width('100%')
-
-        Flex({ wrap: FlexWrap.Wrap }) {
-          Button('+ 记录物品')
-            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-            .fontColor($r('app.color.hero_action_text'))
-            .backgroundColor($r('app.color.hero_action'))
-            .borderRadius(22)
-            .padding({ left: 20, right: 20 })
-            .margin({ right: 8, bottom: 8 })
-            .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM, params: { mode: 'create', returnTo: RouteName.HOME } }))
-          Button('搜索')
-            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-            .fontColor($r('app.color.hero_text'))
-            .backgroundColor($r('app.color.hero_chip'))
-            .borderRadius(22)
-            .margin({ right: 8, bottom: 8 })
-            .onClick(() => this.selectMainTab(RouteName.SEARCH))
-          Button('设置')
-            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-            .fontColor($r('app.color.hero_text'))
-            .backgroundColor($r('app.color.hero_chip'))
-            .borderRadius(22)
-            .margin({ bottom: 8 })
-            .onClick(() => this.selectMainTab(RouteName.SETTINGS))
-        }
-        .width('100%')
-      }
-      .width('100%')
-      .padding({ left: 24, right: 24, top: 24, bottom: 16 })
-      .alignItems(HorizontalAlign.Start)
+        this.attentionMetric(this.dueSoonCount, '到期待处理', $r('app.media.ui_clock'))
+        Divider().vertical(true).height(42).color($r('app.color.hero_line')).margin({ left: 12, right: 20 })
+        this.attentionMetric(this.outOfStockCount, '需要补货', $r('app.media.ui_box'))
+      }.width('100%')
     }
-    .width('100%')
-    .linearGradient({ angle: 125, colors: [[$r('app.color.hero_start'), 0], [$r('app.color.hero_end'), 1]] })
-    .borderRadius($r('app.float.radius_card'))
-    .clip(true)
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 6 })
-    .transition(TransitionEffect.OPACITY
-      .combine(TransitionEffect.translate({ y: 18 }))
-      .combine(TransitionEffect.scale({ x: 0.97, y: 0.97 }))
-      .animation(uiSpring(this.reduceAnimation, 0.48, 0.76)))
+    .width('100%').alignItems(HorizontalAlign.Start).padding(24)
+    .borderRadius(22).backgroundColor($r('app.color.hero_start'))
   }
 
   @Builder
-  private overview() {
-    Row({ space: $r('app.float.space_2') }) {
-      this.metricCard({ label: '最近添加', count: this.recentItems.length, background: $r('app.color.surface_accent'), textColor: $r('app.color.brand_primary') })
-      this.metricCard({ label: '到期待处理', count: this.dueSoonCount, background: $r('app.color.status_warning_soft'), textColor: $r('app.color.status_warning') })
-      this.metricCard({ label: '待补货', count: this.outOfStockCount, background: $r('app.color.status_danger_soft'), textColor: $r('app.color.status_danger') })
-    }
-    .width('100%')
-    .transition(TransitionEffect.OPACITY
-      .combine(TransitionEffect.translate({ y: 12 }))
-      .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
-  }
-
-  @Builder
-  private metricCard($$: HomeMetricParams) {
-    Column({ space: $r('app.float.space_1') }) {
-      Text($$.count.toString())
-        .fontSize($r('app.float.font_title'))
-        .fontWeight(FontWeight.Bold)
-        .fontColor($$.textColor)
-      Text($$.label)
-        .fontSize($r('app.float.font_caption'))
-        .fontColor($$.textColor)
-    }
-    .layoutWeight(1)
-    .padding({ left: 14, right: 12, top: 18, bottom: 18 })
-    .borderRadius(22)
-    .backgroundColor($$.background)
-    .shadow({ radius: 8, color: $r('app.color.shadow_soft'), offsetY: 3 })
-    .alignItems(HorizontalAlign.Start)
+  private attentionMetric(count: number, label: string, icon: Resource) {
+    Column({ space: 8 }) {
+      Row({ space: 5 }) {
+        Text(count.toString()).fontSize(34).fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.hero_text'))
+        Text('项').fontSize(12).fontColor($r('app.color.hero_secondary')).margin({ top: 12 })
+      }
+      Row({ space: 6 }) {
+        Image(icon).width(14).height(14).fillColor($r('app.color.hero_secondary')).accessibilityLevel('no')
+        Text(label).fontSize(12).fontColor($r('app.color.hero_secondary'))
+      }
+    }.layoutWeight(1).alignItems(HorizontalAlign.Start)
   }
 
   @Builder
   private locationShortcutSection() {
-    Column({ space: $r('app.float.space_3') }) {
+    Column({ space: 14 }) {
       Row() {
-        Column({ space: $r('app.float.space_1') }) {
-          Text('按位置找')
-            .fontSize($r('app.float.font_section'))
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.text_primary'))
-          Text('从常用位置直接查看物品')
-            .fontSize($r('app.float.font_caption'))
-            .fontColor($r('app.color.text_secondary'))
-        }
-        .layoutWeight(1)
-        Button('全部')
-          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_app'))
-          .border({ width: 1, color: $r('app.color.border_subtle') })
-          .borderRadius($r('app.float.radius_control'))
-          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST }))
-      }
-      Flex({ wrap: FlexWrap.Wrap }) {
-        ForEach(this.locationPaths, (location: string) => {
-          Button(location)
-            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-            .type(ButtonType.Capsule)
-            .fontColor($r('app.color.brand_primary'))
-            .backgroundColor($r('app.color.surface_accent'))
-            .fontSize($r('app.float.font_caption'))
-            .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+        Text('按位置找').fontSize($r('app.float.font_section')).fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.text_primary')).layoutWeight(1)
+        Button('管理位置').fontSize(12).fontColor($r('app.color.text_secondary'))
+          .height(44).backgroundColor(Color.Transparent).padding(0)
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.LOCATION_MANAGEMENT }))
+      }.width('100%')
+      Scroll() {
+        Row({ space: 10 }) {
+          ForEach(this.locationPaths, (location: string) => {
+            Button({ type: ButtonType.Normal }) {
+              Column({ space: 14 }) {
+                Image($r('app.media.ui_location')).width(24).height(24)
+                  .fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
+                Text(location).fontSize(13).fontWeight(FontWeight.Medium)
+                  .fontColor($r('app.color.text_primary')).maxLines(2)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+              }.alignItems(HorizontalAlign.Start).width('100%')
+            }
+            .width(130).constraintSize({ minHeight: 110 }).padding(16).borderRadius(18)
+            .backgroundColor($r('app.color.surface_card')).accessibilityText(`查看${location}的物品`)
             .onClick(() => this.openLocationList(location))
-        }, (location: string) => location)
-      }
-    }
-    .width('100%')
-    .padding($r('app.float.space_4'))
-    .borderRadius($r('app.float.radius_card'))
-    .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
-    .border({ width: 1, color: $r('app.color.border_subtle') })
+          }, (location: string) => location)
+        }
+      }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%')
+    }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
   @Builder
@@ -599,11 +512,8 @@ struct Index {
             .fontSize($r('app.float.font_section'))
             .fontWeight(FontWeight.Bold)
             .fontColor($r('app.color.text_primary'))
-          Text($$.subtitle)
-            .fontSize($r('app.float.font_caption'))
-            .fontColor($r('app.color.text_secondary'))
         }
-        .layoutWeight(1)
+        .layoutWeight(1).alignItems(HorizontalAlign.Start)
         Text(`${$$.expandableExpiry ? this.dueSoonCount : $$.items.length} 项`)
           .fontSize($r('app.float.font_caption'))
           .fontColor($r('app.color.text_secondary'))
@@ -616,14 +526,17 @@ struct Index {
         }
       }
       if ($$.items.length === 0) {
-        EmptyState({
-          title: $$.emptyText,
-          description: this.summaryEmptyDescription($$.title),
-          actionText: this.summaryEmptyActionText($$.title),
-          actionRoute: $$.actionRoute,
-          actionMode: $$.actionRoute === RouteName.ITEM_FORM ? 'create' : '',
-          actionReturnTo: $$.actionReturnTo ?? ''
-        })
+        if ($$.title === '最近添加') {
+          EmptyState({ title: '给物品一个位置', description: '从一件常用物品开始，记录它放在哪里。',
+            actionText: '记录第一件物品', actionRoute: RouteName.ITEM_FORM,
+            actionMode: 'create', actionReturnTo: RouteName.HOME })
+        } else {
+          Row({ space: 10 }) {
+            Image($r('app.media.ui_check')).width(18).height(18)
+              .fillColor($r('app.color.status_success')).accessibilityLevel('no')
+            Text($$.emptyText).fontSize(13).fontColor($r('app.color.text_secondary'))
+          }.width('100%').padding(18).borderRadius(16).backgroundColor($r('app.color.surface_card'))
+        }
       } else {
         ForEach($$.items, (item: ItemSummary) => {
           ItemCard({ item: item })
@@ -734,23 +647,4 @@ struct Index {
     NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST, params: { query: new ItemQuery('', location) } });
   }
 
-  private summaryEmptyDescription(title: string): string {
-    if (title === '最近添加') {
-      return '先记录一个物品，首页会自动显示最近内容。';
-    }
-    if (title === '到期待处理') {
-      return '目前没有需要优先处理的到期物品。';
-    }
-    if (title === '待补货') {
-      return '数量为 0 的物品会自动出现在这里。';
-    }
-    return '';
-  }
-
-  private summaryEmptyActionText(title: string): string {
-    if (title === '最近添加') {
-      return '新增物品';
-    }
-    return '查看全部';
-  }
 }

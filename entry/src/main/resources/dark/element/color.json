@@ -1,140 +1,112 @@
 {
   "color": [
     {
-      "name": "start_window_background",
-      "value": "#12151A"
-    },
-    {
       "name": "surface_app",
-      "value": "#12151A"
+      "value": "#141B17"
     },
     {
       "name": "surface_card",
-      "value": "#1F232A"
+      "value": "#202922"
     },
     {
       "name": "surface_accent",
-      "value": "#233E31"
+      "value": "#2D3D30"
     },
     {
       "name": "brand_primary",
-      "value": "#85DDB1"
+      "value": "#B6CCA9"
     },
     {
       "name": "brand_on_primary",
-      "value": "#123323"
+      "value": "#1F3827"
     },
     {
       "name": "text_primary",
-      "value": "#EBEDF2"
+      "value": "#EDF0E5"
     },
     {
       "name": "text_secondary",
-      "value": "#A9B0BC"
+      "value": "#A0ACA0"
     },
     {
       "name": "border_subtle",
-      "value": "#30363E"
+      "value": "#344035"
     },
     {
       "name": "status_danger",
-      "value": "#FFB4AB"
+      "value": "#ECAA9E"
     },
     {
       "name": "status_danger_soft",
-      "value": "#5C1E1A"
+      "value": "#442D28"
     },
     {
       "name": "status_warning",
-      "value": "#FFDA8A"
+      "value": "#DEBF84"
     },
     {
       "name": "status_warning_soft",
-      "value": "#4A3800"
+      "value": "#3D3524"
     },
     {
       "name": "status_success",
-      "value": "#8CE6B7"
+      "value": "#B6CCA9"
     },
     {
       "name": "status_success_soft",
-      "value": "#123E2A"
+      "value": "#2D3D30"
     },
     {
       "name": "status_neutral",
-      "value": "#BECBC4"
+      "value": "#A9B6A6"
     },
     {
       "name": "status_neutral_soft",
-      "value": "#2A3731"
+      "value": "#29332A"
     },
     {
       "name": "hero_start",
-      "value": "#202B26"
-    },
-    {
-      "name": "hero_end",
-      "value": "#233E31"
+      "value": "#2B4A37"
     },
     {
       "name": "hero_text",
-      "value": "#EBEDF2"
+      "value": "#F2F3DF"
     },
     {
       "name": "hero_secondary",
-      "value": "#B6C9BE"
-    },
-    {
-      "name": "hero_chip",
-      "value": "#314D3D"
+      "value": "#C0CFC1"
     },
     {
       "name": "hero_action",
-      "value": "#85DDB1"
-    },
-    {
-      "name": "hero_action_text",
-      "value": "#123323"
+      "value": "#DFE8BC"
     },
     {
       "name": "dock_glass",
-      "value": "#CC252A32"
-    },
-    {
-      "name": "glass_border",
-      "value": "#554D5662"
-    },
-    {
-      "name": "shadow_soft",
-      "value": "#18000000"
-    },
-    {
-      "name": "shadow_dock",
-      "value": "#55000000"
-    },
-    {
-      "name": "particle_mint",
-      "value": "#B9F4CB"
+      "value": "#EF263027"
     },
     {
       "name": "dock_selected",
-      "value": "#14FFFFFF"
+      "value": "#3B4B3B"
     },
     {
-      "name": "dock_pressed",
-      "value": "#14FFFFFF"
+      "name": "surface_input",
+      "value": "#19221C"
     },
     {
-      "name": "dock_action_start",
-      "value": "#37A777"
+      "name": "text_tertiary",
+      "value": "#7E8E7D"
     },
     {
-      "name": "dock_action_end",
-      "value": "#178753"
+      "name": "accent_warm",
+      "value": "#D5BF97"
     },
     {
-      "name": "dock_on_action",
-      "value": "#FFFFFF"
+      "name": "hero_line",
+      "value": "#56735C"
+    },
+    {
+      "name": "start_window_background",
+      "value": "#141B17"
     }
   ]
 }

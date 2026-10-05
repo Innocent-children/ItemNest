@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/PageHeader';
 import { RoundedButtonStyle, dockContentInset, uiSpring } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { EmptyState } from '../components/EmptyState';
@@ -10,7 +11,6 @@ import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { SearchHistory } from '../model/SearchHistory';
 import { ItemListRouteParams } from '../navigation/RouteContract';
-import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
 
 interface SearchConditionParams {
@@ -20,6 +20,9 @@ interface SearchConditionParams {
 
 @Component
 export struct SearchPage {
+  @State private viewportWidth: number = 360;
+  @Prop isMainTab: boolean = false;
+  @State private showFilters: boolean = false;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @StorageLink('itemtrace.mainDockVisible') private dockVisible: boolean = true;
   @StorageLink('itemtrace.keyboardVisible') private keyboardVisible: boolean = false;
@@ -81,202 +84,153 @@ export struct SearchPage {
 
   build() {
     Column() {
-      Row() {
-        Column({ space: $r('app.float.space_1') }) {
-          Text('搜索与筛选')
-            .fontSize($r('app.float.font_title'))
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.text_primary'))
-          Text('输入或点选条件后自动显示结果')
-            .fontSize($r('app.float.font_caption'))
-            .fontColor($r('app.color.text_secondary'))
-        }
-        .layoutWeight(1)
-        Button('清除')
-          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_card'))
-          .border({ width: 1, color: $r('app.color.border_subtle') })
-          .borderRadius($r('app.float.radius_control'))
-          .onClick(() => this.clearQuery())
-      }
-      .width('100%')
-      .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
-
+      PageHeader({ title: '查找物品', subtitle: '知道放在哪里，就少一点寻找。',
+        eyebrow: this.isMainTab ? 'FIND YOUR THINGS' : '', showBack: !this.isMainTab,
+        actionText: '筛选位置与分类', actionIcon: $r('app.media.ui_filter'),
+        onAction: () => this.showFilters = true })
+      Row({ space: 10 }) {
+        Search({ value: this.name, placeholder: '物品名称或条码' })
+          .height(52).layoutWeight(1).fontColor($r('app.color.text_primary'))
+          .placeholderColor($r('app.color.text_secondary')).caretStyle({ color: $r('app.color.brand_primary') })
+          .backgroundColor($r('app.color.surface_card')).borderRadius(16)
+          .searchButton('查找', { autoDisable: true })
+          .onChange((value: string) => {
+            this.name = value;
+            this.requestCoordinator.invalidateSearchResults();
+            this.searchLoading = false;
+            this.searchErrorMessage = '';
+            this.loadSuggestions();
+            this.scheduleSearch();
+          })
+          .onSubmit(() => this.search(true))
+      }.width('100%').constraintSize({ maxWidth: 960 })
+        .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: 16 })
       Scroll() {
-        Column({ space: $r('app.float.space_4') }) {
-          Column({ space: $r('app.float.space_3') }) {
-            Text('查找物品')
-              .fontSize($r('app.float.font_section'))
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.text_primary'))
-            Row({ space: $r('app.float.space_2') }) {
-              Image($r('app.media.dock_search'))
-                .width(20).height(20)
-                .fillColor($r('app.color.text_secondary'))
-                .margin({ left: $r('app.float.space_4') })
-                .accessibilityLevel('no')
-              TextInput({ text: this.name, placeholder: '输入物品名称或条码' })
-                .layoutWeight(1)
-                .height(48)
-                .fontSize($r('app.float.font_body'))
-                .fontColor($r('app.color.text_primary'))
-                .placeholderColor($r('app.color.text_secondary'))
-                .caretColor($r('app.color.brand_primary'))
-                .backgroundColor(Color.Transparent)
-                .border({ width: 0 })
-                .padding({ left: 0, right: $r('app.float.space_4') })
-                .onChange((value: string) => {
-                  this.name = value;
-                  this.requestCoordinator.invalidateSearchResults();
-                  this.searchLoading = false;
-                  this.searchErrorMessage = '';
-                  this.loadSuggestions();
-                  this.scheduleSearch();
-                })
+        Column({ space: 16 }) {
+          if (this.selectedLocation.length > 0 || this.selectedCategory.length > 0) {
+            Flex({ wrap: FlexWrap.Wrap }) {
+              if (this.selectedLocation.length > 0) {
+                this.conditionChip({ label: this.selectedLocation, type: 'location' })
+              }
+              if (this.selectedCategory.length > 0) {
+                this.conditionChip({ label: this.selectedCategory, type: 'category' })
+              }
+            }.width('100%')
+          }
+          if (this.searchLoading) {
+            LoadingState({ text: '正在查找…' })
+          } else if (this.searchErrorMessage.length > 0) {
+            ErrorState({ message: this.searchErrorMessage })
+            Button('重新查找').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .fontColor($r('app.color.brand_on_primary')).backgroundColor($r('app.color.brand_primary'))
+              .onClick(() => this.search(true, false))
+          } else if (this.searched) {
+            Row() {
+              Text(`${this.items.length} 件物品`).fontSize(13).fontWeight(FontWeight.Medium)
+                .fontColor($r('app.color.text_secondary')).layoutWeight(1)
+              Button('清除条件').fontSize(12).height(44).padding(0)
+                .fontColor($r('app.color.brand_primary')).backgroundColor(Color.Transparent)
+                .onClick(() => this.clearQuery())
+            }.width('100%')
+            if (this.items.length === 0) {
+              EmptyState({ title: '还没有找到', description: '试试更短的名称，或移除位置和分类条件。' })
+            } else {
+              ForEach(this.items, (item: ItemSummary) => {
+                ItemCard({ item: item })
+              }, (item: ItemSummary) => `${item.id}:${item.updatedAt}:${item.expiryStatus}:${item.quantity}`)
             }
-            .width('100%')
-            .backgroundColor($r('app.color.surface_app'))
-            .border({ width: 0.8, color: $r('app.color.border_subtle') })
-            .borderRadius($r('app.float.radius_pill'))
+          } else {
             if (this.suggestions.length > 0 || this.history.length > 0) {
               this.suggestionPanel()
             }
-          }
-          .width('100%')
-          .padding($r('app.float.space_4'))
-          .borderRadius($r('app.float.radius_card'))
-          .backgroundColor($r('app.color.surface_card'))
-          .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
-
-          if (!this.currentQuery().isEmpty()) {
-            this.selectedConditionPanel()
-          }
-
-          if (this.locationPaths.length > 0) {
-            Column({ space: $r('app.float.space_3') }) {
-              Text('位置筛选')
-                .fontSize($r('app.float.font_section'))
-                .fontWeight(FontWeight.Bold)
-                .fontColor($r('app.color.text_primary'))
-              Text('仅显示已记录的位置')
-                .fontSize($r('app.float.font_caption'))
-                .fontColor($r('app.color.text_secondary'))
-              Flex({ wrap: FlexWrap.Wrap }) {
-                ForEach(this.locationPaths, (location: string) => {
-                  Button(location)
-                    .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-                    .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-                    .type(ButtonType.Capsule)
-                    .fontColor(this.selectedLocation === location ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
-                    .backgroundColor(this.selectedLocation === location ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
-                    .fontSize($r('app.float.font_caption'))
-                    .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-                    .onClick(() => {
-                      this.selectedLocation = this.selectedLocation === location ? '' : location;
-                      this.search(false, false);
-                    })
-                }, (location: string) => location)
-              }
+            if (this.filterLoading) {
+              LoadingState({ text: '正在整理位置与分类…' })
+            } else if (this.filterErrorMessage.length > 0) {
+              ErrorState({ message: this.filterErrorMessage })
+              Button('重试读取').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                .onClick(() => this.loadFilterOptions(true))
+            } else {
+              Column({ space: 16 }) {
+                Image($r('app.media.ui_collection')).width(160).height(128).accessibilityLevel('no')
+                Text('想找的，都在这里。').fontSize(19).fontWeight(FontWeight.Medium)
+                  .fontColor($r('app.color.text_primary'))
+                Text('输入名称，或按位置和分类缩小范围。').fontSize(13)
+                  .fontColor($r('app.color.text_secondary')).textAlign(TextAlign.Center)
+                Button('按位置与分类查找').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                  .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+                  .onClick(() => this.showFilters = true)
+              }.width('100%').padding({ top: 36, bottom: 24 })
             }
-            .width('100%')
-            .padding($r('app.float.space_4'))
-            .borderRadius($r('app.float.radius_card'))
-            .backgroundColor($r('app.color.surface_card'))
-            .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
           }
+        }.width('100%').constraintSize({ maxWidth: 960 }).alignItems(HorizontalAlign.Start)
+          .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'),
+            bottom: dockContentInset(this.dockVisible, this.keyboardVisible) })
+      }.width('100%').layoutWeight(1).scrollBar(BarState.Off)
+    }
+    .width('100%').height('100%')
+    .padding({ top: this.safeAreaTop, left: this.safeAreaLeft, right: this.safeAreaRight })
+    .backgroundColor($r('app.color.surface_app'))
+    .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
+    .bindSheet($$this.showFilters, this.filterSheet(), {
+      height: SheetSize.LARGE, detents: [SheetSize.MEDIUM, SheetSize.LARGE],
+      dragBar: true, showClose: true, title: { title: '缩小查找范围', subtitle: '按位置与分类组合查找' },
+      backgroundColor: $r('app.color.surface_app'), preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
+      width: this.viewportWidth >= 700 ? 560 : undefined
+    })
+  }
 
-          if (this.categories.length > 0) {
-            Column({ space: $r('app.float.space_3') }) {
-              Text('分类筛选')
-                .fontSize($r('app.float.font_section'))
-                .fontWeight(FontWeight.Bold)
-                .fontColor($r('app.color.text_primary'))
-              Flex({ wrap: FlexWrap.Wrap }) {
-                ForEach(this.categories, (category: string) => {
-                  Button(category)
-                    .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-                    .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-                    .type(ButtonType.Capsule)
-                    .fontColor(this.selectedCategory === category ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
-                    .backgroundColor(this.selectedCategory === category ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
-                    .fontSize($r('app.float.font_caption'))
-                    .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-                    .onClick(() => {
-                      this.selectedCategory = this.selectedCategory === category ? '' : category;
-                      this.search(false, false);
-                    })
-                }, (category: string) => category)
-              }
-            }
-            .width('100%')
-            .padding($r('app.float.space_4'))
-            .borderRadius($r('app.float.radius_card'))
-            .backgroundColor($r('app.color.surface_card'))
-            .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
-          }
-
+  @Builder
+  private filterSheet() {
+    Column() {
+      Scroll() {
+        Column({ space: 20 }) {
           if (this.filterLoading) {
             LoadingState({ text: '正在读取筛选条件…' })
           } else if (this.filterErrorMessage.length > 0) {
             ErrorState({ message: this.filterErrorMessage })
-            Button('重试加载筛选条件')
-              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-              .fontColor($r('app.color.brand_on_primary'))
-              .backgroundColor($r('app.color.brand_primary'))
+            Button('重试读取').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
               .onClick(() => this.loadFilterOptions(true))
+          } else {
+            Text('存放位置').fontSize(18).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
+            Flex({ wrap: FlexWrap.Wrap }) {
+              this.filterChoice('全部位置', '', 'location')
+              ForEach(this.locationPaths, (value: string) => {
+                this.filterChoice(value, value, 'location')
+              }, (value: string) => value)
+            }.width('100%')
+            Text('物品分类').fontSize(18).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
+            Flex({ wrap: FlexWrap.Wrap }) {
+              this.filterChoice('全部分类', '', 'category')
+              ForEach(this.categories, (value: string) => {
+                this.filterChoice(value, value, 'category')
+              }, (value: string) => value)
+            }.width('100%')
           }
+        }.width('100%').padding(24).alignItems(HorizontalAlign.Start)
+      }.width('100%').layoutWeight(1)
+      Row() {
+        Button('查看结果').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .width('100%').height(50).fontColor($r('app.color.brand_on_primary'))
+          .backgroundColor($r('app.color.brand_primary'))
+          .onClick(() => { this.showFilters = false; this.search(true); })
+      }.width('100%').padding({ left: 24, right: 24, bottom: 24 })
+    }.width('100%').height('100%')
+  }
 
-          if (this.searchLoading) {
-            LoadingState({ text: '正在查询物品…' })
-          } else if (this.searchErrorMessage.length > 0) {
-            ErrorState({ message: this.searchErrorMessage })
-            Button('重试搜索')
-              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-              .fontColor($r('app.color.brand_on_primary'))
-              .backgroundColor($r('app.color.brand_primary'))
-              .onClick(() => this.search(true, false))
-          } else if (this.searched && this.items.length === 0) {
-            EmptyState({ title: '暂无搜索结果', description: '请修改或清除筛选条件后重试。' })
-            Button('清除条件')
-              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-              .width('100%')
-              .fontColor($r('app.color.brand_primary'))
-              .backgroundColor($r('app.color.surface_accent'))
-              .borderRadius($r('app.float.radius_control'))
-              .onClick(() => this.clearQuery())
-          } else if (this.searched) {
-            Text(`找到 ${this.items.length} 个物品`)
-              .fontSize($r('app.float.font_section'))
-              .fontWeight(FontWeight.Medium)
-              .fontColor($r('app.color.text_primary'))
-            Button('查看完整列表')
-              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-              .width('100%')
-              .fontColor($r('app.color.brand_primary'))
-              .backgroundColor($r('app.color.surface_accent'))
-              .borderRadius($r('app.float.radius_control'))
-              .onClick(() => this.openResultList())
-            ForEach(this.items, (item: ItemSummary) => {
-              ItemCard({ item: item })
-            }, (item: ItemSummary) => `${item.id}:${item.updatedAt}:${item.expiryStatus}:${item.quantity}`)
-          }
-        }
-        .width('100%')
-        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: dockContentInset(this.dockVisible, this.keyboardVisible) })
-      }
-      .layoutWeight(1)
-
-    }
-    .width('100%')
-    .height('100%')
-    .padding({ top: this.safeAreaTop, left: this.safeAreaLeft, right: this.safeAreaRight })
-    .backgroundColor($r('app.color.surface_app'))
+  @Builder
+  private filterChoice(label: string, value: string, type: string) {
+    Button(label).attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+      .fontSize(13).borderRadius(24)
+      .fontColor((type === 'location' ? this.selectedLocation : this.selectedCategory) === value
+        ? $r('app.color.brand_on_primary') : $r('app.color.text_primary'))
+      .backgroundColor((type === 'location' ? this.selectedLocation : this.selectedCategory) === value
+        ? $r('app.color.brand_primary') : $r('app.color.surface_card'))
+      .margin({ right: 8, bottom: 8 })
+      .accessibilitySelected((type === 'location' ? this.selectedLocation : this.selectedCategory) === value)
+      .onClick(() => {
+        if (type === 'location') { this.selectedLocation = value; } else { this.selectedCategory = value; }
+        this.search(false, false);
+      })
   }
 
   @Builder
@@ -332,39 +286,6 @@ export struct SearchPage {
       }
     }
     .width('100%')
-  }
-
-  @Builder
-  private selectedConditionPanel() {
-    Column({ space: $r('app.float.space_2') }) {
-      Row() {
-        Text('已选条件')
-          .fontSize($r('app.float.font_caption'))
-          .fontColor($r('app.color.text_secondary'))
-          .layoutWeight(1)
-        Button('全部清除')
-          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_app'))
-          .onClick(() => this.clearQuery())
-      }
-      Flex({ wrap: FlexWrap.Wrap }) {
-        if (this.name.trim().length > 0) {
-          this.conditionChip({ label: `名称：${this.name.trim()}`, type: 'name' })
-        }
-        if (this.selectedLocation.length > 0) {
-          this.conditionChip({ label: `位置：${this.selectedLocation}`, type: 'location' })
-        }
-        if (this.selectedCategory.length > 0) {
-          this.conditionChip({ label: `分类：${this.selectedCategory}`, type: 'category' })
-        }
-      }
-    }
-    .width('100%')
-    .padding($r('app.float.space_3'))
-    .borderRadius($r('app.float.radius_control'))
-    .backgroundColor($r('app.color.surface_card'))
   }
 
   @Builder
@@ -592,15 +513,6 @@ export struct SearchPage {
     this.selectedLocation = record.locationPath ?? '';
     this.selectedCategory = record.category ?? '';
     this.search(false, false);
-  }
-
-  private openResultList(): void {
-    const query = this.currentQuery();
-    if (query.isEmpty()) {
-      return;
-    }
-    AppServices.get().searchSuggestions.recordSearch(query);
-    NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST, params: { query: query } });
   }
 
 }

@@ -1,4 +1,4 @@
-import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
+import { RoundedButtonStyle } from '../ui/VisualStyle';
 import { ITEM_UNIT_OPTIONS, ItemUnit } from '../model/Item';
 
 @Component
@@ -10,73 +10,33 @@ export struct QuantityInput {
   @Prop inputEnabled: boolean = true;
 
   build() {
-    Column({ space: $r('app.float.space_2') }) {
-      Text('数量与单位')
-        .fontSize($r('app.float.font_body'))
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.text_primary'))
-      TextInput({ text: this.quantityText, placeholder: '默认 1' })
-        .type(InputType.NUMBER_DECIMAL)
-        .backgroundColor($r('app.color.surface_app'))
-        .border({ width: 1, color: $r('app.color.border_subtle') })
-        .borderRadius($r('app.float.radius_control'))
-        .enabled(this.inputEnabled)
-        .onChange((value: string) => {
-          this.quantityText = value;
-          this.errorMessage = this.validateQuantity(value);
-        })
-      Row({ space: $r('app.float.space_2') }) {
-        Button('-')
-          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-          .layoutWeight(1)
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_accent'))
-          .borderRadius($r('app.float.radius_control'))
-          .enabled(this.inputEnabled)
-          .onClick(() => this.adjustQuantity(-1))
-        Button('+')
-          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-          .layoutWeight(1)
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_accent'))
-          .borderRadius($r('app.float.radius_control'))
-          .enabled(this.inputEnabled)
-          .onClick(() => this.adjustQuantity(1))
-        Button('置 0')
-          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-          .layoutWeight(1)
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_app'))
-          .border({ width: 1, color: $r('app.color.border_subtle') })
-          .borderRadius($r('app.float.radius_control'))
-          .enabled(this.inputEnabled)
-          .onClick(() => this.setQuantity('0'))
-      }
-      .width('100%')
-      Flex({ wrap: FlexWrap.Wrap }) {
-        ForEach(ITEM_UNIT_OPTIONS, (option: ItemUnit) => {
-          Button(option)
-            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-            .type(ButtonType.Capsule)
-            .fontColor(this.unit === option ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
-            .backgroundColor(this.unit === option ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
-            .fontSize($r('app.float.font_caption'))
-            .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-            .enabled(this.inputEnabled)
-            .onClick(() => this.unit = option)
-        }, (option: ItemUnit) => option)
-      }
+    Column({ space: 12 }) {
+      Text('拥有多少？').fontSize(14).fontWeight(FontWeight.Medium).fontColor($r('app.color.text_primary'))
+      Row({ space: 8 }) {
+        Button('−').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .width(44).height(48).fontSize(22).fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent')).accessibilityText('数量减少一')
+          .enabled(this.inputEnabled && Number(this.quantityText) > 0).onClick(() => this.adjustQuantity(-1))
+        TextInput({ text: this.quantityText, placeholder: '1' })
+          .type(InputType.NUMBER_DECIMAL).height(48).layoutWeight(1).fontSize(20).textAlign(TextAlign.Center)
+          .fontColor($r('app.color.text_primary')).backgroundColor($r('app.color.surface_input')).borderRadius(14)
+          .enabled(this.inputEnabled).accessibilityText('物品总数量')
+          .onChange((value: string) => { this.quantityText = value; this.errorMessage = this.validateQuantity(value); })
+        Button('+').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .width(44).height(48).fontSize(22).fontColor($r('app.color.brand_primary'))
+          .backgroundColor($r('app.color.surface_accent')).accessibilityText('数量增加一')
+          .enabled(this.inputEnabled).onClick(() => this.adjustQuantity(1))
+        Select(ITEM_UNIT_OPTIONS.map((unit: ItemUnit): SelectOption => { return { value: unit }; }))
+          .selected(ITEM_UNIT_OPTIONS.indexOf(this.unit)).value(this.unit).font({ size: 14 })
+          .fontColor($r('app.color.text_primary')).backgroundColor($r('app.color.surface_input'))
+          .borderRadius(14).width(78).height(48).enabled(this.inputEnabled).accessibilityText('物品单位')
+          .onSelect((index: number) => this.unit = ITEM_UNIT_OPTIONS[index])
+      }.width('100%')
+      Text('总量包含借出部分。').fontSize(11).fontColor($r('app.color.text_secondary'))
       if (this.errorMessage.length > 0) {
-        Text(this.errorMessage)
-          .fontSize($r('app.float.font_caption'))
-          .fontColor($r('app.color.status_danger'))
+        Text(this.errorMessage).fontSize(13).fontColor($r('app.color.status_danger'))
       }
-    }
-    .alignItems(HorizontalAlign.Start)
+    }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
   private validateQuantity(value: string): string {

@@ -1,16 +1,8 @@
 {
   "float": [
     {
-      "name": "page_text_font_size",
-      "value": "50fp"
-    },
-    {
-      "name": "font_display",
-      "value": "32fp"
-    },
-    {
       "name": "font_title",
-      "value": "28fp"
+      "value": "30fp"
     },
     {
       "name": "font_section",
@@ -46,19 +38,19 @@
     },
     {
       "name": "radius_card",
-      "value": "24vp"
+      "value": "20vp"
     },
     {
       "name": "radius_control",
-      "value": "22vp"
+      "value": "14vp"
     },
     {
       "name": "space_5",
       "value": "20vp"
     },
     {
-      "name": "radius_pill",
-      "value": "40vp"
+      "name": "page_gutter",
+      "value": "24vp"
     }
   ]
 }

@@ -13,13 +13,7 @@ export struct EmptyState {
 
   build() {
     Column({ space: $r('app.float.space_3') }) {
-      Image($r('app.media.ui_trace'))
-        .width(30).height(30)
-        .fillColor($r('app.color.brand_primary'))
-        .padding(14)
-        .width(58).height(58)
-        .backgroundColor($r('app.color.surface_accent'))
-        .borderRadius(21)
+      Image($r('app.media.ui_collection')).width(160).height(128)
         .accessibilityLevel('no')
       Text(this.title)
         .fontSize($r('app.float.font_section'))
@@ -41,10 +35,10 @@ export struct EmptyState {
       }
     }
     .width('100%')
-    .padding($r('app.float.space_6'))
+    .padding({ left: 24, right: 24, top: 28, bottom: 28 })
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .border({ width: 1, color: $r('app.color.border_subtle') })
+
     .alignItems(HorizontalAlign.Center)
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 8 }))

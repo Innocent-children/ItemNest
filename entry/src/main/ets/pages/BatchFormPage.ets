@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/PageHeader';
 import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
@@ -65,80 +66,78 @@ export struct BatchFormPage {
   build() {
     Stack({ alignContent: Alignment.Center }) {
       Column() {
-        Row() {
-          Text(this.editMode ? '编辑批次' : '新增批次')
-            .fontSize($r('app.float.font_title'))
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.text_primary'))
-            .layoutWeight(1)
-          Button('取消')
-            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-            .fontColor($r('app.color.brand_primary'))
-            .backgroundColor($r('app.color.surface_card'))
-            .border({ width: 1, color: $r('app.color.border_subtle') })
-            .borderRadius($r('app.float.radius_control'))
-            .enabled(!this.saving)
-            .onClick(() => this.requestClose())
-        }
-        .width('100%')
-        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
+        PageHeader({ title: this.editMode ? '编辑批次' : '添加一个批次', showBack: true,
+          subtitle: '同一件物品，也可以分开放。', actionEnabled: !this.saving,
+          onBack: () => this.requestClose() })
 
         if (this.loading) {
           LoadingState({ text: '正在读取批次…' })
         } else {
           Scroll() {
             Column({ space: $r('app.float.space_4') }) {
-            Text('填写此批次剩余总量，包含借出部分，不是这次增减的数量。')
-              .fontSize($r('app.float.font_caption'))
-              .fontColor($r('app.color.text_secondary'))
-            TextInput({ text: this.quantityText, placeholder: '批次总量' })
-              .type(InputType.NUMBER_DECIMAL)
-              .backgroundColor($r('app.color.surface_card'))
-              .border({ width: 1, color: $r('app.color.border_subtle') })
-              .borderRadius($r('app.float.radius_control'))
-              .onChange((value: string) => this.quantityText = value)
-            Column({ space: $r('app.float.space_1') }) {
-              Row() {
-                Text('单位')
-                  .fontSize($r('app.float.font_body'))
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor($r('app.color.text_primary'))
-                  .layoutWeight(1)
-                Text(this.unit)
-                  .fontSize($r('app.float.font_body'))
-                  .fontColor($r('app.color.brand_primary'))
-              }
-              .width('100%')
-              Text('批次单位与物品统一。如需纠正单位，请在编辑物品中修改；数值不会自动换算。')
+              Text('填写此批次剩余总量，包含借出部分，不是这次增减的数量。')
                 .fontSize($r('app.float.font_caption'))
                 .fontColor($r('app.color.text_secondary'))
+              TextInput({ text: this.quantityText, placeholder: '批次总量' })
+                .type(InputType.NUMBER_DECIMAL)
+                .backgroundColor($r('app.color.surface_card'))
+                .border({ width: 1, color: $r('app.color.border_subtle') })
+                .borderRadius($r('app.float.radius_control'))
+                .onChange((value: string) => this.quantityText = value)
+              Column({ space: $r('app.float.space_1') }) {
+                Row() {
+                  Text('单位')
+                    .fontSize($r('app.float.font_body'))
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor($r('app.color.text_primary'))
+                    .layoutWeight(1)
+
+                  Text(this.unit)
+                    .fontSize($r('app.float.font_body'))
+                    .fontColor($r('app.color.brand_primary'))
+                }
+                .width('100%')
+                Text('批次单位与物品统一。如需纠正单位，请在编辑物品中修改；数值不会自动换算。')
+                  .fontSize($r('app.float.font_caption'))
+                  .fontColor($r('app.color.text_secondary'))
+              }
+              .width('100%')
+              .padding($r('app.float.space_3'))
+              .backgroundColor($r('app.color.surface_accent'))
+              .borderRadius($r('app.float.radius_control'))
+              Row() {
+                Text('到期日期').fontSize(15).fontColor($r('app.color.text_primary')).layoutWeight(1)
+                Button('清除').height(44).fontSize(13).backgroundColor(Color.Transparent)
+                  .fontColor($r('app.color.brand_primary')).enabled(this.expirationDate.length > 0)
+                  .onClick(() => this.expirationDate = '')
+              }.width('100%')
+              CalendarPicker({ selected: this.expirationPickerDate() })
+                .onChange((date: Date) => this.expirationDate = this.formatDate(date))
+              Text(this.expirationDate.length > 0 ? `到期于 ${this.expirationDate}` : '尚未设置到期日')
+                .fontSize(12).fontColor($r('app.color.text_secondary'))
+              TextInput({ text: this.locationPath, placeholder: '批次位置，可选' })
+                .backgroundColor($r('app.color.surface_card'))
+                .border({ width: 1, color: $r('app.color.border_subtle') })
+                .borderRadius($r('app.float.radius_control'))
+                .onChange((value: string) => this.locationPath = value)
+              TextArea({ text: this.notes, placeholder: '批次备注，可选' })
+                .maxLength(500)
+                .backgroundColor($r('app.color.surface_card'))
+                .border({ width: 1, color: $r('app.color.border_subtle') })
+                .borderRadius($r('app.float.radius_control'))
+                .onChange((value: string) => this.notes = value)
+              if (this.errorMessage.length > 0) {
+                Text(this.errorMessage)
+                  .fontSize($r('app.float.font_caption'))
+                  .fontColor($r('app.color.status_danger'))
+              }
+
             }
             .width('100%')
-            .padding($r('app.float.space_3'))
-            .backgroundColor($r('app.color.surface_accent'))
-            .borderRadius($r('app.float.radius_control'))
-            TextInput({ text: this.expirationDate, placeholder: '到期日期 YYYY-MM-DD，可选' })
-              .backgroundColor($r('app.color.surface_card'))
-              .border({ width: 1, color: $r('app.color.border_subtle') })
-              .borderRadius($r('app.float.radius_control'))
-              .onChange((value: string) => this.expirationDate = value)
-            TextInput({ text: this.locationPath, placeholder: '批次位置，可选' })
-              .backgroundColor($r('app.color.surface_card'))
-              .border({ width: 1, color: $r('app.color.border_subtle') })
-              .borderRadius($r('app.float.radius_control'))
-              .onChange((value: string) => this.locationPath = value)
-            TextArea({ text: this.notes, placeholder: '批次备注，可选' })
-              .maxLength(500)
-              .backgroundColor($r('app.color.surface_card'))
-              .border({ width: 1, color: $r('app.color.border_subtle') })
-              .borderRadius($r('app.float.radius_control'))
-              .onChange((value: string) => this.notes = value)
-            if (this.errorMessage.length > 0) {
-              Text(this.errorMessage)
-                .fontSize($r('app.float.font_caption'))
-                .fontColor($r('app.color.status_danger'))
-            }
+            .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
+          }
+          .layoutWeight(1)
+          Column() {
             Button(this.saving ? '正在保存…' : '保存批次')
               .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
               .width('100%')
@@ -156,15 +155,11 @@ export struct BatchFormPage {
                 }
               })
               .onClick(() => this.save())
-          }
-            .width('100%')
-            .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
-          }
-          .layoutWeight(1)
+          }.width('100%').padding(20).backgroundColor($r('app.color.surface_card'))
         }
       }
       .width('100%')
-      .height('100%')
+      .height('100%').constraintSize({ maxWidth: 800 })
       .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
       .backgroundColor($r('app.color.surface_app'))
 
@@ -178,6 +173,18 @@ export struct BatchFormPage {
     }
     .width('100%')
     .height('100%')
+  }
+
+  private expirationPickerDate(): Date {
+    if (this.expirationDate.length === 0) { return new Date(); }
+    const parts = this.expirationDate.split('-');
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  }
+
+  private formatDate(date: Date): string {
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${date.getFullYear()}-${month}-${day}`;
   }
 
   private async loadForm(): Promise<void> {

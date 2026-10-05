@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/PageHeader';
 import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
@@ -7,6 +8,8 @@ import { AppServices } from '../service/AppServices';
 
 @Component
 export struct LocationManagementPage {
+  @State private showCreateSheet: boolean = false;
+  @State private viewportWidth: number = 360;
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
@@ -51,67 +54,24 @@ export struct LocationManagementPage {
 
   build() {
     Column() {
-      Text('位置管理')
-        .fontSize($r('app.float.font_title'))
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.text_primary'))
-        .width('100%')
-        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
-
+      PageHeader({ title: '存放位置', subtitle: '给每个角落一个名字。', showBack: true,
+        actionText: '新增位置', actionIcon: $r('app.media.dock_add'), actionEnabled: !this.operating && !this.loading,
+        onAction: () => { this.actionError = ''; this.showCreateSheet = true; } })
       if (this.loading) {
         LoadingState({ text: '正在读取位置…' })
       } else {
         Scroll() {
           Column({ space: $r('app.float.space_4') }) {
-            TextInput({ text: this.name, placeholder: '新增位置名称' })
-              .backgroundColor($r('app.color.surface_card'))
-              .border({ width: 1, color: $r('app.color.border_subtle') })
-              .borderRadius($r('app.float.radius_control'))
-              .enabled(!this.operating)
-              .onChange((value: string) => this.name = value)
-            Flex({ wrap: FlexWrap.Wrap }) {
-              Button('无父级')
-                .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-                .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-                .type(ButtonType.Capsule)
-                .fontColor(this.selectedParentId.length === 0 ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
-                .backgroundColor(this.selectedParentId.length === 0 ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
-                .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-                .enabled(!this.operating)
-                .onClick(() => this.selectedParentId = '')
-              ForEach(this.locations, (location: LocationRecord) => {
-                if (location.active) {
-                  Button(location.path)
-                    .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-                    .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-                    .type(ButtonType.Capsule)
-                    .fontColor(this.selectedParentId === location.id ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
-                    .backgroundColor(this.selectedParentId === location.id ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
-                    .fontSize($r('app.float.font_caption'))
-                    .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-                    .enabled(!this.operating)
-                    .onClick(() => this.selectedParentId = this.selectedParentId === location.id ? '' : location.id)
-                }
-              }, (location: LocationRecord) => `${location.id}:${location.updatedAt}:${location.active}`)
-            }
-            Button('新增位置')
-              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-              .width('100%')
-              .fontColor($r('app.color.brand_on_primary'))
-              .backgroundColor($r('app.color.brand_primary'))
-              .borderRadius($r('app.float.radius_control'))
-              .enabled(!this.operating)
-              .scale({ x: this.pressedAction === 'create' && !this.reduceAnimation ? 0.96 : 1, y: this.pressedAction === 'create' && !this.reduceAnimation ? 0.96 : 1 })
-              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-              .onTouch((event: TouchEvent) => this.updatePressedAction(event, 'create'))
-              .onClick(() => this.createLocation())
             if (this.actionError.length > 0) {
               ErrorState({ message: this.actionError })
             } else if (this.loadError.length > 0) {
               ErrorState({ message: this.loadError })
             }
+            Text('全部位置').fontSize(18).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary')).width('100%').margin({ top: 12 })
             ForEach(this.locations, (location: LocationRecord) => {
               Row() {
+                Image($r('app.media.ui_location')).width(24).height(24)
+                  .fillColor($r('app.color.brand_primary')).margin({ right: 14 }).accessibilityLevel('no')
                 Column({ space: $r('app.float.space_1') }) {
                   Text(location.path)
                     .fontSize($r('app.float.font_body'))
@@ -121,7 +81,7 @@ export struct LocationManagementPage {
                     .fontSize($r('app.float.font_caption'))
                     .fontColor($r('app.color.text_secondary'))
                 }
-                .layoutWeight(1)
+                .layoutWeight(1).alignItems(HorizontalAlign.Start)
                 Button(location.active ? '停用' : '启用')
                   .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
                   .fontColor($r('app.color.brand_primary'))
@@ -143,15 +103,80 @@ export struct LocationManagementPage {
             }, (location: LocationRecord) => `${location.id}:${location.updatedAt}:${location.active}`)
           }
           .width('100%')
-          .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
+          .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
         }
         .layoutWeight(1)
       }
     }
     .width('100%')
-    .height('100%')
+    .height('100%').constraintSize({ maxWidth: 960 })
     .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
+    .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
+    .bindSheet($$this.showCreateSheet, this.createSheet(), {
+      height: SheetSize.LARGE, dragBar: true, showClose: true,
+      title: { title: '新增位置' }, backgroundColor: $r('app.color.surface_app'),
+      preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
+      width: this.viewportWidth >= 700 ? 560 : undefined,
+      onWillDismiss: (action: DismissSheetAction) => { if (!this.operating) { action.dismiss(); } }
+    })
+  }
+
+  @Builder
+  private createSheet() {
+    Column() {
+      Scroll() {
+        Column({ space: 16 }) {
+          TextInput({ text: this.name, placeholder: '新增位置名称' })
+            .backgroundColor($r('app.color.surface_card'))
+            .border({ width: 1, color: $r('app.color.border_subtle') })
+            .borderRadius($r('app.float.radius_control'))
+            .enabled(!this.operating)
+            .onChange((value: string) => this.name = value)
+          Text('放在哪个位置下面？').fontSize(13).fontColor($r('app.color.text_secondary')).width('100%')
+          Flex({ wrap: FlexWrap.Wrap }) {
+            Button('无父级')
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
+              .type(ButtonType.Capsule)
+              .fontColor(this.selectedParentId.length === 0 ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
+              .backgroundColor(this.selectedParentId.length === 0 ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
+              .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+              .enabled(!this.operating)
+              .onClick(() => this.selectedParentId = '')
+            ForEach(this.locations, (location: LocationRecord) => {
+              if (location.active) {
+                Button(location.path)
+                  .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                  .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
+                  .type(ButtonType.Capsule)
+                  .fontColor(this.selectedParentId === location.id ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
+                  .backgroundColor(this.selectedParentId === location.id ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
+                  .fontSize($r('app.float.font_caption'))
+                  .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+                  .enabled(!this.operating)
+                  .onClick(() => this.selectedParentId = this.selectedParentId === location.id ? '' : location.id)
+              }
+            }, (location: LocationRecord) => `${location.id}:${location.updatedAt}:${location.active}`)
+          }
+
+          if (this.actionError.length > 0) { ErrorState({ message: this.actionError }) }
+        }.width('100%').padding(24).alignItems(HorizontalAlign.Start)
+      }.width('100%').layoutWeight(1)
+      Row() {
+        Button('新增位置')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .width('100%')
+          .fontColor($r('app.color.brand_on_primary'))
+          .backgroundColor($r('app.color.brand_primary'))
+          .borderRadius($r('app.float.radius_control'))
+          .enabled(!this.operating)
+          .scale({ x: this.pressedAction === 'create' && !this.reduceAnimation ? 0.96 : 1, y: this.pressedAction === 'create' && !this.reduceAnimation ? 0.96 : 1 })
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
+          .onTouch((event: TouchEvent) => this.updatePressedAction(event, 'create'))
+          .onClick(() => this.createLocation())
+      }.width('100%').padding({ left: 24, right: 24, bottom: 24 })
+    }.width('100%').height('100%')
   }
 
   private async loadLocations(showLoading: boolean = true): Promise<void> {
@@ -190,6 +215,7 @@ export struct LocationManagementPage {
         this.actionError = result.getError().message;
         return;
       }
+      this.showCreateSheet = false;
       this.name = '';
       this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadLocations(false);

@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/PageHeader';
 import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
@@ -95,29 +96,10 @@ export struct ItemFormPage {
   build() {
     Stack({ alignContent: Alignment.Center }) {
       Column() {
-        Row() {
-          Column({ space: $r('app.float.space_1') }) {
-            Text(this.editMode ? '编辑物品' : '记录新物品')
-              .fontSize($r('app.float.font_title'))
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.text_primary'))
-            Text(this.editMode ? '更新后，所有列表和摘要会同步刷新。' : '先记录最重要的信息，其他内容随时补充。')
-              .fontSize($r('app.float.font_caption'))
-              .fontColor($r('app.color.text_secondary'))
-          }
-          .layoutWeight(1)
-          Button('取消')
-            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-            .fontColor($r('app.color.brand_primary'))
-            .backgroundColor($r('app.color.surface_card'))
-            .border({ width: 1, color: $r('app.color.border_subtle') })
-            .borderRadius($r('app.float.radius_control'))
-            .enabled(!this.saving)
-            .onClick(() => this.requestClose())
-        }
-        .width('100%')
-        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
+        PageHeader({ title: this.editMode ? '编辑物品' : '记录新物品', showBack: true,
+          subtitle: this.editMode ? '为物品更新一份档案。' : '记下名称和位置，下次一找就到。',
+          actionText: '扫码', actionIcon: $r('app.media.ui_scan'), actionEnabled: !this.saving && !this.scanning,
+          onBack: () => this.requestClose(), onAction: () => { this.showNotesSection = true; this.scanBarcode(); } })
 
         if (this.loading) {
           LoadingState({ text: '正在读取物品…' })
@@ -127,7 +109,7 @@ export struct ItemFormPage {
               this.coreSection()
               this.locationSection()
 
-              this.sectionToggle('分类', this.categoryValue.length > 0 ? `当前：${this.categoryValue}` : '可选，用于筛选和整理', 'category')
+              this.sectionToggle('分类', this.categoryValue.length > 0 ? this.categoryValue : '让物品更好整理', 'category')
               if (this.showCategorySection) {
                 this.categorySection()
               }
@@ -141,7 +123,7 @@ export struct ItemFormPage {
                 this.expirySection()
               }
 
-              this.sectionToggle('备注与条码', '补充注意事项或条码文本', 'notes')
+              this.sectionToggle('备注与条码', '补充注意事项和条码', 'notes')
               if (this.showNotesSection) {
                 this.notesSection()
               }
@@ -153,7 +135,7 @@ export struct ItemFormPage {
 
             }
             .width('100%')
-            .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_4') })
+            .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_4') })
           }
           .layoutWeight(1)
 
@@ -189,13 +171,13 @@ export struct ItemFormPage {
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
     }
-    .width('100%')
+    .width('100%').alignItems(HorizontalAlign.Start)
   }
 
   @Builder
   private coreSection() {
     Column({ space: $r('app.float.space_4') }) {
-      this.fieldTitle('基础信息', this.editMode ? '名称与单位可编辑；数量和到期日由批次管理。' : '数量填写目前拥有的总量，包含借出部分；借还可在保存后记录。')
+      this.fieldTitle('这是什么物品？', this.editMode ? '数量和到期日可在批次管理中修改。' : '先给它一个容易找到的名字。')
       TextInput({ text: this.name, placeholder: '例如：感冒药' })
         .maxLength(80)
         .backgroundColor($r('app.color.surface_app'))
@@ -230,10 +212,11 @@ export struct ItemFormPage {
         QuantityInput({ quantityText: $quantityText, unit: $unit, errorMessage: $quantityError })
       }
     }
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
   }
 
   @Builder
@@ -271,7 +254,7 @@ export struct ItemFormPage {
   @Builder
   private locationSection() {
     Column({ space: $r('app.float.space_4') }) {
-      this.fieldTitle('默认位置', '批次未单独填写位置时使用这里；找物按仍有数量的批次显示。')
+      this.fieldTitle('放在哪里？', '未单独设置批次位置时，使用这里的位置。')
       LocationInput({ locationPath: $locationPath })
       if (this.managedLocations.length > 0) {
         Text('常用位置')
@@ -281,10 +264,11 @@ export struct ItemFormPage {
         LocationSelector({ selectedPath: $locationPath, locations: this.managedLocations })
       }
     }
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
   }
 
   @Builder
@@ -331,10 +315,11 @@ export struct ItemFormPage {
         }, (category: string) => category)
       }
     }
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 12 }))
       .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
@@ -351,7 +336,7 @@ export struct ItemFormPage {
           .borderRadius($r('app.float.radius_control'))
           .backgroundColor($r('app.color.status_danger_soft'))
       }
-      Button(this.saving ? '正在保存…' : '保存物品')
+      Button(this.saving ? '正在保存…' : this.editMode ? '保存修改' : '收好这件物品')
         .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
         .width('100%')
         .fontColor($r('app.color.brand_on_primary'))
@@ -370,13 +355,15 @@ export struct ItemFormPage {
         .onClick(() => this.save())
     }
     .width('100%')
-    .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_3'), bottom: $r('app.float.space_4') })
-    .backgroundColor($r('app.color.surface_app'))
+    .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), top: $r('app.float.space_3'), bottom: $r('app.float.space_4') })
+    .backgroundColor($r('app.color.surface_card'))
   }
 
   @Builder
   private sectionToggle(title: string, description: string, section: string) {
-    Row() {
+    Row({ space: 14 }) {
+      Image(section === 'category' ? $r('app.media.ui_category') : section === 'expiry' ? $r('app.media.ui_clock') : section === 'photo' ? $r('app.media.ui_photo') : $r('app.media.ui_scan'))
+        .width(22).height(22).fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
       Column({ space: $r('app.float.space_1') }) {
         Text(title)
           .fontSize($r('app.float.font_body'))
@@ -386,16 +373,18 @@ export struct ItemFormPage {
           .fontSize($r('app.float.font_caption'))
           .fontColor($r('app.color.text_secondary'))
       }
-      .layoutWeight(1)
-      Text(this.isSectionExpanded(section) ? '收起' : '展开')
-        .fontSize($r('app.float.font_caption'))
+      .layoutWeight(1).alignItems(HorizontalAlign.Start)
+      Text(this.isSectionExpanded(section) ? '−' : '+')
+        .fontSize(22)
         .fontColor($r('app.color.brand_primary'))
     }
     .width('100%')
-    .padding($r('app.float.space_4'))
+    .padding(20)
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
+    .accessibilityText(title + '，' + (this.isSectionExpanded(section) ? '收起' : '展开'))
+    .accessibilityGroup(true)
     .onClick(() => this.toggleSection(section))
   }
 
@@ -448,10 +437,11 @@ export struct ItemFormPage {
         this.reminderShortcut('提前 7 天', '7')
       }
     }
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 12 }))
       .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
@@ -526,10 +516,11 @@ export struct ItemFormPage {
         .enabled(!this.scanning)
         .onClick(() => this.scanBarcode())
     }
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 12 }))
       .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
@@ -538,6 +529,9 @@ export struct ItemFormPage {
   @Builder
   private photoSection() {
     Column({ space: $r('app.float.space_3') }) {
+      if (this.pendingPhotoUri.length > 0) {
+        Image(this.pendingPhotoUri).width('100%').height(180).objectFit(ImageFit.Cover).borderRadius(14)
+      }
       Text(this.hasPhoto() ? '当前物品已有照片；重新选择后保存会替换照片。' : '可选择系统相册照片，或在系统选择器中拍摄。')
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
@@ -569,10 +563,11 @@ export struct ItemFormPage {
           .fontColor($r('app.color.status_success'))
       }
     }
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
     .transition(TransitionEffect.OPACITY
       .combine(TransitionEffect.translate({ y: 12 }))
       .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))

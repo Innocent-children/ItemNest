@@ -1,3 +1,5 @@
+import { InventoryMetrics } from '../components/InventoryMetrics';
+import { PageHeader } from '../components/PageHeader';
 import { RoundedButtonStyle } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { ErrorState } from '../components/ErrorState';
@@ -11,6 +13,8 @@ import { AppServices } from '../service/AppServices';
 
 @Component
 export struct LendingPage {
+  @State private viewportWidth: number = 360;
+  @State private showOperationSheet: boolean = false;
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
@@ -85,12 +89,7 @@ export struct LendingPage {
 
   build() {
     Column() {
-      Text('借出与归还')
-        .fontSize($r('app.float.font_title'))
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.text_primary'))
-        .width('100%')
-        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
+      PageHeader({ title: '借出与归还', subtitle: '记清借给谁，也记得收回来。', showBack: true })
       if (this.loading) {
         LoadingState({ text: '正在读取借还记录…' })
       } else if (!this.contentLoaded && this.loadError.length > 0) {
@@ -106,93 +105,36 @@ export struct LendingPage {
                 .fontSize($r('app.float.font_section'))
                 .fontWeight(FontWeight.Bold)
                 .fontColor($r('app.color.text_primary'))
-              Text(`总量 ${this.totalQuantity}${this.unit} · 在手 ${this.availableQuantity}${this.unit} · 未归还 ${this.borrowedQuantity}${this.unit}`)
-                .fontSize($r('app.float.font_body'))
-                .fontColor($r('app.color.text_primary'))
-              Text('总量包含借出的物品。借出减少在手，归还增加在手，总量不变；用掉物品才减少总量。')
-                .fontSize($r('app.float.font_caption'))
-                .fontColor($r('app.color.text_secondary'))
+              InventoryMetrics({ total: this.totalQuantity, available: this.availableQuantity,
+                borrowed: this.borrowedQuantity, unit: this.unit })
+              Text('归还只增加在手，总量保持不变。').fontSize(12).fontColor($r('app.color.text_secondary'))
               if (this.inventoryWarning.length > 0) {
                 Text(this.inventoryWarning)
                   .fontSize($r('app.float.font_caption'))
                   .fontColor($r('app.color.status_danger'))
               }
             }
-            .width('100%')
-            .padding($r('app.float.space_4'))
+            .width('100%').alignItems(HorizontalAlign.Start)
+            .padding(24)
             .backgroundColor($r('app.color.surface_card'))
             .borderRadius($r('app.float.radius_card'))
 
             Row({ space: $r('app.float.space_2') }) {
               Button('记录借出')
+                .fontColor($r('app.color.brand_on_primary')).backgroundColor($r('app.color.brand_primary'))
                 .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
                 .layoutWeight(1)
                 .enabled(!this.submitting)
-                .onClick(() => this.startBorrow())
+                .onClick(() => { this.startBorrow(); this.showOperationSheet = true; })
               Button('记录归还')
+                .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_card'))
                 .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
                 .layoutWeight(1)
                 .enabled(!this.submitting && this.outstandingLoans.length > 0)
-                .onClick(() => this.startReturn())
+                .onClick(() => { this.startReturn(); this.showOperationSheet = true; })
             }
             .width('100%')
 
-            Text(this.formTitle())
-              .fontSize($r('app.float.font_section'))
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.text_primary'))
-            if (this.isReturnForm()) {
-              Text(this.formMode === 'editReturn' ? '归还来源保持原关联；选中其他借出可纠正归还对象。' : '选择这次归还对应的借出记录')
-                .fontSize($r('app.float.font_caption'))
-                .fontColor($r('app.color.text_secondary'))
-              ForEach(this.returnCandidates(), (loan: OutstandingLoan) => {
-                Button(`${this.selectedBorrowId === loan.borrowEvent.id ? '✓ ' : ''}${this.loanLabel(loan)}`)
-                  .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-                  .width('100%')
-                  .enabled(!this.submitting)
-                  .onClick(() => {
-                    this.selectedBorrowId = loan.borrowEvent.id;
-                  })
-              }, (loan: OutstandingLoan) => `${loan.borrowEvent.id}-${loan.remainingQuantity}-${loan.borrowEvent.counterpart ?? ''}-${loan.borrowEvent.note ?? ''}`)
-            } else {
-              TextInput({ text: this.counterpart, placeholder: '借给谁，可选' })
-                .backgroundColor($r('app.color.surface_card'))
-                .border({ width: 1, color: $r('app.color.border_subtle') })
-                .borderRadius($r('app.float.radius_control'))
-                .enabled(!this.submitting)
-                .onChange((value: string) => this.counterpart = value)
-            }
-            TextInput({ text: this.quantityText, placeholder: `数量（${this.unit}）` })
-              .type(InputType.NUMBER_DECIMAL)
-              .backgroundColor($r('app.color.surface_card'))
-              .border({ width: 1, color: $r('app.color.border_subtle') })
-              .borderRadius($r('app.float.radius_control'))
-              .enabled(!this.submitting)
-              .onChange((value: string) => this.quantityText = value)
-            TextInput({ text: this.note, placeholder: '备注，可选' })
-              .backgroundColor($r('app.color.surface_card'))
-              .border({ width: 1, color: $r('app.color.border_subtle') })
-              .borderRadius($r('app.float.radius_control'))
-              .enabled(!this.submitting)
-              .onChange((value: string) => this.note = value)
-            Row({ space: $r('app.float.space_2') }) {
-              if (this.editEventId.length > 0 || this.isReturnForm()) {
-                Button('取消')
-                  .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-                  .layoutWeight(1)
-                  .enabled(!this.submitting)
-                  .onClick(() => this.startBorrow())
-              }
-              Button(this.submitting ? '正在保存…' : this.editEventId.length > 0 ? '保存纠正' : this.isReturnForm() ? '确认归还' : '确认借出')
-                .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-                .layoutWeight(1)
-                .fontColor($r('app.color.brand_on_primary'))
-                .backgroundColor($r('app.color.brand_primary'))
-                .borderRadius($r('app.float.radius_control'))
-                .enabled(!this.submitting && this.loadError.length === 0)
-                .onClick(() => this.saveOperation())
-            }
-            .width('100%')
             if (this.actionError.length > 0) {
               ErrorState({ message: this.actionError })
             }
@@ -203,7 +145,7 @@ export struct LendingPage {
                 .onClick(() => this.loadStateForCurrentRevision(false))
             }
 
-            Text('尚未归还')
+            Text('尚未归还').width('100%')
               .fontSize($r('app.float.font_section'))
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))
@@ -224,9 +166,10 @@ export struct LendingPage {
                     .fontColor($r('app.color.text_secondary'))
                 }
                 Button('归还这笔')
+                  .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
                   .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
                   .enabled(!this.submitting)
-                  .onClick(() => this.startReturn(loan))
+                  .onClick(() => { this.startReturn(loan); this.showOperationSheet = true; })
               }
               .width('100%')
               .padding($r('app.float.space_3'))
@@ -234,7 +177,7 @@ export struct LendingPage {
               .borderRadius($r('app.float.radius_control'))
             }, (loan: OutstandingLoan) => `${loan.borrowEvent.id}-${loan.remainingQuantity}-${loan.borrowEvent.counterpart ?? ''}-${loan.borrowEvent.note ?? ''}`)
 
-            Text('操作记录')
+            Text('操作记录').width('100%')
               .fontSize($r('app.float.font_section'))
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))
@@ -243,15 +186,84 @@ export struct LendingPage {
             }, (event: TraceEvent) => `${event.id}-${event.quantity}-${event.voidedAt ?? 0}-${event.note ?? ''}-${event.counterpart ?? ''}-${JSON.stringify(event.returnAllocations ?? [])}`)
           }
           .width('100%')
-          .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
+          .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
         }
         .layoutWeight(1)
       }
     }
     .width('100%')
-    .height('100%')
+    .height('100%').constraintSize({ maxWidth: 960 })
     .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
+    .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
+    .bindSheet($$this.showOperationSheet, this.operationSheet(), {
+      height: SheetSize.LARGE, dragBar: true, showClose: true,
+      title: { title: this.formTitle() }, preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
+      width: this.viewportWidth >= 700 ? 560 : undefined,
+      backgroundColor: $r('app.color.surface_app'),
+      onWillDismiss: (action: DismissSheetAction) => { if (!this.submitting) { action.dismiss(); } }
+    })
+  }
+
+  @Builder
+  private operationSheet() {
+    Scroll() {
+      Column({ space: 16 }) {
+        if (this.isReturnForm()) {
+          Text(this.formMode === 'editReturn' ? '归还来源保持原关联；选中其他借出可纠正归还对象。' : '选择这次归还对应的借出记录')
+            .fontSize($r('app.float.font_caption'))
+            .fontColor($r('app.color.text_secondary'))
+          ForEach(this.returnCandidates(), (loan: OutstandingLoan) => {
+            Button(`${this.selectedBorrowId === loan.borrowEvent.id ? '✓ ' : ''}${this.loanLabel(loan)}`)
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .width('100%')
+              .enabled(!this.submitting)
+              .onClick(() => {
+                this.selectedBorrowId = loan.borrowEvent.id;
+              })
+          }, (loan: OutstandingLoan) => `${loan.borrowEvent.id}-${loan.remainingQuantity}-${loan.borrowEvent.counterpart ?? ''}-${loan.borrowEvent.note ?? ''}`)
+        } else {
+          TextInput({ text: this.counterpart, placeholder: '借给谁，可选' })
+            .backgroundColor($r('app.color.surface_card'))
+            .border({ width: 1, color: $r('app.color.border_subtle') })
+            .borderRadius($r('app.float.radius_control'))
+            .enabled(!this.submitting)
+            .onChange((value: string) => this.counterpart = value)
+        }
+        TextInput({ text: this.quantityText, placeholder: `数量（${this.unit}）` })
+          .type(InputType.NUMBER_DECIMAL)
+          .backgroundColor($r('app.color.surface_card'))
+          .border({ width: 1, color: $r('app.color.border_subtle') })
+          .borderRadius($r('app.float.radius_control'))
+          .enabled(!this.submitting)
+          .onChange((value: string) => this.quantityText = value)
+        TextInput({ text: this.note, placeholder: '备注，可选' })
+          .backgroundColor($r('app.color.surface_card'))
+          .border({ width: 1, color: $r('app.color.border_subtle') })
+          .borderRadius($r('app.float.radius_control'))
+          .enabled(!this.submitting)
+          .onChange((value: string) => this.note = value)
+        Row({ space: $r('app.float.space_2') }) {
+          if (this.editEventId.length > 0 || this.isReturnForm()) {
+            Button('取消')
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .layoutWeight(1)
+              .enabled(!this.submitting)
+              .onClick(() => this.showOperationSheet = false)
+          }
+          Button(this.submitting ? '正在保存…' : this.editEventId.length > 0 ? '保存纠正' : this.isReturnForm() ? '确认归还' : '确认借出')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .layoutWeight(1)
+            .fontColor($r('app.color.brand_on_primary'))
+            .backgroundColor($r('app.color.brand_primary'))
+            .borderRadius($r('app.float.radius_control'))
+            .enabled(!this.submitting && this.loadError.length === 0)
+            .onClick(() => this.saveOperation())
+        }
+        .width('100%')
+        if (this.actionError.length > 0) { ErrorState({ message: this.actionError }) }
+      }.width('100%').padding(24).alignItems(HorizontalAlign.Start)
+    }.width('100%')
   }
 
   @Builder
@@ -282,10 +294,12 @@ export struct LendingPage {
       if (event.voidedAt === undefined && (event.type === TraceEventType.BORROW || event.type === TraceEventType.RETURN)) {
         Row({ space: $r('app.float.space_2') }) {
           Button('纠正')
+            .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
             .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
             .enabled(!this.submitting)
-            .onClick(() => this.startCorrection(event))
+            .onClick(() => { this.startCorrection(event); this.showOperationSheet = true; })
           Button('撤销')
+            .fontColor($r('app.color.text_secondary')).backgroundColor($r('app.color.surface_input'))
             .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
             .enabled(!this.submitting)
             .onClick(() => this.confirmVoid(event))
@@ -293,7 +307,8 @@ export struct LendingPage {
       }
     }
     .width('100%')
-    .padding($r('app.float.space_3'))
+    .alignItems(HorizontalAlign.Start)
+    .padding(20)
     .backgroundColor($r('app.color.surface_card'))
     .borderRadius($r('app.float.radius_control'))
   }
@@ -390,6 +405,7 @@ export struct LendingPage {
         return;
       }
       const message = this.editEventId.length > 0 ? '记录已纠正' : this.isReturnForm() ? '归还已记录' : '借出已记录';
+      this.showOperationSheet = false;
       this.startBorrow();
       this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadState(false);
@@ -411,7 +427,7 @@ export struct LendingPage {
       const confirm = await this.getUIContext().getPromptAction().showDialog({
         title: `撤销这笔${this.eventLabel(event.type)}？`,
         message: `${event.quantity}${this.unit}${event.counterpart === undefined ? '' : ` · ${event.counterpart}`}。撤销后重新计算未归还和在手数量，原记录仍保留并标记为已撤销。`,
-        buttons: [{ text: '取消', color: '#777777' }, { text: '确认撤销', color: '#B42318' }]
+        buttons: [{ text: '取消', color: $r('app.color.text_secondary') }, { text: '确认撤销', color: $r('app.color.status_danger') }]
       });
       if (confirm.index !== 1) {
         return;

@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "module description"
+      "value": "个人物品收纳与提醒"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "description"
+      "value": "记录物品位置、数量与到期日期"
     },
     {
       "name": "EntryAbility_label",
-      "value": "label"
+      "value": "ItemTrace"
     }
   ]
 }

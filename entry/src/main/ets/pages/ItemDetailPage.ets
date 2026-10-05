@@ -1,3 +1,5 @@
+import { InventoryMetrics } from '../components/InventoryMetrics';
+import { PageHeader } from '../components/PageHeader';
 import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
@@ -33,6 +35,9 @@ interface ManagementEntryParams {
 
 @Component
 export struct ItemDetailPage {
+  @State private viewportWidth: number = 360;
+  @State private showActionSheet: boolean = false;
+  @State private actionSheetMode: string = 'consume';
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
@@ -136,39 +141,8 @@ export struct ItemDetailPage {
   build() {
     Stack({ alignContent: Alignment.Center }) {
       Column() {
-        Row() {
-          Column({ space: $r('app.float.space_1') }) {
-            Text('物品详情')
-              .fontSize($r('app.float.font_title'))
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.text_primary'))
-            Text('查看记录、更新信息或删除物品')
-              .fontSize($r('app.float.font_caption'))
-              .fontColor($r('app.color.text_secondary'))
-          }
-          .layoutWeight(1)
-          if (this.item !== undefined) {
-            Button('编辑')
-              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-              .fontColor($r('app.color.brand_primary'))
-              .backgroundColor($r('app.color.surface_card'))
-              .border({ width: 1, color: $r('app.color.border_subtle') })
-              .borderRadius($r('app.float.radius_control'))
-              .onClick(() => this.openEdit())
-            Button(this.deletePreviewLoading ? '正在读取…' : '删除')
-              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-              .margin({ left: $r('app.float.space_2') })
-              .fontColor($r('app.color.status_danger'))
-              .backgroundColor($r('app.color.status_danger_soft'))
-              .borderRadius($r('app.float.radius_control'))
-              .enabled(!this.deletePreviewLoading && !this.deleting && !this.consuming)
-              .onClick(() => this.prepareDeletePreview())
-          }
-        }
-        .width('100%')
-        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
+        PageHeader({ title: '物品档案', showBack: true, actionText: this.item === undefined ? '' : '编辑',
+          actionEnabled: !this.deleting && !this.consuming, onAction: () => this.openEdit() })
 
         if (this.loading) {
           LoadingState({ text: '正在读取物品详情…' })
@@ -202,66 +176,117 @@ export struct ItemDetailPage {
       })
     }
     .width('100%')
-    .height('100%')
+    .height('100%').backgroundColor($r('app.color.surface_app'))
+    .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
+    .bindSheet($$this.showActionSheet, this.actionSheet(), {
+      height: SheetSize.FIT_CONTENT, dragBar: true, showClose: true,
+      title: { title: this.actionSheetMode === 'consume' ? '记录这次用量' : '补货提醒' },
+      backgroundColor: $r('app.color.surface_app'), preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
+      width: this.viewportWidth >= 700 ? 560 : undefined,
+      onWillDismiss: (action: DismissSheetAction) => {
+        if (!this.consuming && !this.thresholdSaving) { action.dismiss(); }
+      }
+    })
   }
 
   @Builder
   private detailContent($$: ItemDetailParams) {
     Scroll() {
       Column({ space: $r('app.float.space_4') }) {
-        Column({ space: $r('app.float.space_3') }) {
-          Row({ space: $r('app.float.space_3') }) {
-            Text($$.item.name.substring(0, 1))
-              .fontSize($r('app.float.font_title'))
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.brand_primary'))
-              .backgroundColor($r('app.color.surface_accent'))
-              .width(60)
-              .height(60)
-              .borderRadius(30)
-              .textAlign(TextAlign.Center)
-              .padding({ top: 12 })
-            Column({ space: $r('app.float.space_1') }) {
-              Text($$.item.name)
-                .fontSize($r('app.float.font_title'))
-                .fontWeight(FontWeight.Bold)
-                .fontColor($r('app.color.text_primary'))
-              Text(`总量 ${$$.item.quantity}${$$.item.unit}（包含借出）`)
-                .fontSize($r('app.float.font_body'))
-                .fontWeight(FontWeight.Medium)
-                .fontColor($r('app.color.brand_primary'))
+        Column({ space: 20 }) {
+          Row({ space: 18 }) {
+            if (this.photoPath.length > 0) {
+              Image(this.photoPath).width(84).height(96).objectFit(ImageFit.Cover).borderRadius(18)
+                .accessibilityText('物品照片')
+            } else {
+              Stack() {
+                Image($r('app.media.ui_box')).width(38).height(38)
+                  .fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
+              }.width(84).height(96).borderRadius(18).backgroundColor($r('app.color.surface_accent'))
             }
-            .layoutWeight(1)
+            Column({ space: 10 }) {
+              Text($$.item.category ?? '我的物品').fontSize(12).fontColor($r('app.color.text_secondary'))
+              Text($$.item.name).fontSize(27).fontWeight(FontWeight.Bold)
+                .fontColor($r('app.color.text_primary')).width('100%')
+              ExpiryStatusTag({ status: this.expiryStatus })
+            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+          }.width('100%')
+          Divider().color($r('app.color.border_subtle'))
+          InventoryMetrics({ total: $$.item.quantity, unit: $$.item.unit,
+            available: this.managementReady ? this.availableQuantity : undefined,
+            borrowed: this.managementReady ? this.borrowedQuantity : undefined })
+          Text('总量包含借出，归还不重复增加总量。').fontSize(11).fontColor($r('app.color.text_secondary'))
+          if (this.inventoryWarning.length > 0) {
+            Text(this.inventoryWarning).fontSize(13).fontColor($r('app.color.status_danger'))
           }
-          ExpiryStatusTag({ status: this.expiryStatus })
-        }
-        .width('100%')
-        .padding($r('app.float.space_4'))
-        .borderRadius($r('app.float.radius_card'))
-        .backgroundColor($r('app.color.surface_card'))
-        .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+          if (this.managementLoadError.length > 0) {
+            ErrorState({ message: this.managementLoadError })
+            Button('重试读取数量').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .onClick(() => this.loadDetailForCurrentRevision(false))
+          }
+        }.width('100%').padding(24).borderRadius(22).backgroundColor($r('app.color.surface_card'))
+          .alignItems(HorizontalAlign.Start)
 
         if (this.actionError.length > 0) {
           this.actionErrorPanel()
         }
 
-        this.consumptionSection({ item: $$.item })
-        this.managementSection({ item: $$.item })
-        this.lowStockSection({ item: $$.item })
         this.locationSection({ item: $$.item })
+        this.managementSection({ item: $$.item })
         this.expirySection({ item: $$.item })
-        this.notesSection({ item: $$.item })
-        this.photoSection({ item: $$.item })
+        if ($$.item.notes !== undefined || $$.item.barcode !== undefined) {
+          this.notesSection({ item: $$.item })
+        }
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 12 }) {
+            Image($r('app.media.ui_box')).width(22).height(22).fillColor($r('app.color.brand_primary'))
+              .accessibilityLevel('no')
+            Column({ space: 5 }) {
+              Text('补货提醒').fontSize(15).fontColor($r('app.color.text_primary'))
+              Text(this.thresholdLoadError.length > 0 ? '暂时无法读取，点击重试' :
+                this.thresholdEnabled ? `总量少于 ${this.thresholdText}${$$.item.unit} 时标记` : '还未启用')
+                .fontSize(12).fontColor($r('app.color.text_secondary'))
+            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+            Image($r('app.media.ui_chevron')).width(14).height(14)
+              .fillColor($r('app.color.text_secondary')).accessibilityLevel('no')
+          }.width('100%')
+        }.width('100%').padding(20).borderRadius(20).backgroundColor($r('app.color.surface_card'))
+          .onClick(() => { this.actionSheetMode = 'stock'; this.showActionSheet = true; })
+        if (this.photoPath.length > 0 || $$.item.photoLocalId !== undefined) {
+          this.photoSection({ item: $$.item })
+        }
+        Button(this.deletePreviewLoading ? '正在读取关联记录…' : '删除这件物品')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .width('100%').fontSize(13).fontColor($r('app.color.status_danger'))
+          .backgroundColor(Color.Transparent)
+          .enabled(!this.deletePreviewLoading && !this.deleting && !this.consuming)
+          .onClick(() => this.prepareDeletePreview())
 
         if (this.deleting) {
           LoadingState({ text: '正在删除物品…' })
         }
       }
       .width('100%')
-      .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
+      .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
       .alignItems(HorizontalAlign.Start)
     }
     .layoutWeight(1)
+  }
+
+  @Builder
+  private actionSheet() {
+    Scroll() {
+      Column({ space: 16 }) {
+        if (this.actionError.length > 0) { this.actionErrorPanel() }
+        if (this.item !== undefined) {
+          if (this.actionSheetMode === 'consume') {
+            this.consumptionSection({ item: this.item })
+          } else {
+            this.lowStockSection({ item: this.item })
+          }
+        }
+      }.width('100%').padding({ left: 24, right: 24, bottom: 24 })
+    }.width('100%')
   }
 
   @Builder
@@ -345,10 +370,11 @@ export struct ItemDetailPage {
       }
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
   }
 
   @Builder
@@ -366,10 +392,11 @@ export struct ItemDetailPage {
       this.detailRow({ label: '分类', value: $$.item.category ?? '未设置' })
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
   }
 
   @Builder
@@ -399,10 +426,11 @@ export struct ItemDetailPage {
       }
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
   }
 
   @Builder
@@ -424,10 +452,11 @@ export struct ItemDetailPage {
       }
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
   }
 
   @Builder
@@ -438,11 +467,6 @@ export struct ItemDetailPage {
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
       if (this.photoPath.length > 0) {
-        Image(this.photoPath)
-          .width('100%')
-          .height(180)
-          .objectFit(ImageFit.Cover)
-          .borderRadius($r('app.float.radius_control'))
         Button(this.removingPhoto ? '正在移除照片…' : '移除照片')
           .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
           .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
@@ -458,10 +482,11 @@ export struct ItemDetailPage {
       }
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
   }
 
   @Builder
@@ -653,10 +678,11 @@ export struct ItemDetailPage {
         .onClick(() => this.consume())
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
   }
 
   private activeLocationText(item: Item): string {
@@ -692,6 +718,7 @@ export struct ItemDetailPage {
         this.actionError = '消耗已记录，系统提醒更新失败，可在下方重试同步';
         notice += '，提醒更新失败';
       }
+      this.showActionSheet = false;
       this.consumeQuantityText = '1';
       this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadDetail(false);
@@ -741,50 +768,32 @@ export struct ItemDetailPage {
 
   @Builder
   private managementSection($$: ItemDetailParams) {
-    Column({ space: $r('app.float.space_3') }) {
-      Row() {
-        Text('管理动作')
-          .fontSize($r('app.float.font_section'))
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-        Text('批次 / 借还')
-          .fontSize($r('app.float.font_caption'))
-          .fontColor($r('app.color.text_secondary'))
-      }
-      Row({ space: $r('app.float.space_2') }) {
-        this.managementEntry({ title: '批次', description: this.batchCount === 0 ? `汇总 ${$$.item.quantity}${$$.item.unit}` : `${this.batchCount} 个批次`, route: RouteName.BATCH_LIST, itemId: $$.item.id })
-        this.managementEntry({ title: '借还', description: this.borrowedQuantity === 0 ? '当前无借出' : `借出 ${this.borrowedQuantity}${$$.item.unit}`, route: RouteName.LENDING, itemId: $$.item.id })
-      }
-      .width('100%')
-    }
-    .width('100%')
-    .padding($r('app.float.space_4'))
-    .borderRadius($r('app.float.radius_card'))
-    .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+    Row({ space: 10 }) {
+      Button({ type: ButtonType.Normal }) {
+        Column({ space: 12 }) {
+          Image($r('app.media.ui_minus')).width(22).height(22).fillColor($r('app.color.brand_on_primary'))
+          Text('记录用量').fontSize(13).fontWeight(FontWeight.Medium).fontColor($r('app.color.brand_on_primary'))
+        }.width('100%')
+      }.layoutWeight(1).padding(18).borderRadius(18).backgroundColor($r('app.color.brand_primary'))
+        .enabled(this.managementReady && this.availableQuantity > 0 && !this.consuming && !this.deleting)
+        .onClick(() => { this.actionError = ''; this.actionSheetMode = 'consume'; this.showActionSheet = true; })
+      this.managementEntry({ title: '批次管理', description: `${this.batchCount} 个批次`,
+        route: RouteName.BATCH_LIST, itemId: $$.item.id })
+      this.managementEntry({ title: '借出归还', description: '查看借还记录', route: RouteName.LENDING, itemId: $$.item.id })
+    }.width('100%')
   }
 
   @Builder
   private managementEntry($$: ManagementEntryParams) {
-    Column({ space: $r('app.float.space_1') }) {
-      Text($$.title)
-        .fontSize($r('app.float.font_body'))
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.text_primary'))
-      Text($$.description)
-        .fontSize($r('app.float.font_caption'))
-        .fontColor($r('app.color.text_secondary'))
-      Text('进入')
-        .fontSize($r('app.float.font_caption'))
-        .fontColor($r('app.color.brand_primary'))
-    }
-    .layoutWeight(1)
-    .padding($r('app.float.space_3'))
-    .borderRadius($r('app.float.radius_control'))
-    .backgroundColor($r('app.color.surface_app'))
-    .border({ width: 1, color: $r('app.color.border_subtle') })
-    .onClick(() => NavigationHelper.pushUrl({ url: $$.route, params: { itemId: $$.itemId } }))
+    Button({ type: ButtonType.Normal }) {
+      Column({ space: 12 }) {
+        Image($$.route === RouteName.BATCH_LIST ? $r('app.media.ui_box') : $r('app.media.ui_lend'))
+          .width(22).height(22).fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
+        Text($$.title).fontSize(13).fontWeight(FontWeight.Medium).fontColor($r('app.color.brand_primary'))
+      }.width('100%')
+    }.layoutWeight(1).padding(18).borderRadius(18).backgroundColor($r('app.color.surface_card'))
+      .accessibilityText($$.title + '，' + $$.description)
+      .onClick(() => NavigationHelper.pushUrl({ url: $$.route, params: { itemId: $$.itemId } }))
   }
 
   private async loadManagementState(item: Item, requestId?: number): Promise<void> {

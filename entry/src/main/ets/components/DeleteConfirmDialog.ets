@@ -1,62 +1,39 @@
-import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 @Component
 export struct DeleteConfirmDialog {
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @Link visible: boolean;
   @Link confirmed: boolean;
   @Prop title: string = '确认删除物品？';
   @Prop description: string = '删除后不可恢复。';
   @Prop confirmText: string = '确认删除';
+  private opening: boolean = false;
 
   build() {
     if (this.visible) {
-      Column() {
-        Column({ space: $r('app.float.space_4') }) {
-          Text(this.title)
-            .fontSize($r('app.float.font_section'))
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.text_primary'))
-          Text(this.description)
-            .fontSize($r('app.float.font_body'))
-            .fontColor($r('app.color.text_secondary'))
-          Row({ space: $r('app.float.space_3') }) {
-            Button('取消')
-              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-              .layoutWeight(1)
-              .fontColor($r('app.color.brand_primary'))
-              .backgroundColor($r('app.color.surface_accent'))
-              .borderRadius($r('app.float.radius_control'))
-              .onClick(() => {
-                this.visible = false;
-              })
-            Button(this.confirmText)
-              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-              .layoutWeight(1)
-              .fontColor($r('app.color.brand_on_primary'))
-              .backgroundColor($r('app.color.status_danger'))
-              .borderRadius($r('app.float.radius_control'))
-              .onClick(() => {
-                this.visible = false;
-                this.confirmed = true;
-              })
-          }
-        }
-        .width('88%')
-        .constraintSize({ maxWidth: 480 })
-        .padding($r('app.float.space_6'))
-        .borderRadius($r('app.float.radius_card'))
-        .backgroundColor($r('app.color.surface_card'))
-        .transition(TransitionEffect.OPACITY
-          .combine(TransitionEffect.scale({ x: 0.96, y: 0.96 }))
-          .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
-      }
-      .width('100%')
-      .height('100%')
-      .justifyContent(FlexAlign.Center)
-      .backgroundColor('#66000000')
-      .transition(TransitionEffect.opacity(0).animation(uiSpring(this.reduceAnimation, 0.3, 0.68)))
+      Row().width(0).height(0).accessibilityLevel('no')
+        .onAppear(() => this.openDialog())
+    }
+  }
+
+  /**
+   * 等待本次标题和描述传入后再打开系统弹窗，只有点击确认才触发操作。
+   */
+  private async openDialog(): Promise<void> {
+    if (!this.visible || this.opening) { return; }
+    this.opening = true;
+    try {
+      const result = await this.getUIContext().getPromptAction().showDialog({
+        title: this.title, message: this.description,
+        buttons: [
+          { text: '取消', color: $r('app.color.text_secondary') },
+          { text: this.confirmText, color: $r('app.color.status_danger') }
+        ]
+      });
+      this.visible = false;
+      if (result.index === 1) { this.confirmed = true; }
+    } catch (_) {
+      this.visible = false;
+    } finally {
+      this.opening = false;
     }
   }
 }

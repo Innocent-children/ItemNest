@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/PageHeader';
 import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
@@ -73,27 +74,10 @@ export struct BatchListPage {
   build() {
     Stack({ alignContent: Alignment.Center }) {
       Column() {
-        Row() {
-          Column({ space: $r('app.float.space_1') }) {
-            Text('批次管理')
-              .fontSize($r('app.float.font_title'))
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.text_primary'))
-            Text('批次数量是拥有的总量，包含借出部分')
-              .fontSize($r('app.float.font_caption'))
-              .fontColor($r('app.color.text_secondary'))
-          }
-          .layoutWeight(1)
-          Button('+ 新增')
-            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-            .fontColor($r('app.color.brand_on_primary'))
-            .backgroundColor($r('app.color.brand_primary'))
-            .borderRadius($r('app.float.radius_control'))
-            .onClick(() => NavigationHelper.pushUrl({ url: RouteName.BATCH_FORM, params: { mode: 'create', itemId: this.itemId } }))
-        }
-        .width('100%')
-        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
+        PageHeader({ title: '批次管理', subtitle: '分清位置、数量与到期日期。', showBack: true,
+          actionText: '新增批次', actionIcon: $r('app.media.dock_add'),
+          onAction: () => NavigationHelper.pushUrl({ url: RouteName.BATCH_FORM,
+            params: { mode: 'create', itemId: this.itemId } }) })
 
         if (this.actionError.length > 0 || (this.errorMessage.length > 0 && this.batches.length > 0)) {
           Column({ space: $r('app.float.space_2') }) {
@@ -139,22 +123,17 @@ export struct BatchListPage {
                       .fontWeight(FontWeight.Bold)
                       .fontColor($r('app.color.text_primary'))
                       .layoutWeight(1)
-                    Button('编辑')
-                      .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-                      .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-                      .fontColor($r('app.color.brand_primary'))
-                      .backgroundColor($r('app.color.surface_accent'))
-                      .borderRadius($r('app.float.radius_control'))
-                      .onClick(() => NavigationHelper.pushUrl({ url: RouteName.BATCH_FORM, params: { mode: 'edit', itemId: this.itemId, batchId: batch.id } }))
-                    Button(this.deleting ? '处理中…' : (this.batches.length === 1 ? '清空数量' : '删除'))
-                      .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-                      .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-                      .fontColor($r('app.color.status_danger'))
-                      .backgroundColor($r('app.color.status_danger_soft'))
-                      .borderRadius($r('app.float.radius_control'))
+                    Button({ type: ButtonType.Normal }) {
+                      Image($r('app.media.ui_more')).width(22).height(22)
+                        .fillColor($r('app.color.text_secondary')).accessibilityLevel('no')
+                    }.width(44).height(44).padding(0).borderRadius(22)
+                      .backgroundColor($r('app.color.surface_input')).accessibilityText('批次操作')
                       .enabled(!this.deleting)
-                      .margin({ left: $r('app.float.space_2') })
-                      .onClick(() => this.requestDeleteBatch(batch.id))
+                      .bindMenu([
+                        { value: '编辑批次', action: () => NavigationHelper.pushUrl({ url: RouteName.BATCH_FORM,
+                          params: { mode: 'edit', itemId: this.itemId, batchId: batch.id } }) },
+                        { value: this.batches.length === 1 ? '清空数量' : '删除批次', action: () => this.requestDeleteBatch(batch.id) }
+                      ])
                   }
                   Text(`到期：${batch.expirationDate ?? '未设置'} · 位置：${batch.locationPath ?? '未设置'}`)
                     .fontSize($r('app.float.font_caption'))
@@ -169,16 +148,16 @@ export struct BatchListPage {
                 .padding($r('app.float.space_4'))
                 .borderRadius($r('app.float.radius_card'))
                 .backgroundColor($r('app.color.surface_card'))
-                .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
               }
             }, (batch: Batch) => `${batch.id}:${batch.updatedAt}:${batch.quantity}:${batch.expirationDate ?? ''}`)
           }
           .layoutWeight(1)
-          .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
+          .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
         }
       }
       .width('100%')
-      .height('100%')
+      .height('100%').constraintSize({ maxWidth: 960 })
       .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
       .backgroundColor($r('app.color.surface_app'))
 

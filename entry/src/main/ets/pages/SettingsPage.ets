@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/PageHeader';
 import { RoundedButtonStyle, dockContentInset, uiSpring } from '../ui/VisualStyle';
 import { notificationManager } from '@kit.NotificationKit';
 import { common, ConfigurationConstant } from '@kit.AbilityKit';
@@ -13,6 +14,10 @@ import { ImportPreview } from '../common/ImportValidation';
 
 @Component
 export struct SettingsPage {
+  @State private viewportWidth: number = 360;
+  @State private showReminderSettings: boolean = false;
+  @State private savedPreferenceSignature: string = '';
+  @State private preferencesReady: boolean = false;
   @Prop isMainTab: boolean = false;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
@@ -49,29 +54,8 @@ export struct SettingsPage {
 
   build() {
     Column() {
-      Row() {
-        Column({ space: $r('app.float.space_1') }) {
-          Text('设置')
-            .fontSize($r('app.float.font_title'))
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.text_primary'))
-          Text('偏好仅保存在当前设备，不包含物品数据。')
-            .fontSize($r('app.float.font_caption'))
-            .fontColor($r('app.color.text_secondary'))
-        }
-        .layoutWeight(1)
-        if (!this.isMainTab) {
-          Button('返回')
-            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-            .fontColor($r('app.color.brand_primary'))
-            .backgroundColor($r('app.color.surface_accent'))
-            .borderRadius($r('app.float.radius_control'))
-            .onClick(() => NavigationHelper.back())
-        }
-      }
-      .width('100%')
-      .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
+      PageHeader({ title: '我的空间', subtitle: '让整理，更合你的习惯。',
+        eyebrow: this.isMainTab ? 'MAKE IT YOURS' : '', showBack: !this.isMainTab })
 
       if (this.loading) {
         LoadingState({ text: '正在读取设置…' })
@@ -79,11 +63,11 @@ export struct SettingsPage {
         Scroll() {
           Row() {
             Column({ space: $r('app.float.space_4') }) {
-              this.reminderCard()
-              this.sortCard()
-              this.homeCard()
               this.themeCard()
               this.managementCard()
+              this.reminderEntry()
+              this.homeCard()
+              this.sortCard()
               this.backupCard()
               if (this.errorMessage.length > 0) {
                 Text(this.errorMessage)
@@ -93,19 +77,11 @@ export struct SettingsPage {
                   .borderRadius($r('app.float.radius_control'))
                   .backgroundColor($r('app.color.status_danger_soft'))
               }
-              Button(this.saving ? '正在保存…' : '保存设置')
-                .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-                .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-                .width('100%')
-                .fontColor($r('app.color.brand_on_primary'))
-                .backgroundColor($r('app.color.brand_primary'))
-                .borderRadius($r('app.float.radius_control'))
-                .enabled(!this.saving && !this.reminderSyncing)
-                .onClick(() => this.save())
+
             }
             .width('100%')
             .constraintSize({ maxWidth: 880 })
-            .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: dockContentInset(this.dockVisible, this.keyboardVisible) })
+            .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: dockContentInset(this.dockVisible, this.keyboardVisible) })
           }
           .width('100%')
           .justifyContent(FlexAlign.Center)
@@ -113,6 +89,18 @@ export struct SettingsPage {
         .layoutWeight(1)
       }
 
+      if (!this.loading && (this.hasPreferenceChanges() || this.saving)) {
+        Column({ space: 8 }) {
+          Text('有未保存的偏好更改').fontSize(12).fontColor($r('app.color.text_secondary'))
+          Button(this.saving ? '正在保存…' : '保存偏好')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .width('100%').height(48).fontColor($r('app.color.brand_on_primary'))
+            .backgroundColor($r('app.color.brand_primary'))
+            .enabled(this.preferencesReady && !this.saving && !this.reminderSyncing).onClick(() => this.save())
+        }.width('100%').constraintSize({ maxWidth: 880 })
+          .padding({ left: 24, right: 24, top: 12, bottom: dockContentInset(this.dockVisible, this.keyboardVisible) })
+          .backgroundColor($r('app.color.surface_card'))
+      }
       if (this.loading) {
         Blank().layoutWeight(1)
       }
@@ -121,6 +109,62 @@ export struct SettingsPage {
     .height('100%')
     .padding({ top: this.safeAreaTop, left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
+    .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
+    .bindSheet($$this.showReminderSettings, this.reminderSettingsSheet(), {
+      height: SheetSize.LARGE, dragBar: true, showClose: true,
+      title: { title: '到期提醒', subtitle: '提前一步，减少遗忘' },
+      backgroundColor: $r('app.color.surface_app'), preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
+      width: this.viewportWidth >= 700 ? 560 : undefined
+    })
+  }
+
+  @Builder
+  private reminderEntry() {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 14 }) {
+        Image($r('app.media.ui_clock')).width(24).height(24)
+          .fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
+        Column({ space: 6 }) {
+          Text('到期提醒').fontSize(16).fontWeight(FontWeight.Medium).fontColor($r('app.color.text_primary'))
+          Text(this.reminderEnabled ? `提前 ${this.defaultReminderDays} 天提醒` : '尚未开启系统提醒')
+            .fontSize(12).fontColor($r('app.color.text_secondary'))
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        Image($r('app.media.ui_chevron')).width(14).height(14)
+          .fillColor($r('app.color.text_secondary')).accessibilityLevel('no')
+      }.width('100%')
+    }.width('100%').padding(22).borderRadius(20).backgroundColor($r('app.color.surface_card'))
+      .onClick(() => this.showReminderSettings = true)
+  }
+
+  @Builder
+  private reminderSettingsSheet() {
+    Column() {
+      Scroll() {
+        Column({ space: 16 }) {
+          this.reminderCard()
+          if (this.errorMessage.length > 0) {
+            Text(this.errorMessage).fontSize(13).fontColor($r('app.color.status_danger'))
+          }
+        }.width('100%').padding(24)
+      }.width('100%').layoutWeight(1)
+      Row() {
+        Button(this.saving ? '正在保存…' : this.hasPreferenceChanges() ? '保存偏好与提醒' : '已保存')
+        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        .width('100%').height(48).fontColor($r('app.color.brand_on_primary'))
+        .backgroundColor($r('app.color.brand_primary'))
+        .enabled(this.hasPreferenceChanges() && this.preferencesReady && !this.saving && !this.reminderSyncing)
+        .onClick(() => this.save())
+      }.width('100%').padding({ left: 24, right: 24, bottom: 24 })
+    }.width('100%').height('100%')
+  }
+
+  private preferenceSignature(): string {
+    return JSON.stringify([this.defaultReminderDays, this.defaultSort, this.showRecentSection,
+      this.showExpirySection, this.showStockSection, this.themeMode, this.reminderEnabled]);
+  }
+
+  private hasPreferenceChanges(): boolean {
+    return this.preferencesReady && this.preferenceSignature() !== this.savedPreferenceSignature;
   }
 
   @Builder
@@ -134,13 +178,13 @@ export struct SettingsPage {
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
     }
-    .width('100%')
+    .width('100%').alignItems(HorizontalAlign.Start)
   }
 
   @Builder
   private reminderCard() {
     Column({ space: $r('app.float.space_3') }) {
-      this.cardTitle('提醒', '保存设置会同步已有物品。已进入提醒期的库存会安排在下一分钟；已过期或无库存的物品不再创建提醒。')
+      this.cardTitle('提醒偏好', '保存后同步已有物品，已过期或无库存的物品不再创建提醒。')
       Text('默认提前提醒天数')
         .fontSize($r('app.float.font_body'))
         .fontColor($r('app.color.text_primary'))
@@ -191,10 +235,11 @@ export struct SettingsPage {
       }
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
   }
 
   private async loadNotificationStatus(): Promise<void> {
@@ -233,7 +278,7 @@ export struct SettingsPage {
   @Builder
   private sortCard() {
     Column({ space: $r('app.float.space_3') }) {
-      this.cardTitle('列表排序', '默认排序不影响当前的搜索与筛选条件。')
+      this.cardTitle('默认排序', '也可以在物品列表中临时调整。')
       Flex({ wrap: FlexWrap.Wrap }) {
         this.sortChoiceButton('最近更新', ItemSortMode.UPDATED_DESC)
         this.sortChoiceButton('最近添加', ItemSortMode.CREATED_DESC)
@@ -242,31 +287,33 @@ export struct SettingsPage {
       .width('100%')
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
   }
 
   @Builder
   private homeCard() {
     Column({ space: $r('app.float.space_3') }) {
-      this.cardTitle('首页内容', '关闭分区不会删除任何本地物品。')
+      this.cardTitle('首页内容', '选择打开应用时想看到的内容。')
       this.switchRow('最近添加', this.showRecentSection, (value: boolean) => this.showRecentSection = value)
       this.switchRow('到期待处理', this.showExpirySection, (value: boolean) => this.showExpirySection = value)
       this.switchRow('待补货', this.showStockSection, (value: boolean) => this.showStockSection = value)
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
   }
 
   @Builder
   private themeCard() {
     Column({ space: $r('app.float.space_3') }) {
-      this.cardTitle('外观', '主题偏好保存后会立即应用到当前界面。')
+      this.cardTitle('外观', '选择让你舒服的明暗。保存后生效。')
       Flex({ wrap: FlexWrap.Wrap }) {
         this.themeChoiceButton('跟随系统', ThemeMode.SYSTEM)
         this.themeChoiceButton('浅色', ThemeMode.LIGHT)
@@ -275,46 +322,49 @@ export struct SettingsPage {
       .width('100%')
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
   }
 
   @Builder
   private managementCard() {
     Column({ space: $r('app.float.space_3') }) {
-      this.cardTitle('数据管理', '维护常用位置和分类，不影响已有物品记录。')
-      Row({ space: $r('app.float.space_2') }) {
-        Button('位置管理')
-          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-          .layoutWeight(1)
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_accent'))
-          .borderRadius($r('app.float.radius_control'))
-          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.LOCATION_MANAGEMENT }))
-        Button('分类管理')
-          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-          .layoutWeight(1)
-          .fontColor($r('app.color.brand_primary'))
-          .backgroundColor($r('app.color.surface_accent'))
-          .borderRadius($r('app.float.radius_control'))
-          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.CATEGORY_MANAGEMENT }))
-      }
-      .width('100%')
+      this.cardTitle('整理方式', '常用位置和分类，由你定义。')
+      this.managementRow('存放位置', '房间、柜子、抽屉…', $r('app.media.ui_location'), RouteName.LOCATION_MANAGEMENT)
+      Divider().color($r('app.color.border_subtle'))
+      this.managementRow('物品分类', '按用途，或按你的习惯', $r('app.media.ui_category'), RouteName.CATEGORY_MANAGEMENT)
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
+  }
+
+  @Builder
+  private managementRow(title: string, subtitle: string, icon: Resource, route: RouteName) {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 14 }) {
+        Image(icon).width(22).height(22).fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
+        Column({ space: 5 }) {
+          Text(title).fontSize(15).fontColor($r('app.color.text_primary'))
+          Text(subtitle).fontSize(12).fontColor($r('app.color.text_secondary'))
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        Image($r('app.media.ui_chevron')).width(14).height(14)
+          .fillColor($r('app.color.text_secondary')).accessibilityLevel('no')
+      }.width('100%')
+    }.width('100%').padding({ top: 12, bottom: 12 }).backgroundColor(Color.Transparent)
+      .onClick(() => NavigationHelper.pushUrl({ url: route }))
   }
 
   @Builder
   private backupCard() {
     Column({ space: $r('app.float.space_3') }) {
+      Image($r('app.media.ui_backup')).width(24).height(24).fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
       this.cardTitle('本地备份与恢复', '备份包含物品、批次、位置、分类、借还记录、库存阈值和照片；不包含系统提醒或偏好设置。')
       Button(this.backupBusy ? '正在处理…' : '保存备份文件')
         .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
@@ -369,10 +419,11 @@ export struct SettingsPage {
       }
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
-    .shadow({ radius: 12, color: $r('app.color.shadow_soft'), offsetY: 4 })
+
   }
 
   private async saveBackupFile(): Promise<void> {
@@ -558,6 +609,8 @@ export struct SettingsPage {
     this.themeMode = preferences.themeMode;
     this.reminderEnabled = preferences.reminderEnabled;
     this.persistedReminderEnabled = preferences.reminderEnabled;
+    this.preferencesReady = true;
+    this.savedPreferenceSignature = this.preferenceSignature();
   }
 
   private async save(): Promise<void> {

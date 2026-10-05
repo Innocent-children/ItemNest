@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/PageHeader';
 import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
@@ -7,6 +8,8 @@ import { AppServices } from '../service/AppServices';
 
 @Component
 export struct CategoryManagementPage {
+  @State private showCreateSheet: boolean = false;
+  @State private viewportWidth: number = 360;
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
@@ -50,42 +53,24 @@ export struct CategoryManagementPage {
 
   build() {
     Column() {
-      Text('分类管理')
-        .fontSize($r('app.float.font_title'))
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.text_primary'))
-        .width('100%')
-        .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), top: $r('app.float.space_4'), bottom: $r('app.float.space_3') })
-
+      PageHeader({ title: '物品分类', subtitle: '按你的习惯，把物品整理好。', showBack: true,
+        actionText: '新增分类', actionIcon: $r('app.media.dock_add'), actionEnabled: !this.operating && !this.loading,
+        onAction: () => { this.actionError = ''; this.showCreateSheet = true; } })
       if (this.loading) {
         LoadingState({ text: '正在读取分类…' })
       } else {
         Scroll() {
           Column({ space: $r('app.float.space_4') }) {
-            TextInput({ text: this.name, placeholder: '新增分类名称' })
-              .backgroundColor($r('app.color.surface_card'))
-              .border({ width: 1, color: $r('app.color.border_subtle') })
-              .borderRadius($r('app.float.radius_control'))
-              .enabled(!this.operating)
-              .onChange((value: string) => this.name = value)
-            Button('新增分类')
-              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-              .width('100%')
-              .fontColor($r('app.color.brand_on_primary'))
-              .backgroundColor($r('app.color.brand_primary'))
-              .borderRadius($r('app.float.radius_control'))
-              .enabled(!this.operating)
-              .scale({ x: this.pressedAction === 'create' && !this.reduceAnimation ? 0.96 : 1, y: this.pressedAction === 'create' && !this.reduceAnimation ? 0.96 : 1 })
-              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-              .onTouch((event: TouchEvent) => this.updatePressedAction(event, 'create'))
-              .onClick(() => this.createCategory())
             if (this.actionError.length > 0) {
               ErrorState({ message: this.actionError })
             } else if (this.loadError.length > 0) {
               ErrorState({ message: this.loadError })
             }
+            Text('全部分类').fontSize(18).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary')).width('100%').margin({ top: 12 })
             ForEach(this.categories, (category: CategoryRecord) => {
               Row() {
+                Image($r('app.media.ui_category')).width(24).height(24)
+                  .fillColor($r('app.color.brand_primary')).margin({ right: 14 }).accessibilityLevel('no')
                 Column({ space: $r('app.float.space_1') }) {
                   Text(category.name)
                     .fontSize($r('app.float.font_body'))
@@ -95,7 +80,7 @@ export struct CategoryManagementPage {
                     .fontSize($r('app.float.font_caption'))
                     .fontColor($r('app.color.text_secondary'))
                 }
-                .layoutWeight(1)
+                .layoutWeight(1).alignItems(HorizontalAlign.Start)
                 Button(category.active ? '停用' : '启用')
                   .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
                   .fontColor($r('app.color.brand_primary'))
@@ -117,15 +102,54 @@ export struct CategoryManagementPage {
             }, (category: CategoryRecord) => `${category.id}:${category.updatedAt}:${category.active}`)
           }
           .width('100%')
-          .padding({ left: $r('app.float.space_4'), right: $r('app.float.space_4'), bottom: $r('app.float.space_6') })
+          .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
         }
         .layoutWeight(1)
       }
     }
     .width('100%')
-    .height('100%')
+    .height('100%').constraintSize({ maxWidth: 960 })
     .padding({ top: this.safeAreaTop, bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
     .backgroundColor($r('app.color.surface_app'))
+    .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
+    .bindSheet($$this.showCreateSheet, this.createSheet(), {
+      height: SheetSize.FIT_CONTENT, dragBar: true, showClose: true,
+      title: { title: '新增分类' }, backgroundColor: $r('app.color.surface_app'),
+      preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
+      width: this.viewportWidth >= 700 ? 560 : undefined,
+      onWillDismiss: (action: DismissSheetAction) => { if (!this.operating) { action.dismiss(); } }
+    })
+  }
+
+  @Builder
+  private createSheet() {
+    Column() {
+      Scroll() {
+        Column({ space: 16 }) {
+          TextInput({ text: this.name, placeholder: '新增分类名称' })
+            .backgroundColor($r('app.color.surface_card'))
+            .border({ width: 1, color: $r('app.color.border_subtle') })
+            .borderRadius($r('app.float.radius_control'))
+            .enabled(!this.operating)
+            .onChange((value: string) => this.name = value)
+
+          if (this.actionError.length > 0) { ErrorState({ message: this.actionError }) }
+        }.width('100%').padding(24).alignItems(HorizontalAlign.Start)
+      }.width('100%')
+      Row() {
+        Button('新增分类')
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .width('100%')
+          .fontColor($r('app.color.brand_on_primary'))
+          .backgroundColor($r('app.color.brand_primary'))
+          .borderRadius($r('app.float.radius_control'))
+          .enabled(!this.operating)
+          .scale({ x: this.pressedAction === 'create' && !this.reduceAnimation ? 0.96 : 1, y: this.pressedAction === 'create' && !this.reduceAnimation ? 0.96 : 1 })
+          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
+          .onTouch((event: TouchEvent) => this.updatePressedAction(event, 'create'))
+          .onClick(() => this.createCategory())
+      }.width('100%').padding({ left: 24, right: 24, bottom: 24 })
+    }.width('100%')
   }
 
   private async loadCategories(showLoading: boolean = true): Promise<void> {
@@ -161,6 +185,7 @@ export struct CategoryManagementPage {
         this.actionError = result.getError().message;
         return;
       }
+      this.showCreateSheet = false;
       this.name = '';
       this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadCategories(false);
