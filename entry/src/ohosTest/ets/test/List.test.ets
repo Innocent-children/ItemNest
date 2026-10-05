@@ -1,3 +1,4 @@
+import userFlowRepairDeviceTest from './UserFlowRepairDevice.test';
 import inventoryUpgradeDeviceTest from './InventoryUpgradeDevice.test';
 import appEventBusFlowTest from './AppEventBusFlow.test';
 import abilityTest from './Ability.test';
@@ -11,6 +12,7 @@ import barcodeMigrationTest from './BarcodeMigration.test';
 import portableBackupDeviceTest from './PortableBackupDevice.test';
 
 export default function testsuite() {
+  userFlowRepairDeviceTest();
   inventoryUpgradeDeviceTest();
   abilityTest();
   appEventBusFlowTest();

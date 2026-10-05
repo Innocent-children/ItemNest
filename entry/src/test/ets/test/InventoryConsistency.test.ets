@@ -183,11 +183,15 @@ export default function inventoryConsistencyTest() {
       expect(batches.batches[0].quantity).assertEqual(0);
     });
 
-    it('存在批次时允许统一纠正单位但不直接改汇总数量和到期日', 0, async () => {
+    it('多个批次时允许统一纠正单位但不直接改汇总数量和到期日', 0, async () => {
       const items = new FakeItemRepository();
       items.items.push(buildItem());
       const batches = new FakeBatchRepository();
       batches.batches.push(buildDefaultBatch());
+      const second = buildDefaultBatch();
+      second.id = 'batch-second';
+      second.quantity = 0;
+      batches.batches.push(second);
       const service = new ItemUpdateService(items, new ItemValidator(), () => 20, batches);
 
       const quantityChanged = await service.update('item-1', {

@@ -135,7 +135,7 @@ export struct LocationManagementPage {
           }
           .width('100%')
           .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
-        }.clip(false)
+        }.clip(false).align(Alignment.TopStart)
         .layoutWeight(1)
       }
     }
@@ -220,7 +220,7 @@ export struct LocationManagementPage {
 
           if (this.actionError.length > 0) { ErrorState({ message: this.actionError }) }
         }.width('100%').padding(24).alignItems(HorizontalAlign.Start)
-      }.width('100%').layoutWeight(1)
+      }.align(Alignment.TopStart).width('100%').layoutWeight(1)
       Row() {
         Button('新增位置')
           .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))

@@ -14,12 +14,23 @@ export class LocalAssetStorage {
 
   async copyFromPickerUri(sourceUri: string, assetId: string): Promise<Result<string>> {
     const targetPath = `${this.context.filesDir}/${ASSET_DIRECTORY_NAME}/${assetId}`;
+    let sourceFile: fileIo.File | undefined = undefined;
     try {
       await this.ensureDirectory();
-      await fileIo.copyFile(sourceUri, targetPath);
+      // Picker 授权的是 URI，通过 open 获取描述符后才能复制到私有目录。
+      sourceFile = await fileIo.open(sourceUri, fileIo.OpenMode.READ_ONLY);
+      await fileIo.copyFile(sourceFile.fd, targetPath);
       return success<string>(targetPath);
     } catch (_) {
+      await this.remove(targetPath);
       return failure<string>(new AppError(AppErrorCode.ASSET_STORAGE, '图片保存失败，请重新选择'));
+    } finally {
+      if (sourceFile !== undefined) {
+        try {
+          await fileIo.close(sourceFile);
+        } catch (_) {
+        }
+      }
     }
   }
 

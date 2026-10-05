@@ -1,3 +1,4 @@
+import { FakeStockThresholdRepository } from '../../../test/ets/test/FakeStockThresholdRepository';
 import { describe, it, expect } from '@ohos/hypium';
 import { AppError, AppErrorCode } from '../../../main/ets/common/AppError';
 import { Result, failure, success } from '../../../main/ets/common/Result';
@@ -94,15 +95,14 @@ export default function homeSummaryFlowTest() {
         repository.items.push(dueItem);
       }
 
-      const summary = await new HomeSummaryService(repository, new ExpiryService())
+      const summary = await new HomeSummaryService(repository, new ExpiryService(), new FakeStockThresholdRepository())
         .getSummary(new Date(2026, 5, 20));
 
       expect(summary.ok).assertTrue();
       if (summary.ok) {
-        expect(summary.getData().dueSoonItems.length).assertEqual(10);
-        expect(summary.getData().outOfStockItems.length).assertEqual(10);
+        expect(summary.getData().restockItems.length).assertEqual(12);
         expect(summary.getData().dueSoonCount).assertEqual(12);
-        expect(summary.getData().outOfStockCount).assertEqual(12);
+        expect(summary.getData().restockCount).assertEqual(12);
       }
     });
 
@@ -116,7 +116,7 @@ export default function homeSummaryFlowTest() {
       const createResult = await repository.create(latestItem);
       expect(createResult.ok).assertTrue();
 
-      const summary = await new HomeSummaryService(repository, new ExpiryService())
+      const summary = await new HomeSummaryService(repository, new ExpiryService(), new FakeStockThresholdRepository())
         .getSummary(new Date(2026, 5, 20));
 
       expect(summary.ok).assertTrue();

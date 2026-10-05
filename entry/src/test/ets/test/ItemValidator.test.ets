@@ -10,6 +10,14 @@ export default function itemValidatorTest() {
       expect(validator.validate({ name: 'a'.repeat(81) }).ok).assertFalse();
     });
 
+    it('接受容易产生浮点误差的一位和两位小数', 0, () => {
+      const validator = new ItemValidator();
+      for (const quantity of [1.1, 0.29, 2.35, 4.01]) {
+        expect(validator.validateQuantity(quantity).ok).assertTrue();
+      }
+      expect(validator.validateQuantity(1.101).ok).assertFalse();
+    });
+
     it('拒绝非法数量和提醒天数', 0, () => {
       const validator = new ItemValidator();
       expect(validator.validate({ name: '药品', quantity: -1 }).ok).assertFalse();

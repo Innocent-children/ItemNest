@@ -1,5 +1,6 @@
 import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 import { ITEM_UNIT_OPTIONS, ItemUnit } from '../model/Item';
+import { ItemValidator } from '../common/ItemValidator';
 
 @Component
 export struct QuantityInput {
@@ -53,11 +54,8 @@ export struct QuantityInput {
     if (value.trim().length === 0) {
       return '';
     }
-    const quantity = Number(value);
-    if (!Number.isFinite(quantity) || quantity < 0 || Math.round(quantity * 100) !== quantity * 100) {
-      return '数量必须是最多两位小数的非负数';
-    }
-    return '';
+    const result = new ItemValidator().validateQuantity(Number(value));
+    return result.ok ? '' : result.getError().message;
   }
 
   private adjustQuantity(delta: number): void {

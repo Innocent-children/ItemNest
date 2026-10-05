@@ -199,7 +199,13 @@ export struct SearchPage {
                 .onClick(() => this.clearQuery())
             }.width('100%')
             if (this.items.length === 0) {
-              EmptyState({ title: '还没有找到', description: '试试更短的名称，或移除位置和分类条件。' })
+              if (this.currentQuery().isEmpty()) {
+                EmptyState({ title: '还没有物品', description: '从一件常用物品开始，记下它的位置。',
+                  actionText: '记录第一件物品', actionRoute: RouteName.ITEM_FORM,
+                  actionMode: 'create', actionReturnTo: RouteName.SEARCH })
+              } else {
+                EmptyState({ title: '还没有找到', description: '试试更短的名称，或移除位置和分类条件。' })
+              }
             } else {
               ForEach(this.items, (item: ItemSummary) => {
                 ItemCard({ item: this.currentItem(item.id, item), heroKey: this.isMainTab ? 'tab-search' : 'search' })
@@ -276,13 +282,13 @@ export struct SearchPage {
             }.width('100%')
           }
         }.width('100%').padding(24).alignItems(HorizontalAlign.Start)
-      }.width('100%').layoutWeight(1)
+      }.align(Alignment.TopStart).width('100%').layoutWeight(1)
       Row() {
         Button('查看结果').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
           .width('100%').height(50).fontColor($r('app.color.brand_on_primary'))
           .backgroundColor($r('app.color.brand_primary'))
           .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-          .onClick(() => { this.showFilters = false; this.search(true); })
+          .onClick(() => { this.showFilters = false; this.search(true, true, true); })
       }.width('100%').padding({ left: 24, right: 24, bottom: 24 })
     }.width('100%').height('100%')
   }
@@ -343,17 +349,19 @@ export struct SearchPage {
             .backgroundColor($r('app.color.surface_app'))
             .onClick(() => this.clearHistory())
         }
-        ForEach(this.history, (record: SearchHistory) => {
-          Button(record.queryText ?? record.locationPath ?? record.category ?? '最近查看')
-            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-            .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-            .type(ButtonType.Capsule)
-            .fontColor($r('app.color.brand_primary'))
-            .backgroundColor($r('app.color.surface_accent'))
-            .fontSize($r('app.float.font_caption'))
-            .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-            .onClick(() => this.applyHistory(record))
-        }, (record: SearchHistory) => record.id)
+        Flex({ wrap: FlexWrap.Wrap }) {
+          ForEach(this.history, (record: SearchHistory) => {
+            Button(record.queryText ?? record.locationPath ?? record.category ?? '最近查看')
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
+              .type(ButtonType.Capsule)
+              .fontColor($r('app.color.brand_primary'))
+              .backgroundColor($r('app.color.surface_accent'))
+              .fontSize($r('app.float.font_caption'))
+              .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
+              .onClick(() => this.applyHistory(record))
+          }, (record: SearchHistory) => record.id)
+        }.width('100%')
       }
     }
     .width('100%')
@@ -418,9 +426,9 @@ export struct SearchPage {
     }
   }
 
-  private async search(showLoading: boolean = true, recordHistory: boolean = true): Promise<void> {
+  private async search(showLoading: boolean = true, recordHistory: boolean = true, allowEmpty: boolean = false): Promise<void> {
     const query = this.currentQuery();
-    if (query.isEmpty()) {
+    if (query.isEmpty() && !this.searched && !allowEmpty) {
       this.requestCoordinator.invalidateSearchResults();
       this.items = [];
       this.searched = false;
@@ -444,7 +452,7 @@ export struct SearchPage {
         this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.4, 0.85), () => { this.items = items; });
         this.searched = true;
         this.searchErrorMessage = '';
-        if (recordHistory) {
+        if (recordHistory && !query.isEmpty()) {
           await AppServices.get().searchSuggestions.recordSearch(query);
           if (!this.requestCoordinator.isCurrentSearch(requestId)) {
             return;
@@ -469,7 +477,7 @@ export struct SearchPage {
 
   private async refreshResults(showLoading: boolean = false): Promise<void> {
     const query = this.currentQuery();
-    if (query.isEmpty()) {
+    if (query.isEmpty() && !this.searched) {
       this.requestCoordinator.invalidateSearchResults();
       this.items = [];
       this.searched = false;

@@ -18,6 +18,7 @@ import { AppServices } from '../service/AppServices';
 @Component
 export struct ItemListPage {
   private pageScroller: Scroller = new Scroller();
+  @State private attention: 'expiry' | 'restock' | undefined = undefined;
   @Prop isMainTab: boolean = false;
   @State private contentWidth: number = 0;
   @State private selectedSort: ItemSortMode | undefined = undefined;
@@ -105,9 +106,9 @@ export struct ItemListPage {
 
   @Builder
   private pageHeader() {
-    PageHeader({ title: this.query.isEmpty() ? '我的物品' : '筛选结果',
+    PageHeader({ title: this.attention === 'expiry' ? '到期待处理' : this.attention === 'restock' ? '需要补货' : this.query.isEmpty() ? '我的物品' : '筛选结果',
         subtitle: '每一件，都好好收着。', eyebrow: this.isMainTab ? 'YOUR COLLECTION' : '',
-        showBack: !this.isMainTab, actionText: '查找与筛选', actionIcon: $r('app.media.dock_search'),
+        showBack: !this.isMainTab, actionText: this.attention === undefined ? '查找与筛选' : '查找其他物品', actionIcon: $r('app.media.dock_search'),
         onAction: () => NavigationHelper.pushUrl({ url: RouteName.SEARCH, params: { query: this.query } }) })
   }
 
@@ -118,16 +119,18 @@ export struct ItemListPage {
       Row() {
         Text(this.loading ? '正在整理物品' : `共 ${this.items.length} 件物品`)
           .fontSize(13).fontColor($r('app.color.text_secondary')).layoutWeight(1)
-        Button(this.sortDescription.replace('按', '').replace('排序', '') + '⌄')
-          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-          .height(44).fontSize(12).padding(0).fontColor($r('app.color.brand_primary'))
-          .backgroundColor(Color.Transparent)
-          .bindMenu([
-            { value: '最近更新', action: () => this.changeSort(ItemSortMode.UPDATED_DESC) },
-            { value: '最近添加', action: () => this.changeSort(ItemSortMode.CREATED_DESC) },
-            { value: '名称 A-Z', action: () => this.changeSort(ItemSortMode.NAME_ASC) }
-          ])
-          .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
+        if (this.attention === undefined) {
+          Button(this.sortDescription.replace('按', '').replace('排序', '') + '⌄')
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .height(44).fontSize(12).padding(0).fontColor($r('app.color.brand_primary'))
+            .backgroundColor(Color.Transparent)
+            .bindMenu([
+              { value: '最近更新', action: () => this.changeSort(ItemSortMode.UPDATED_DESC) },
+              { value: '最近添加', action: () => this.changeSort(ItemSortMode.CREATED_DESC) },
+              { value: '名称 A-Z', action: () => this.changeSort(ItemSortMode.NAME_ASC) }
+            ])
+            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
+        }
       }.width('100%').constraintSize({ maxWidth: 960 })
         .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: 6 })
       if (!this.query.isEmpty()) {
@@ -157,7 +160,10 @@ export struct ItemListPage {
                 .onClick(() => this.loadItemsForCurrentRevision(true))
             } else if (this.items.length === 0) {
               Column({ space: $r('app.float.space_3') }) {
-                if (this.query.isEmpty()) {
+                if (this.attention !== undefined) {
+                  EmptyState({ title: this.attention === 'expiry' ? '暂无到期待处理物品' : '库存充足',
+                    description: '信息已更新，安心使用就好。' })
+                } else if (this.query.isEmpty()) {
                   EmptyState({
                     title: '暂无物品',
                     description: '新增第一个物品，开始记录它放在哪里。',
@@ -218,6 +224,7 @@ export struct ItemListPage {
   private readQuery(): void {
     try {
       const params = NavigationHelper.getParams() as ItemListRouteParams | undefined;
+      this.attention = params?.attention;
       if (params === undefined || params.query === undefined) {
         this.query = new ItemQuery();
         return;
@@ -237,7 +244,19 @@ export struct ItemListPage {
       this.errorMessage = '';
     }
     try {
-      if (query.isEmpty()) {
+      if (this.attention !== undefined) {
+        const result = await AppServices.get().homeSummary.getSummary();
+        if (!this.loadRequestCoordinator.isCurrent(requestId)) { return; }
+        if (!result.ok) {
+          this.errorMessage = result.getError().message;
+          return;
+        }
+        const items = this.attention === 'expiry' ? result.getData().expiryAttentionItems : result.getData().restockItems;
+        await AppServices.get().photos.loadThumbnails(items);
+        if (!this.loadRequestCoordinator.isCurrent(requestId)) { return; }
+        this.getUIContext().animateTo(uiSpring(this.reduceAnimation), () => this.items = items);
+        this.errorMessage = '';
+      } else if (query.isEmpty()) {
         const result = await AppServices.get().listItems.listAll();
         if (!this.loadRequestCoordinator.isCurrent(requestId)) {
           return;

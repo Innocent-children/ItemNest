@@ -172,7 +172,7 @@ export struct SettingsPage {
             Text(this.errorMessage).fontSize(13).fontColor($r('app.color.status_danger'))
           }
         }.width('100%').padding(24)
-      }.width('100%').layoutWeight(1)
+      }.align(Alignment.TopStart).width('100%').layoutWeight(1)
       Row() {
         Button(this.saving ? '正在保存…' : this.hasPreferenceChanges() ? '保存偏好与提醒' : '已保存')
         .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
@@ -334,7 +334,7 @@ export struct SettingsPage {
       this.cardTitle('首页内容', '选择打开应用时想看到的内容。')
       this.switchRow('最近添加', this.showRecentSection, (value: boolean) => this.showRecentSection = value)
       this.switchRow('到期待处理', this.showExpirySection, (value: boolean) => this.showExpirySection = value)
-      this.switchRow('待补货', this.showStockSection, (value: boolean) => this.showStockSection = value)
+      this.switchRow('需要补货', this.showStockSection, (value: boolean) => this.showStockSection = value)
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)

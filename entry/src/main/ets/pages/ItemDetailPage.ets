@@ -1,3 +1,4 @@
+import { Batch } from '../model/Batch';
 import { localImageSource } from '../ui/ImageSource';
 import { SharedRouteMotion } from '../ui/SharedRouteMotion';
 import { PhotoViewer } from '../components/PhotoViewer';
@@ -73,6 +74,8 @@ export struct ItemDetailPage {
   @State private photoPath: string = '';
   @State private removingPhoto: boolean = false;
   @State private batchCount: number = 0;
+  @State private stockBatches: Batch[] = [];
+  @State private consumeBatchId: string = '';
   @State private borrowedQuantity: number = 0;
   @State private availableQuantity: number = 0;
   @State private inventoryWarning: string = '';
@@ -294,7 +297,7 @@ export struct ItemDetailPage {
           InventoryMetrics({ total: $$.item.quantity, unit: $$.item.unit,
             available: this.managementReady ? this.availableQuantity : undefined,
             borrowed: this.managementReady ? this.borrowedQuantity : undefined })
-          Text('总量包含借出，归还不重复增加总量。').fontSize(11).fontColor($r('app.color.text_secondary'))
+          Text('借出的物品也计入拥有总量。').fontSize(11).fontColor($r('app.color.text_secondary'))
           if (this.inventoryWarning.length > 0) {
             Text(this.inventoryWarning).fontSize(13).fontColor($r('app.color.status_danger'))
           }
@@ -474,11 +477,12 @@ export struct ItemDetailPage {
         .fontSize($r('app.float.font_section'))
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
-      this.detailRow({ label: '现存位置', value: this.activeLocationText($$.item) })
-      this.detailRow({ label: '默认位置', value: $$.item.locationPath ?? '未设置' })
-      Text('找物使用仍有数量的批次位置；批次未填写位置时使用默认位置。')
-        .fontSize($r('app.float.font_caption'))
-        .fontColor($r('app.color.text_secondary'))
+      this.detailRow({ label: '存放位置', value: this.activeLocationText($$.item) })
+      if (this.batchCount > 1) {
+        this.detailRow({ label: '默认位置', value: $$.item.locationPath ?? '未设置' })
+        Text('分放在不同地方的物品，可在库存明细中分别调整。')
+          .fontSize($r('app.float.font_caption')).fontColor($r('app.color.text_secondary'))
+      }
       this.detailRow({ label: '分类', value: $$.item.category ?? '未设置' })
     }
     .width('100%')
@@ -748,6 +752,15 @@ export struct ItemDetailPage {
           .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
           .onClick(() => this.loadDetailForCurrentRevision(false))
       }
+      if (this.stockBatches.length > 1) {
+        Text('从哪里取用？').fontSize(14).fontColor($r('app.color.text_primary'))
+        Select(this.consumptionOptions($$.item))
+          .selected(this.consumeBatchId.length === 0 ? 0 : this.stockBatches.findIndex((batch: Batch) => batch.id === this.consumeBatchId) + 1)
+          .value(this.consumptionOptions($$.item)[this.consumeBatchId.length === 0 ? 0 : this.stockBatches.findIndex((batch: Batch) => batch.id === this.consumeBatchId) + 1].value)
+          .width('100%').font({ size: 14 }).backgroundColor($r('app.color.surface_input')).borderRadius(14)
+          .enabled(!this.consuming).onSelect((index: number) => this.consumeBatchId = index === 0 ? '' : this.stockBatches[index - 1].id)
+      }
+      Text(`这次用掉多少（${$$.item.unit}）`).fontSize(14).fontColor($r('app.color.text_primary'))
       TextInput({ text: this.consumeQuantityText, placeholder: '这次用掉多少，例如：1' })
         .borderWidth(1)
         .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'consumeQuantityText'))
@@ -762,7 +775,7 @@ export struct ItemDetailPage {
         .borderColor(this.focusedField === 'consumeQuantityText' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
         .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
         .onChange((value: string) => this.consumeQuantityText = value)
-      Text('填写这次用掉的数量，按最早到期的批次扣减；借出部分不能消耗。')
+      Text(this.consumeBatchId.length > 0 ? '仅扣减所选位置的库存，借出部分不能消耗。' : '优先使用最早到期的物品；借出部分不能消耗。')
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
       Button(this.consuming ? '正在记录…' : '记录消耗')
@@ -787,6 +800,14 @@ export struct ItemDetailPage {
     return activeLocationText(item.activeLocationPaths, item.locationPath, item.quantity);
   }
 
+  private consumptionOptions(item: Item): SelectOption[] {
+    const options: SelectOption[] = [{ value: '自动选择 · 优先使用最早到期的物品' }];
+    for (const batch of this.stockBatches) {
+      options.push({ value: `${batch.locationPath ?? item.locationPath ?? '未设置位置'} · ${batch.quantity}${item.unit} · ${batch.expirationDate ?? '无到期日'}` });
+    }
+    return options;
+  }
+
   private async consume(): Promise<void> {
     if (this.consuming || this.deleting || !this.managementReady) {
       return;
@@ -800,7 +821,7 @@ export struct ItemDetailPage {
     this.consuming = true;
     this.actionError = '';
     try {
-      const result = await AppServices.get().batches.consume(this.itemId, quantity);
+      const result = await AppServices.get().batches.consume(this.itemId, quantity, this.consumeBatchId.length > 0 ? this.consumeBatchId : undefined);
       if (!result.ok) {
         this.actionError = result.getError().message;
         return;
@@ -866,28 +887,34 @@ export struct ItemDetailPage {
 
   @Builder
   private managementSection($$: ItemDetailParams) {
-    Row({ space: 10 }) {
-      Button({ type: ButtonType.Normal }) {
-        Column({ space: 12 }) {
-          Image($r('app.media.ui_minus')).width(22).height(22).fillColor($r('app.color.brand_on_primary'))
-          Text('记录用量').fontSize(13).fontWeight(FontWeight.Medium).fontColor($r('app.color.brand_on_primary'))
-        }.width('100%')
-      }
-        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1).padding(18).borderRadius(18).backgroundColor($r('app.color.brand_primary'))
-        .enabled(this.managementReady && this.availableQuantity > 0 && !this.consuming && !this.deleting)
-        .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-        .onClick(() => { this.actionError = ''; this.actionSheetMode = 'consume'; this.showActionSheet = true; })
-      this.managementEntry({ title: '批次管理', description: `${this.batchCount} 个批次`,
-        route: RouteName.BATCH_LIST, itemId: $$.item.id })
-      this.managementEntry({ title: '借出归还', description: '查看借还记录', route: RouteName.LENDING, itemId: $$.item.id })
+    Column({ space: 12 }) {
+      Row({ space: 10 }) {
+        Button({ type: ButtonType.Normal }) {
+          Column({ space: 12 }) {
+            Image($r('app.media.ui_minus')).width(22).height(22).fillColor($r('app.color.brand_on_primary'))
+            Text('记录用量').fontSize(13).fontWeight(FontWeight.Medium).fontColor($r('app.color.brand_on_primary'))
+          }.width('100%')
+        }
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1).padding(18).borderRadius(18).backgroundColor($r('app.color.brand_primary'))
+          .enabled(this.managementReady && this.availableQuantity > 0 && !this.consuming && !this.deleting)
+          .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
+          .onClick(() => { this.actionError = ''; this.actionSheetMode = 'consume'; this.showActionSheet = true; })
+        this.managementEntry({ title: '补入物品', description: '记录这次补入的数量',
+          route: RouteName.BATCH_FORM, itemId: $$.item.id })
+        this.managementEntry({ title: '借出归还', description: '查看借还记录', route: RouteName.LENDING, itemId: $$.item.id })
+      }.width('100%')
+      Button(`库存明细 · ${this.batchCount} 个批次`).attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        .width('100%').fontSize(13).backgroundColor($r('app.color.surface_card')).fontColor($r('app.color.brand_primary'))
+        .onClick(() => NavigationHelper.pushUrl({ url: RouteName.BATCH_LIST, params: { itemId: $$.item.id } }))
     }.width('100%')
   }
+
 
   @Builder
   private managementEntry($$: ManagementEntryParams) {
     Button({ type: ButtonType.Normal }) {
       Column({ space: 12 }) {
-        Image($$.route === RouteName.BATCH_LIST ? $r('app.media.ui_box') : $r('app.media.ui_lend'))
+        Image($$.route === RouteName.BATCH_FORM ? $r('app.media.ui_box') : $r('app.media.ui_lend'))
           .width(22).height(22).fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
         Text($$.title).fontSize(13).fontWeight(FontWeight.Medium).fontColor($r('app.color.brand_primary'))
       }.width('100%')
@@ -895,7 +922,7 @@ export struct ItemDetailPage {
       .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1).padding(18).borderRadius(18).backgroundColor($r('app.color.surface_card'))
       .accessibilityText($$.title + '，' + $$.description)
       .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-      .onClick(() => NavigationHelper.pushUrl({ url: $$.route, params: { itemId: $$.itemId } }))
+      .onClick(() => NavigationHelper.pushUrl({ url: $$.route, params: { itemId: $$.itemId, mode: $$.route === RouteName.BATCH_FORM ? 'create' : undefined } }))
   }
 
   private async loadManagementState(item: Item, requestId?: number): Promise<void> {
@@ -911,6 +938,8 @@ export struct ItemDetailPage {
       }
       if (batchResult.ok) {
         this.batchCount = batchResult.getData().length;
+        this.stockBatches = batchResult.getData().filter((batch: Batch) => batch.quantity > 0);
+        if (!this.stockBatches.some((batch: Batch) => batch.id === this.consumeBatchId)) { this.consumeBatchId = ''; }
       }
       const lendingResult = await AppServices.get().lending.getState(item.id);
       if (!this.canApplyLoadResult(requestId)) {

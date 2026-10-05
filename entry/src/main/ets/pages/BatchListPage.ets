@@ -85,8 +85,8 @@ export struct BatchListPage {
 
   @Builder
   private pageHeader() {
-    PageHeader({ title: '批次管理', subtitle: '分清位置、数量与到期日期。', showBack: true,
-          actionText: '新增批次', actionIcon: $r('app.media.dock_add'),
+    PageHeader({ title: '库存明细', subtitle: '分清位置、数量与到期日期。', showBack: true,
+          actionText: '补入物品', actionIcon: $r('app.media.dock_add'),
           onAction: () => NavigationHelper.pushUrl({ url: RouteName.BATCH_FORM,
             params: { mode: 'create', itemId: this.itemId } }) })
   }
@@ -124,7 +124,7 @@ export struct BatchListPage {
             .onClick(() => this.loadBatchesForCurrentRevision(true))
         } else if (this.batches.length === 0) {
           EmptyState({ title: '暂无批次', description: '新增批次后，物品总量和最早到期日会自动汇总。' })
-          Button('新增批次')
+          Button('补入物品')
             .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
             .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
             .fontColor($r('app.color.brand_on_primary'))
@@ -150,7 +150,7 @@ export struct BatchListPage {
                       .backgroundColor($r('app.color.surface_input')).accessibilityText('批次操作')
                       .enabled(!this.deleting)
                       .bindMenu([
-                        { value: '编辑批次', action: () => NavigationHelper.pushUrl({ url: RouteName.BATCH_FORM,
+                        { value: '修改数量、位置与到期日', action: () => NavigationHelper.pushUrl({ url: RouteName.BATCH_FORM,
                           params: { mode: 'edit', itemId: this.itemId, batchId: batch.id } }) },
                         { value: this.batches.length === 1 ? '清空数量' : '删除批次', action: () => this.requestDeleteBatch(batch.id) }
                       ])

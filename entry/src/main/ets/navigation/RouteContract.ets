@@ -23,10 +23,12 @@ export interface BatchRouteParams extends ItemRouteParams {
 }
 
 export interface ItemListRouteParams {
+  attention?: 'expiry' | 'restock';
   query?: ItemQuery;
 }
 
 export interface NavigationRouteParams {
+  attention?: 'expiry' | 'restock';
   itemId?: string;
   batchId?: string;
   mode?: string;

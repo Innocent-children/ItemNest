@@ -11,7 +11,6 @@ import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
-import { LowStockItem } from '../model/StockThreshold';
 import { getUnhandledRouteRefreshAt } from '../navigation/RefreshContract';
 import { RouteRefreshParams } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
@@ -32,13 +31,14 @@ interface AttentionMetricParams {
   count: number;
   label: string;
   icon: Resource;
+  attention: 'expiry' | 'restock';
 }
 
 interface HomeSummarySectionParams {
   title: string;
   items: ItemSummary[];
   emptyText: string;
-  expandableExpiry?: boolean;
+  attention?: 'expiry' | 'restock';
 }
 
 @Entry
@@ -61,13 +61,10 @@ struct Index {
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private recentItems: ItemSummary[] = [];
-  @State private dueSoonItems: ItemSummary[] = [];
   @State private expiryAttentionItems: ItemSummary[] = [];
-  @State private showAllExpiryItems: boolean = false;
-  @State private outOfStockItems: ItemSummary[] = [];
-  @State private lowStockItems: LowStockItem[] = [];
+  @State private restockItems: ItemSummary[] = [];
   @State private dueSoonCount: number = 0;
-  @State private outOfStockCount: number = 0;
+  @State private restockCount: number = 0;
   @State private locationPaths: string[] = [];
   @State private showRecentSection: boolean = true;
   @State private showExpirySection: boolean = true;
@@ -351,23 +348,20 @@ struct Index {
           Row() {
             Column({ space: $r('app.float.space_5') }) {
               this.homeHeader()
-              if (this.recentItems.length > 0 || this.locationPaths.length > 0 || this.dueSoonCount + this.outOfStockCount > 0) {
+              if (this.recentItems.length > 0 || this.locationPaths.length > 0 || this.dueSoonCount + this.restockCount > 0) {
                 this.hero()
               }
               if (this.locationPaths.length > 0) {
                 this.locationShortcutSection()
               }
-              if (shouldShowRecentSection(this.showRecentSection)) {
-                this.summarySection({ title: '最近添加', items: this.recentItems, emptyText: '暂无物品' })
-              }
               if (this.showExpirySection) {
-                this.summarySection({ title: '到期待处理', items: this.showAllExpiryItems ? this.expiryAttentionItems : this.dueSoonItems, emptyText: '暂无到期待处理物品', expandableExpiry: true })
+                this.summarySection({ title: '到期待处理', items: this.expiryAttentionItems, emptyText: '暂无到期待处理物品', attention: 'expiry' })
               }
               if (this.showStockSection) {
-                this.summarySection({ title: '待补货', items: this.outOfStockItems, emptyText: '暂无待补货物品' })
-                if (this.lowStockItems.length > 0) {
-                  this.lowStockSection()
-                }
+                this.summarySection({ title: '需要补货', items: this.restockItems, emptyText: '库存充足，暂时不用补货', attention: 'restock' })
+              }
+              if (shouldShowRecentSection(this.showRecentSection)) {
+                this.summarySection({ title: '最近添加', items: this.recentItems, emptyText: '暂无物品' })
               }
             }
             .width('100%')
@@ -437,16 +431,16 @@ struct Index {
         Image($r('app.media.ui_check')).width(20).height(20)
           .fillColor($r('app.color.hero_action')).accessibilityLevel('no')
         Column({ space: 5 }) {
-          Text(this.dueSoonCount + this.outOfStockCount === 0 ? '生活，有条不紊。' : '有些物品，需要留意。')
+          Text(this.dueSoonCount + this.restockCount === 0 ? '生活，有条不紊。' : '有些物品，需要留意。')
             .fontSize(19).fontWeight(FontWeight.Medium).fontColor($r('app.color.hero_text'))
-          Text(this.dueSoonCount + this.outOfStockCount === 0 ? '到期与补货，我们帮你记着。' : '到期与库存信息，已为你整理好。')
+          Text(this.dueSoonCount + this.restockCount === 0 ? '到期与补货，我们帮你记着。' : '到期与库存信息，已为你整理好。')
             .fontSize(12).fontColor($r('app.color.hero_secondary'))
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       }.width('100%')
       Row() {
-        this.attentionMetric({ count: this.dueSoonCount, label: '到期待处理', icon: $r('app.media.ui_clock') })
+        this.attentionMetric({ count: this.dueSoonCount, label: '到期待处理', icon: $r('app.media.ui_clock'), attention: 'expiry' })
         Divider().vertical(true).height(42).color($r('app.color.hero_line')).margin({ left: 12, right: 20 })
-        this.attentionMetric({ count: this.outOfStockCount, label: '需要补货', icon: $r('app.media.ui_box') })
+        this.attentionMetric({ count: this.restockCount, label: '需要补货', icon: $r('app.media.ui_box'), attention: 'restock' })
       }.width('100%')
     }
     .width('100%').alignItems(HorizontalAlign.Start).padding(24)
@@ -455,18 +449,24 @@ struct Index {
 
   @Builder
   private attentionMetric($$: AttentionMetricParams) {
-    Column({ space: 8 }) {
-      Row({ space: 5 }) {
-        Text($$.count.toString()).contentTransition(numericMotion(this.reduceAnimation, $$.count)).fontSize(34).fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.hero_text'))
-        Text('项').fontSize(12).fontColor($r('app.color.hero_secondary')).margin({ top: 12 })
-      }
-      Row({ space: 6 }) {
-        Image($$.icon).width(14).height(14).fillColor($r('app.color.hero_secondary')).accessibilityLevel('no')
-        Text($$.label).fontSize(12).fontColor($r('app.color.hero_secondary'))
-      }
-    }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+    Button({ type: ButtonType.Normal }) {
+      Column({ space: 8 }) {
+        Row({ space: 5 }) {
+          Text($$.count.toString()).contentTransition(numericMotion(this.reduceAnimation, $$.count)).fontSize(34).fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.hero_text'))
+          Text('项').fontSize(12).fontColor($r('app.color.hero_secondary')).margin({ top: 12 })
+        }
+        Row({ space: 6 }) {
+          Image($$.icon).width(14).height(14).fillColor($r('app.color.hero_secondary')).accessibilityLevel('no')
+          Text($$.label).fontSize(12).fontColor($r('app.color.hero_secondary'))
+        }
+      }.width('100%').alignItems(HorizontalAlign.Start)
+    }.buttonStyle(ButtonStyleMode.TEXTUAL).borderRadius(16)
+      .layoutWeight(1).padding(0).backgroundColor(Color.Transparent)
+      .accessibilityText(`${$$.label} ${$$.count} 项，查看列表`)
+      .onClick(() => this.openAttentionList($$.attention))
   }
+
 
   @Builder
   private locationShortcutSection() {
@@ -514,18 +514,13 @@ struct Index {
             .fontColor($r('app.color.text_primary'))
         }
         .layoutWeight(1).alignItems(HorizontalAlign.Start)
-        Text(`${$$.expandableExpiry ? this.dueSoonCount : $$.items.length} 项`)
+        Text(`${$$.items.length} 项`)
           .fontSize($r('app.float.font_caption'))
           .fontColor($r('app.color.text_secondary'))
-        if ($$.expandableExpiry && this.expiryAttentionItems.length > 10) {
-          Button(this.showAllExpiryItems ? '收起' : '查看全部待处理')
-            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-            .fontColor($r('app.color.brand_primary'))
-            .backgroundColor($r('app.color.surface_accent'))
-            .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-            .onClick(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.9), () => {
-              this.showAllExpiryItems = !this.showAllExpiryItems;
-            }))
+        if ($$.attention !== undefined && $$.items.length > 3) {
+          Button('查看全部').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .fontSize(12).fontColor($r('app.color.brand_primary')).backgroundColor(Color.Transparent)
+            .onClick(() => this.openAttentionList($$.attention ?? 'expiry'))
         }
       }
       if ($$.items.length === 0) {
@@ -541,7 +536,7 @@ struct Index {
           }.width('100%').padding(18).borderRadius(16).backgroundColor($r('app.color.surface_card'))
         }
       } else {
-        ForEach($$.items, (item: ItemSummary) => {
+        ForEach($$.attention === undefined ? $$.items : $$.items.slice(0, 3), (item: ItemSummary) => {
           ItemCard({ item: $$.items.find((current: ItemSummary) => current.id === item.id) ?? item, heroKey: $$.title })
         }, (item: ItemSummary) => item.id)
       }
@@ -549,37 +544,8 @@ struct Index {
     .width('100%')
   }
 
-  @Builder
-  private lowStockSection() {
-    Column({ space: $r('app.float.space_3') }) {
-      Text('低库存')
-        .fontSize($r('app.float.font_section'))
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.text_primary'))
-      Text('拥有的总量（包含借出）低于设置阈值，仅在应用内提示。')
-        .fontSize($r('app.float.font_caption'))
-        .fontColor($r('app.color.text_secondary'))
-      ForEach(this.lowStockItems, (item: LowStockItem) => {
-        Row({ space: $r('app.float.space_3') }) {
-          Text(item.name)
-            .fontSize($r('app.float.font_body'))
-            .fontColor($r('app.color.text_primary'))
-            .layoutWeight(1)
-          Text(`${item.quantity} / 阈值 ${item.threshold}`)
-            .fontSize($r('app.float.font_caption'))
-            .fontColor($r('app.color.status_danger'))
-        }
-        .width('100%')
-        .padding($r('app.float.space_3'))
-        .borderRadius($r('app.float.radius_control'))
-        .backgroundColor($r('app.color.surface_card'))
-        .transition(TransitionEffect.OPACITY
-          .combine(TransitionEffect.translate({ y: 10 }))
-          .animation(uiSpring(this.reduceAnimation, 0.42, 0.78)))
-          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_DETAIL, params: { itemId: item.itemId } }))
-      }, (item: LowStockItem) => item.itemId)
-    }
-    .width('100%')
+  private openAttentionList(attention: 'expiry' | 'restock'): void {
+    NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST, params: { attention: attention } });
   }
 
   private async loadSummary(showLoading: boolean = true): Promise<void> {
@@ -603,35 +569,30 @@ struct Index {
         return;
       }
       if (!result.ok) {
-        if (showLoading || this.recentItems.length + this.dueSoonItems.length + this.outOfStockItems.length === 0) {
+        if (showLoading || this.recentItems.length + this.expiryAttentionItems.length + this.restockItems.length === 0) {
           this.errorMessage = result.getError().message;
         }
         return;
       }
       this.errorMessage = '';
       const summary = result.getData();
-      await AppServices.get().photos.loadThumbnails(summary.recentItems.concat(summary.expiryAttentionItems, summary.outOfStockItems));
+      await AppServices.get().photos.loadThumbnails(summary.recentItems.concat(summary.expiryAttentionItems, summary.restockItems));
       if (loadId !== this.summaryLoadId) { return; }
       this.recentItems = summary.recentItems;
-      this.dueSoonItems = summary.dueSoonItems;
       this.expiryAttentionItems = summary.expiryAttentionItems;
-      this.outOfStockItems = summary.outOfStockItems;
+      this.restockItems = summary.restockItems;
       if (this.reduceAnimation) {
         this.dueSoonCount = summary.dueSoonCount;
-        this.outOfStockCount = summary.outOfStockCount;
+        this.restockCount = summary.restockCount;
       } else {
         this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.4, 0.76), () => {
           this.dueSoonCount = summary.dueSoonCount;
-          this.outOfStockCount = summary.outOfStockCount;
+          this.restockCount = summary.restockCount;
         });
       }
       await this.loadLocationShortcuts(loadId);
-      const lowStock = await AppServices.get().lowStock.listLowStock();
-      if (loadId === this.summaryLoadId) {
-        this.lowStockItems = lowStock.ok ? lowStock.getData() : [];
-      }
     } catch (_) {
-      if (loadId === this.summaryLoadId && (showLoading || this.recentItems.length + this.dueSoonItems.length + this.outOfStockItems.length === 0)) {
+      if (loadId === this.summaryLoadId && (showLoading || this.recentItems.length + this.expiryAttentionItems.length + this.restockItems.length === 0)) {
         this.errorMessage = '数据库初始化失败，请重试';
       }
     } finally {

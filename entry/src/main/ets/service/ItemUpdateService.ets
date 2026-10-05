@@ -32,6 +32,7 @@ export class ItemUpdateService {
       return failure<Item>(new AppError(AppErrorCode.NOT_FOUND, '物品不存在或已删除'));
     }
     const existing = existingResult.getData() as Item;
+    let singleBatchId: string | undefined = undefined;
     if (this.batches !== undefined) {
       const batchResult = await this.batches.listByItemId(itemId);
       if (!batchResult.ok) {
@@ -39,10 +40,12 @@ export class ItemUpdateService {
       }
       const data = validated.getData();
       const aggregateChanged = data.quantity !== existing.quantity || data.expirationDate !== existing.expirationDate;
-      if (batchResult.getData().length > 0 && aggregateChanged) {
+      if (batchResult.getData().length === 1) {
+        singleBatchId = batchResult.getData()[0].id;
+      } else if (batchResult.getData().length > 1 && aggregateChanged) {
         return failure<Item>(new AppError(
           AppErrorCode.VALIDATION,
-          '物品已有批次，请在批次管理中修改数量和到期日；单位可在此统一纠正，数量数值保持不变'
+          '物品分为多个批次，请到库存明细选择要修改的数量和到期日'
         ));
       }
     }
@@ -62,6 +65,6 @@ export class ItemUpdateService {
       createdAt: existing.createdAt,
       updatedAt: this.clock()
     };
-    return this.repository.update(updatedItem);
+    return this.repository.update(updatedItem, singleBatchId);
   }
 }

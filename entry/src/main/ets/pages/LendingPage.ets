@@ -13,7 +13,6 @@ import { AppServices } from '../service/AppServices';
 
 @Component
 export struct LendingPage {
-  private pageScroller: Scroller = new Scroller();
   @State private viewportWidth: number = 360;
   @State private showOperationSheet: boolean = false;
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
@@ -95,7 +94,7 @@ export struct LendingPage {
     }
     .title({ builder: this.pageHeader, height: 76 }, nativeTitleOptions(this.reduceAnimation))
     .hideBackButton(true)
-    .bindToScrollable([this.pageScroller])
+    .bindToScrollable([this.scroller])
     .backgroundColor($r('app.color.surface_app'))
     .onBackPressed(() => NavigationHelper.handleBackPressed())
   }
@@ -212,7 +211,7 @@ export struct LendingPage {
           .width('100%')
           .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
         }
-        .clip(false)
+        .clip(false).align(Alignment.TopStart)
         .layoutWeight(1)
       }
     }
@@ -263,6 +262,7 @@ export struct LendingPage {
             .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
             .onChange((value: string) => this.counterpart = value)
         }
+        Text(`数量（${this.unit}）`).fontSize(14).fontColor($r('app.color.text_primary'))
         TextInput({ text: this.quantityText, placeholder: `数量（${this.unit}）` })
           .borderWidth(1)
           .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'quantityText'))

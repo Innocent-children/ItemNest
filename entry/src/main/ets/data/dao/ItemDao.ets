@@ -2,7 +2,8 @@ import { relationalStore } from '@kit.ArkData';
 import { AppError, AppErrorCode } from '../../common/AppError';
 import { Item, ItemUnit, PhotoState } from '../../model/Item';
 import { ItemQuery } from '../../model/ItemQuery';
-import { isSameOrDescendantLocation } from '../../service/InventoryPolicy';
+import { isSameOrDescendantLocation, validateInventoryReduction } from '../../service/InventoryPolicy';
+import { inventoryOutstandingSql } from '../rdb/InventoryIntegritySchema';
 import { BATCH_TABLE } from '../rdb/BatchSchema';
 import { ITEM_TABLE } from '../rdb/ItemSchema';
 import { RdbDatabase } from '../rdb/RdbDatabase';
@@ -72,12 +73,21 @@ export class ItemDao {
     });
   }
 
-  async update(item: Item): Promise<boolean> {
+  async update(item: Item, singleBatchId?: string): Promise<boolean> {
     try {
       return await this.database.transaction(async (store: relationalStore.Transaction): Promise<boolean> => {
+        if (singleBatchId !== undefined) {
+          await this.validateSingleBatchUpdate(store, item, singleBatchId);
+        }
         const predicates = new relationalStore.RdbPredicates(ITEM_TABLE);
         predicates.equalTo('id', item.id);
         const changedRows = await store.update(this.toUpdateValues(item), predicates);
+        if (changedRows > 0 && singleBatchId !== undefined) {
+          const batchPredicates = new relationalStore.RdbPredicates(BATCH_TABLE);
+          batchPredicates.equalTo('id', singleBatchId).equalTo('item_id', item.id);
+          await store.update({ quantity: item.quantity, expiration_date: item.expirationDate ?? null,
+            location_path: item.locationPath ?? null, updated_at: item.updatedAt }, batchPredicates);
+        }
         return changedRows > 0;
       });
     } catch (error) {
@@ -85,6 +95,33 @@ export class ItemDao {
         throw error;
       }
       throw new AppError(AppErrorCode.DATABASE_WRITE, '修改物品失败，请重试');
+    }
+  }
+
+  /**
+   * 单批次编辑与物品信息在同一事务保存，写入前核对批次和未归还数量。
+   */
+  private async validateSingleBatchUpdate(store: relationalStore.Transaction, item: Item, batchId: string): Promise<void> {
+    const batches = await store.querySql('SELECT id FROM batch WHERE item_id = ?', [item.id]);
+    try {
+      if (batches.rowCount !== 1 || !ResultSetReader.goToNextRow(batches) ||
+        ResultSetReader.readString(batches, 'id') !== batchId) {
+        throw new AppError(AppErrorCode.VALIDATION, '库存明细已变化，请重新打开物品后修改');
+      }
+    } finally {
+      ResultSetReader.close(batches);
+    }
+    const inventory = await store.querySql(`SELECT quantity, ${inventoryOutstandingSql('item.id')} AS borrowed_quantity
+      FROM item WHERE id = ?`, [item.id]);
+    try {
+      if (!ResultSetReader.goToNextRow(inventory)) {
+        throw new AppError(AppErrorCode.NOT_FOUND, '物品不存在或已删除');
+      }
+      const result = validateInventoryReduction(ResultSetReader.readDouble(inventory, 'quantity') ?? 0,
+        item.quantity, ResultSetReader.readDouble(inventory, 'borrowed_quantity') ?? 0);
+      if (!result.ok) { throw result.getError(); }
+    } finally {
+      ResultSetReader.close(inventory);
     }
   }
 

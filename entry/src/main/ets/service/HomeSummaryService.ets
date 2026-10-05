@@ -3,33 +3,35 @@ import { ExpiryStatus } from '../model/ExpiryStatus';
 import { Item, ItemSummary, PhotoState } from '../model/Item';
 import { StockStatus } from '../model/StockStatus';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
+import { StockThresholdRepositoryPort } from '../data/repository/StockThresholdRepository';
+import { StockThreshold } from '../model/StockThreshold';
 import { ExpiryService } from './ExpiryService';
 
 export class HomeSummary {
   readonly recentItems: ItemSummary[];
-  readonly dueSoonItems: ItemSummary[];
-  readonly outOfStockItems: ItemSummary[];
+  readonly restockItems: ItemSummary[];
   readonly dueSoonCount: number;
-  readonly outOfStockCount: number;
+  readonly restockCount: number;
   readonly expiryAttentionItems: ItemSummary[];
 
-  constructor(recentItems: ItemSummary[], dueSoonItems: ItemSummary[], outOfStockItems: ItemSummary[], dueSoonCount: number, outOfStockCount: number, expiryAttentionItems: ItemSummary[] = dueSoonItems) {
+  constructor(recentItems: ItemSummary[], expiryAttentionItems: ItemSummary[], restockItems: ItemSummary[]) {
     this.recentItems = recentItems;
-    this.dueSoonItems = dueSoonItems;
-    this.outOfStockItems = outOfStockItems;
-    this.dueSoonCount = dueSoonCount;
-    this.outOfStockCount = outOfStockCount;
     this.expiryAttentionItems = expiryAttentionItems;
+    this.restockItems = restockItems;
+    this.dueSoonCount = expiryAttentionItems.length;
+    this.restockCount = restockItems.length;
   }
 }
 
 export class HomeSummaryService {
   private readonly repository: ItemRepositoryPort;
   private readonly expiryService: ExpiryService;
+  private readonly thresholds: StockThresholdRepositoryPort;
 
-  constructor(repository: ItemRepositoryPort, expiryService: ExpiryService) {
+  constructor(repository: ItemRepositoryPort, expiryService: ExpiryService, thresholds: StockThresholdRepositoryPort) {
     this.repository = repository;
     this.expiryService = expiryService;
+    this.thresholds = thresholds;
   }
 
   async getSummary(now: Date = new Date()): Promise<Result<HomeSummary>> {
@@ -41,10 +43,12 @@ export class HomeSummaryService {
     if (!itemsResult.ok) {
       return failure<HomeSummary>(itemsResult.getError());
     }
+    const thresholdResult = await this.thresholds.listEnabled();
+    if (!thresholdResult.ok) { return failure<HomeSummary>(thresholdResult.getError()); }
+    const thresholds = thresholdResult.getData();
     const recentItems = this.toSummaries(recentResult.getData(), now);
     const expiryAttentionItems: ItemSummary[] = [];
-    const outOfStockItems: ItemSummary[] = [];
-    let outOfStockCount = 0;
+    const restockItems: ItemSummary[] = [];
     const items = itemsResult.getData();
     for (let index = 0; index < items.length; index++) {
       const item = items[index];
@@ -52,17 +56,14 @@ export class HomeSummaryService {
       if (summary.expiryStatus === ExpiryStatus.DUE_SOON || summary.expiryStatus === ExpiryStatus.EXPIRED) {
         expiryAttentionItems.push(summary);
       }
-      if (summary.stockStatus === StockStatus.OUT_OF_STOCK) {
-        outOfStockCount++;
-        if (outOfStockItems.length < 10) {
-          outOfStockItems.push(summary);
-        }
+      const threshold = thresholds.find((value: StockThreshold) => value.itemId === item.id);
+      if (summary.stockStatus === StockStatus.OUT_OF_STOCK || (threshold !== undefined && item.quantity < threshold.threshold)) {
+        restockItems.push(summary);
       }
     }
     expiryAttentionItems.sort((left: ItemSummary, right: ItemSummary) =>
       (left.expirationDate ?? '').localeCompare(right.expirationDate ?? ''));
-    return success(new HomeSummary(recentItems, expiryAttentionItems.slice(0, 10), outOfStockItems,
-      expiryAttentionItems.length, outOfStockCount, expiryAttentionItems));
+    return success(new HomeSummary(recentItems, expiryAttentionItems, restockItems));
   }
 
   private toSummaries(items: Item[], now: Date): ItemSummary[] {

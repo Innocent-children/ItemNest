@@ -7,7 +7,7 @@ import { ItemDao } from '../dao/ItemDao';
 export interface ItemRepositoryPort {
   create(item: Item): Promise<Result<Item>>;
   getById(itemId: string): Promise<Result<Item | undefined>>;
-  update(item: Item): Promise<Result<Item>>;
+  update(item: Item, singleBatchId?: string): Promise<Result<Item>>;
   deleteConfirmed(itemId: string): Promise<Result<void>>;
   listAll(): Promise<Result<Item[]>>;
   list(query: ItemQuery): Promise<Result<Item[]>>;
@@ -38,9 +38,9 @@ export class ItemRepository implements ItemRepositoryPort {
     }
   }
 
-  async update(item: Item): Promise<Result<Item>> {
+  async update(item: Item, singleBatchId?: string): Promise<Result<Item>> {
     try {
-      const updated = await this.itemDao.update(item);
+      const updated = await this.itemDao.update(item, singleBatchId);
       if (!updated) {
         return failure<Item>(new AppError(AppErrorCode.NOT_FOUND, '物品不存在或已删除'));
       }

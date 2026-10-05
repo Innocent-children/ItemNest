@@ -1,3 +1,4 @@
+import { OptionalDateField } from '../components/OptionalDateField';
 import { PageHeader } from '../components/PageHeader';
 import { RoundedButtonStyle, uiSpring, nativeTitleOptions } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
@@ -80,8 +81,8 @@ export struct BatchFormPage {
 
   @Builder
   private pageHeader() {
-    PageHeader({ title: this.editMode ? '编辑批次' : '添加一个批次', showBack: true,
-          subtitle: '同一件物品，也可以分开放。', actionEnabled: !this.saving,
+    PageHeader({ title: this.editMode ? '修改库存' : '补入物品', showBack: true,
+          subtitle: this.editMode ? '核对数量、位置和到期日。' : '记下这次补入的数量和位置。', actionEnabled: !this.saving,
           onBack: () => this.requestClose() })
   }
 
@@ -95,10 +96,10 @@ export struct BatchFormPage {
         } else {
           Scroll(this.pageScroller) {
             Column({ space: $r('app.float.space_4') }) {
-              Text('填写此批次剩余总量，包含借出部分，不是这次增减的数量。')
+              Text(this.editMode ? '当前数量（包含借出部分）' : '这次补入多少？')
                 .fontSize($r('app.float.font_caption'))
                 .fontColor($r('app.color.text_secondary'))
-              TextInput({ text: this.quantityText, placeholder: '批次总量' })
+              TextInput({ text: this.quantityText, placeholder: this.editMode ? '当前数量' : '补入数量' })
                 .borderWidth(1)
                 .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'quantityText'))
                 .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
@@ -124,7 +125,7 @@ export struct BatchFormPage {
                     .fontColor($r('app.color.brand_primary'))
                 }
                 .width('100%')
-                Text('批次单位与物品统一。如需纠正单位，请在编辑物品中修改；数值不会自动换算。')
+                Text('与物品使用相同单位，可在编辑物品中统一修改。')
                   .fontSize($r('app.float.font_caption'))
                   .fontColor($r('app.color.text_secondary'))
               }
@@ -132,19 +133,9 @@ export struct BatchFormPage {
               .padding($r('app.float.space_3'))
               .backgroundColor($r('app.color.surface_accent'))
               .borderRadius($r('app.float.radius_control'))
-              Row() {
-                Text('到期日期').fontSize(15).fontColor($r('app.color.text_primary')).layoutWeight(1)
-                Button('清除')
-                  .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).height(44).fontSize(13).backgroundColor(Color.Transparent)
-                  .fontColor($r('app.color.brand_primary')).enabled(this.expirationDate.length > 0)
-                  .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-                  .onClick(() => this.expirationDate = '')
-              }.width('100%')
-              CalendarPicker({ selected: this.expirationPickerDate() })
-                .onChange((date: Date) => this.expirationDate = this.formatDate(date))
-              Text(this.expirationDate.length > 0 ? `到期于 ${this.expirationDate}` : '尚未设置到期日')
-                .fontSize(12).fontColor($r('app.color.text_secondary'))
-              TextInput({ text: this.locationPath, placeholder: '批次位置，可选' })
+              Text('到期日期（可选）').fontSize(15).fontColor($r('app.color.text_primary')).width('100%')
+              OptionalDateField({ value: $expirationDate, editable: !this.saving })
+              TextInput({ text: this.locationPath, placeholder: '存放位置，可选' })
                 .borderWidth(1)
                 .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'locationPath'))
                 .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
@@ -156,7 +147,9 @@ export struct BatchFormPage {
                 .borderColor(this.focusedField === 'locationPath' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
                 .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
                 .onChange((value: string) => this.locationPath = value)
-              TextArea({ text: this.notes, placeholder: '批次备注，可选' })
+              Text('未填写位置时，使用物品的默认位置。').fontSize(12)
+                .fontColor($r('app.color.text_secondary')).width('100%')
+              TextArea({ text: this.notes, placeholder: '备注，可选' })
                 .borderWidth(1)
                 .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'notes'))
                 .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
@@ -178,10 +171,10 @@ export struct BatchFormPage {
             }
             .width('100%')
             .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
-          }.clip(false)
+          }.clip(false).align(Alignment.TopStart)
           .layoutWeight(1)
           Column() {
-            Button(this.saving ? '正在保存…' : '保存批次')
+            Button(this.saving ? '正在保存…' : this.editMode ? '保存修改' : '确认补入')
               .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
               .width('100%')
               .fontColor($r('app.color.brand_on_primary'))
@@ -219,18 +212,6 @@ export struct BatchFormPage {
     .width('100%')
     .height('100%')
     }
-
-  private expirationPickerDate(): Date {
-    if (this.expirationDate.length === 0) { return new Date(); }
-    const parts = this.expirationDate.split('-');
-    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-  }
-
-  private formatDate(date: Date): string {
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    return `${date.getFullYear()}-${month}-${day}`;
-  }
 
   private async loadForm(): Promise<void> {
     try {

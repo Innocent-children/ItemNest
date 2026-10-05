@@ -105,7 +105,8 @@ export class AppServices {
     const photoService = new PhotoService(assetRepository, repository, assetStorage);
     this.deleteItem = new ItemDeleteService(repository, reminderService, photoService);
     this.searchItems = new ItemSearchService(repository, listItems);
-    this.homeSummary = new HomeSummaryService(repository, expiryService);
+    const thresholdRepository = new StockThresholdRepository(database);
+    this.homeSummary = new HomeSummaryService(repository, expiryService, thresholdRepository);
     this.preferences = preferenceService;
     this.reminders = reminderService;
     this.photos = photoService;
@@ -114,7 +115,6 @@ export class AppServices {
     this.formSnapshot = new FormSnapshotProvider(this.homeSummary, reminderRepository);
     this.scan = new ScanService(new SystemScanAdapter());
     this.batches = new BatchService(batchRepository, repository);
-    const thresholdRepository = new StockThresholdRepository(database);
     this.lowStock = new LowStockService(thresholdRepository, repository);
     this.lowStockReminder = new LowStockReminderService();
     this.lending = new LendingService(traceRepository, repository);

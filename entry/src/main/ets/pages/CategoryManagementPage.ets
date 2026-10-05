@@ -123,7 +123,7 @@ export struct CategoryManagementPage {
           }
           .width('100%')
           .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
-        }.clip(false)
+        }.clip(false).align(Alignment.TopStart)
         .layoutWeight(1)
       }
     }
