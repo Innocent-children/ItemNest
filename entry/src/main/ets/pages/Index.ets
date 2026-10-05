@@ -1,14 +1,13 @@
-import { localImageSource } from '../ui/ImageSource';
-import { ItemHeroMotion, ItemHeroSource } from '../ui/ItemHeroMotion';
 import { PageHeader } from '../components/PageHeader';
-import { RoundedButtonStyle, dockContentInset, uiSpring, FloatingTabsStyle, nativeTitleOptions, numericMotion } from '../ui/VisualStyle';
+import { SharedSearchField } from '../components/SharedSearchField';
+import { SharedRouteMotion } from '../ui/SharedRouteMotion';
+import { RoundedButtonStyle, dockBarHeight, dockContentInset, uiSpring, FloatingTabsStyle, nativeTitleOptions, numericMotion, bottomTabStyle } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { accessibility } from '@kit.AccessibilityKit';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
-import { MainDock } from '../components/MainDock';
 import { AppEventBus } from '../common/AppEventBus';
 import { ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
@@ -81,15 +80,7 @@ struct Index {
   private lastHandledDataRevision: number = -1;
   private lastHandledPreferenceRevision: number = -1;
   private pathStack: NavPathStack = new NavPathStack();
-  @State private searchEntryVisible: boolean = true;
-  private searchTransition: boolean = false;
-  @State private heroVisible: boolean = false;
-  @State private heroPhoto: string = '';
-  @State private heroX: number = 0;
-  @State private heroY: number = 0;
-  @State private heroWidth: number = 52;
-  @State private heroHeight: number = 60;
-  @State private heroRadius: number = 14;
+  @StorageLink('itemtrace.searchSourceHidden') private searchSourceHidden: boolean = false;
   private homeScroller: Scroller = new Scroller();
   @State private homeScrolled: boolean = false;
   private tabsController: TabsController = new TabsController();
@@ -104,13 +95,6 @@ struct Index {
     } catch (_) {
     }
     NavigationHelper.registerPathStack(this.pathStack);
-    ItemHeroMotion.register((source, proxy, operation, interactive) =>
-      this.animateHero(source, proxy, operation, interactive), () => {
-        this.heroVisible = false;
-        AppStorage.setOrCreate<string>('itemtrace.heroSourceKey', '');
-        AppStorage.setOrCreate<string>('itemtrace.heroActiveItem', '');
-        AppStorage.setOrCreate<number>('itemtrace.heroContentOpacity', 1);
-      });
     this.subscribeDataRefresh();
     this.subscribeRouteResultRefresh();
     this.refreshSummaryForCurrentRevision(true);
@@ -131,7 +115,7 @@ struct Index {
       this.routeResultListenerId = 0;
     }
     NavigationHelper.unregisterPathStack(this.pathStack);
-    ItemHeroMotion.unregister();
+    SharedRouteMotion.clear();
   }
 
   onPageShow(): void {
@@ -149,10 +133,6 @@ struct Index {
     this.reduceAnimation = enabled;
     AppStorage.setOrCreate<boolean>('itemtrace.reduceAnimation', enabled);
     this.pathStack.disableAnimation(enabled);
-    if (enabled) {
-      this.searchEntryVisible = true;
-      AppStorage.setOrCreate<boolean>('itemtrace.searchExpanded', true);
-    }
   }
 
   private onRevisionChanged(): void {
@@ -268,17 +248,12 @@ struct Index {
       })
       .navDestination(this.navDestinationBuilder)
       .customNavContentTransition((from, to, operation) =>
-        this.reduceAnimation ? undefined : (ItemHeroMotion.transition(from, to, operation) ?? this.searchMotion(from, to, operation)))
+        this.reduceAnimation ? undefined : SharedRouteMotion.transition(from, to, operation))
       .width('100%').height('100%')
       .backgroundColor($r('app.color.surface_app'))
-
-      if (this.heroVisible) {
-        this.heroOverlay()
-      }
     }
     .width('100%')
     .height('100%')
-    .id('itemtrace-motion-root')
     .padding({ top: this.safeAreaTop })
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     .backgroundColor($r('app.color.surface_app'))
@@ -286,88 +261,12 @@ struct Index {
 
 
   private openSearch(): void {
-    this.searchTransition = !this.reduceAnimation;
-    AppStorage.setOrCreate<boolean>('itemtrace.searchExpanded', this.reduceAnimation);
-    NavigationHelper.pushUrl({ url: RouteName.SEARCH,
-      params: { source: this.searchTransition ? 'home-search' : 'search' } });
-  }
-
-  private searchMotion(from: NavContentInfo, to: NavContentInfo,
-    operation: NavigationOperation): NavigationAnimatedTransition | undefined {
-    if (!this.searchTransition ||
-      !((operation === NavigationOperation.PUSH && to.name === RouteName.SEARCH && !from.name) ||
-        (operation === NavigationOperation.POP && from.name === RouteName.SEARCH && !to.name))) {
-      return undefined;
-    }
-    const push = operation === NavigationOperation.PUSH;
-    return {
-      timeout: 1000,
-      transition: (proxy: NavigationTransitionProxy) => {
-        this.getUIContext().animateTo({ duration: 360, curve: Curve.Friction,
-          onFinish: () => proxy.finishTransition() }, () => {
-          this.searchEntryVisible = !push;
-          AppStorage.setOrCreate<boolean>('itemtrace.searchExpanded', push);
-        });
-      },
-      onTransitionEnd: (success: boolean) => {
-        if (success && push) { this.getUIContext().getFocusController().requestFocus('itemtrace-search-input'); }
-        if (success && !push) { this.searchTransition = false; }
-      }
-    };
-  }
-
-  private animateHero(source: ItemHeroSource, proxy: NavigationTransitionProxy,
-    operation: NavigationOperation, interactive: boolean): void {
-    const target = source.target;
-    if (target === undefined) { proxy.finishTransition(); return; }
-    const push = operation === NavigationOperation.PUSH;
-    const start = push ? source.frame : target;
-    const end = push ? target : source.frame;
-    const root = ItemHeroMotion.frame(this.getUIContext(), 'itemtrace-motion-root');
-    const rootX = root?.x ?? 0;
-    const rootY = (root?.y ?? 0) + this.safeAreaTop;
-    this.heroPhoto = source.photoPath ?? '';
-    this.heroX = start.x - rootX;
-    this.heroY = start.y - rootY;
-    this.heroWidth = start.width;
-    this.heroHeight = start.height;
-    this.heroRadius = push ? 14 : 18;
-    this.heroVisible = true;
-    AppStorage.setOrCreate<string>('itemtrace.heroSourceKey', source.key);
-    AppStorage.setOrCreate<string>('itemtrace.heroActiveItem', source.item.id);
-    AppStorage.setOrCreate<number>('itemtrace.heroContentOpacity', push ? 0 : 1);
-    this.getUIContext().animateTo({ duration: 420, curve: interactive ? Curve.Linear : Curve.Friction,
-      onFinish: () => { if (!interactive) { proxy.finishTransition(); } } }, () => {
-      this.heroX = end.x - rootX;
-      this.heroY = end.y - rootY;
-      this.heroWidth = end.width;
-      this.heroHeight = end.height;
-      this.heroRadius = push ? 18 : 14;
-      AppStorage.setOrCreate<number>('itemtrace.heroContentOpacity', push ? 1 : 0);
-    });
-  }
-
-  @Builder
-  private heroOverlay() {
-    Stack() {
-      if (this.heroPhoto.length > 0) {
-        Image(localImageSource(this.heroPhoto)).width('100%').height('100%').objectFit(ImageFit.Cover)
-      } else {
-        Image($r('app.media.ui_box')).width('46%').height('46%').fillColor($r('app.color.brand_primary'))
-      }
-    }.width(this.heroWidth).height(this.heroHeight).position({ x: this.heroX, y: this.heroY })
-      .backgroundColor($r('app.color.surface_accent')).borderRadius(this.heroRadius).clip(true)
-      .hitTestBehavior(HitTestMode.None).accessibilityLevel('no').zIndex(10)
-  }
-
-  @Builder
-  private tabLabel(label: string, symbol: Resource, index: number) {
-    MainDock({ label: label, symbol: symbol, selected: this.selectedTabIndex === index })
+    SharedRouteMotion.openSearch(this.getUIContext(), this.reduceAnimation);
   }
 
   @Builder
   private mainHeader() {
-    PageHeader({ title: this.mainTabIndex === 0 ? '物品，都有去处。' : this.mainTabIndex === 1 ? '我的物品' :
+    PageHeader({ title: this.mainTabIndex === 0 ? '一览无遗' : this.mainTabIndex === 1 ? '我的物品' :
       this.mainTabIndex === 2 ? '查找物品' : '我的空间',
       subtitle: this.mainTabIndex === 0 ? 'ITEMTRACE / 物品收纳' : this.mainTabIndex === 1 ? '每一件，都好好收着。' :
         this.mainTabIndex === 2 ? '知道放在哪里，就少一点寻找。' : '让整理，更合你的习惯。',
@@ -396,24 +295,24 @@ struct Index {
     Tabs({ index: this.mainTabIndex, controller: this.tabsController }) {
       TabContent() {
         this.homeContent()
-      }.tabBar(this.tabLabel('首页', $r('sys.symbol.house'), 0))
+      }.tabBar(bottomTabStyle('首页', $r('sys.symbol.house'), this.reduceAnimation))
       TabContent() {
         ItemListPage({ isMainTab: true })
-      }.tabBar(this.tabLabel('物品', $r('sys.symbol.archivebox'), 1))
+      }.tabBar(bottomTabStyle('物品', $r('sys.symbol.archivebox'), this.reduceAnimation))
       TabContent() {
         SearchPage({ isMainTab: true })
-      }.tabBar(this.tabLabel('查找', $r('sys.symbol.magnifyingglass'), 2))
+      }.tabBar(bottomTabStyle('查找', $r('sys.symbol.magnifyingglass'), this.reduceAnimation))
       TabContent() {
         SettingsPage({ isMainTab: true })
-      }.tabBar(this.tabLabel('我的', $r('sys.symbol.person'), 3))
+      }.tabBar(bottomTabStyle('我的', $r('sys.symbol.person'), this.reduceAnimation))
     }
     .attributeModifier(new FloatingTabsStyle(this.reduceAnimation))
     .barPosition(BarPosition.End)
     .barOverlap(true)
-    .barHeight(this.keyboardVisible ? 0 : 64)
+    .barHeight(this.keyboardVisible ? 0 : dockBarHeight)
     .animationMode(AnimationMode.CONTENT_FIRST_WITH_JUMP)
-    .animationCurve(Curve.EaseOut)
-    .animationDuration(this.reduceAnimation ? 0 : 180)
+    .animationCurve(Curve.Friction)
+    .animationDuration(this.reduceAnimation ? 0 : 320)
     .scrollable(true)
     .width('100%')
     .height('100%')
@@ -479,6 +378,7 @@ struct Index {
           .justifyContent(FlexAlign.Center)
         }
         .clip(false)
+        .align(Alignment.TopStart)
         .onDidScroll(() => { this.homeScrolled = this.homeScroller.currentOffset().yOffset > 32; })
         .layoutWeight(1)
       }
@@ -522,25 +422,12 @@ struct Index {
 
   @Builder
   private homeHeader() {
-    Column({ space: 24 }) {
-      if (this.searchEntryVisible) {
-      Button({ type: ButtonType.Normal }) {
-        Row({ space: 12 }) {
-          Image($r('app.media.dock_search')).width(20).height(20)
-            .fillColor($r('app.color.text_secondary')).accessibilityLevel('no')
-          Text('找找你的物品').fontSize(15).fontColor($r('app.color.text_secondary')).layoutWeight(1)
-          Text('名称 / 条码').fontSize(11).fontColor($r('app.color.text_tertiary'))
-        }.width('100%')
+    Column() {
+      if (!this.searchSourceHidden) {
+        SharedSearchField({ editable: false, inputId: 'itemtrace-home-search-input',
+          transitionId: 'itemtrace-home-search', onOpen: () => this.openSearch() })
       }
-        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-      .width('100%').height(54).padding({ left: 18, right: 18 }).borderRadius(16)
-      .backgroundColor($r('app.color.surface_card'))
-      .accessibilityText('搜索物品名称或条码')
-      .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-      .geometryTransition(this.reduceAnimation ? '' : 'itemtrace-home-search')
-      .onClick(() => this.openSearch())
-      }
-    }.width('100%').alignItems(HorizontalAlign.Start)
+    }.width('100%').height(52).alignItems(HorizontalAlign.Start)
   }
 
   @Builder

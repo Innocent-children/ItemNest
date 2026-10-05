@@ -1,7 +1,10 @@
 import { NavigationRouteParams } from '../navigation/RouteContract';
 import { PageHeader } from '../components/PageHeader';
+import { SharedSearchField } from '../components/SharedSearchField';
+import { SharedRouteMotion } from '../ui/SharedRouteMotion';
 import { RoundedButtonStyle, dockContentInset, uiSpring, nativeTitleOptions, nativeSheetOptions } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
+import { RouteName } from '../navigation/RouteName';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
@@ -21,8 +24,11 @@ interface SearchConditionParams {
 
 @Component
 export struct SearchPage {
-  @StorageLink('itemtrace.searchExpanded') private searchExpanded: boolean = true;
+  private focusOnShown: boolean = false;
   @State private homeTransition: boolean = false;
+  @StorageLink('itemtrace.searchExpanded') private searchExpanded: boolean = true;
+  @StorageLink('itemtrace.sharedPageProgress') private sharedPageProgress: number = 1;
+  @StorageLink('itemtrace.sharedPageRoute') private sharedPageRoute: string = '';
   private pageScroller: Scroller = new Scroller();
   private searchController: SearchController = new SearchController();
   @State private viewportWidth: number = 360;
@@ -54,6 +60,7 @@ export struct SearchPage {
 
   aboutToAppear(): void {
     this.homeTransition = !this.isMainTab && (NavigationHelper.getParams() as NavigationRouteParams | undefined)?.source === 'home-search';
+    this.focusOnShown = this.homeTransition && this.reduceAnimation;
     this.readInitialQuery();
     const hasInitialQuery = !this.currentQuery().isEmpty();
     this.loadSearchDataForCurrentRevision(!hasInitialQuery, false);
@@ -64,6 +71,10 @@ export struct SearchPage {
 
   onPageShow(): void {
     this.refreshForRevisionChange(false);
+  }
+
+  aboutToDisappear(): void {
+    if (this.homeTransition) { SharedRouteMotion.release(RouteName.SEARCH); }
   }
 
   private onDataRevisionChanged(): void {
@@ -99,6 +110,14 @@ export struct SearchPage {
       .hideBackButton(true)
       .bindToScrollable([this.pageScroller])
       .backgroundColor($r('app.color.surface_app'))
+      .opacity(this.homeTransition && this.sharedPageRoute === RouteName.SEARCH ? this.sharedPageProgress : 1)
+      .onShown(() => {
+        if (this.focusOnShown) {
+          this.focusOnShown = false;
+          this.getUIContext().getFocusController().requestFocus('itemtrace-search-input');
+        }
+      })
+      .onHidden(() => this.searchController.stopEditing())
       .onBackPressed(() => NavigationHelper.handleBackPressed())
     }
   }
@@ -117,7 +136,10 @@ export struct SearchPage {
     PageHeader({ title: '查找物品', subtitle: '知道放在哪里，就少一点寻找。',
         eyebrow: this.isMainTab ? 'FIND YOUR THINGS' : '', showBack: !this.isMainTab,
         actionText: '筛选位置与分类', actionIcon: $r('app.media.ui_filter'),
-        onAction: () => this.openFilters() })
+        onAction: () => this.openFilters(), onBack: () => {
+          this.searchController.stopEditing();
+          if (!NavigationHelper.handleBackPressed()) { NavigationHelper.back(); }
+        } })
   }
 
   @Builder
@@ -126,30 +148,26 @@ export struct SearchPage {
 
       Row({ space: 10 }) {
         if (!this.homeTransition || this.searchExpanded) {
-        Search({ value: this.name, placeholder: '物品名称或条码', controller: this.searchController })
-          .id(this.isMainTab ? 'itemtrace-tab-search-input' : 'itemtrace-search-input')
-          .geometryTransition(this.homeTransition && !this.reduceAnimation ? 'itemtrace-home-search' : '')
-          .height(52).layoutWeight(1).fontColor($r('app.color.text_primary'))
-          .placeholderColor($r('app.color.text_secondary')).caretStyle({ color: $r('app.color.brand_primary') })
-          .backgroundColor($r('app.color.surface_card')).borderRadius(16)
-          .searchButton('查找', { autoDisable: true })
-          .onChange((value: string) => {
+        SharedSearchField({ value: this.name, controller: this.searchController,
+          inputId: this.isMainTab ? 'itemtrace-tab-search-input' : 'itemtrace-search-input',
+          transitionId: this.homeTransition ? 'itemtrace-home-search' : '',
+          onChange: (value: string) => {
             this.name = value;
             this.requestCoordinator.invalidateSearchResults();
             this.searchLoading = false;
             this.searchErrorMessage = '';
             this.loadSuggestions();
             this.scheduleSearch();
-          })
-          .onSubmit(() => this.search(true))
+          }, onSubmit: () => this.search(true) }).layoutWeight(1)
         }
         if (this.isMainTab) {
         Button('筛选').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
           .height(48).fontSize(13).backgroundColor($r('app.color.surface_accent'))
           .fontColor($r('app.color.brand_primary')).onClick(() => this.openFilters())
         }
-      }.width('100%').constraintSize({ maxWidth: 960 })
+      }.width('100%').height(68).constraintSize({ maxWidth: 960 })
         .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: 16 })
+        .onAreaChange(() => { if (this.homeTransition) { SharedRouteMotion.targetReady(); } })
       Scroll(this.pageScroller) {
         Column({ space: 16 }) {
           if (this.selectedLocation.length > 0 || this.selectedCategory.length > 0) {
@@ -184,7 +202,7 @@ export struct SearchPage {
               EmptyState({ title: '还没有找到', description: '试试更短的名称，或移除位置和分类条件。' })
             } else {
               ForEach(this.items, (item: ItemSummary) => {
-                ItemCard({ item: this.currentItem(item.id, item), heroKey: 'search' })
+                ItemCard({ item: this.currentItem(item.id, item), heroKey: this.isMainTab ? 'tab-search' : 'search' })
               }, (item: ItemSummary) => item.id)
             }
           } else {
@@ -215,7 +233,7 @@ export struct SearchPage {
         }.width('100%').constraintSize({ maxWidth: 960 }).alignItems(HorizontalAlign.Start)
           .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'),
             bottom: dockContentInset(this.isMainTab, this.keyboardVisible, this.safeAreaBottom) })
-      }.clip(false).width('100%').layoutWeight(1).scrollBar(BarState.Off)
+      }.clip(false).align(Alignment.TopStart).width('100%').layoutWeight(1).scrollBar(BarState.Off)
     }
     .width('100%').height('100%')
     .padding({ left: this.safeAreaLeft, right: this.safeAreaRight })

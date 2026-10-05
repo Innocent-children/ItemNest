@@ -1,5 +1,5 @@
 import { localImageSource } from '../ui/ImageSource';
-import { ItemHeroMotion } from '../ui/ItemHeroMotion';
+import { SharedRouteMotion } from '../ui/SharedRouteMotion';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { InventoryMetrics } from '../components/InventoryMetrics';
 import { PageHeader } from '../components/PageHeader';
@@ -45,9 +45,11 @@ interface ManagementEntryParams {
 @Component
 export struct ItemDetailPage {
   @State private heroPreview: ItemSummary | undefined = undefined;
+  @State private sharedPhotoId: string = '';
+  @StorageLink('itemtrace.sharedItemExpanded') private sharedItemExpanded: boolean = true;
+  @StorageLink('itemtrace.sharedPageProgress') private sharedPageProgress: number = 1;
+  @StorageLink('itemtrace.sharedPageRoute') private sharedPageRoute: string = '';
   @State private showPhotoViewer: boolean = false;
-  @StorageLink('itemtrace.heroActiveItem') private heroActiveItem: string = '';
-  @StorageLink('itemtrace.heroContentOpacity') private heroContentOpacity: number = 1;
   private pageScroller: Scroller = new Scroller();
   @State private viewportWidth: number = 360;
   @State private showActionSheet: boolean = false;
@@ -107,7 +109,8 @@ export struct ItemDetailPage {
       return;
     }
     this.itemId = itemIdResult.getData();
-    this.heroPreview = ItemHeroMotion.preview(this.itemId);
+    this.heroPreview = SharedRouteMotion.preview(this.itemId);
+    this.sharedPhotoId = SharedRouteMotion.itemTransitionId(this.itemId);
     this.loadDetailForCurrentRevision(true);
   }
 
@@ -118,6 +121,10 @@ export struct ItemDetailPage {
     if (this.itemId.length > 0) {
       this.loadDetailForCurrentRevision(false);
     }
+  }
+
+  aboutToDisappear(): void {
+    SharedRouteMotion.release(RouteName.ITEM_DETAIL, this.itemId);
   }
 
   private onDataRevisionChanged(): void {
@@ -162,14 +169,15 @@ export struct ItemDetailPage {
     .hideBackButton(true)
     .bindToScrollable([this.pageScroller])
     .backgroundColor($r('app.color.surface_app'))
+    .opacity(this.sharedPageRoute === RouteName.ITEM_DETAIL ? this.sharedPageProgress : 1)
     .onBackPressed(() => NavigationHelper.handleBackPressed())
-    .onShown(() => { this.heroPreview = ItemHeroMotion.preview(this.itemId); })
   }
 
   @Builder
   private pageHeader() {
     PageHeader({ title: '物品档案', showBack: true, actionText: this.item === undefined ? '' : '编辑',
-          actionEnabled: !this.deleting && !this.consuming, onAction: () => this.openEdit() })
+          actionEnabled: !this.deleting && !this.consuming, onAction: () => this.openEdit(),
+          onBack: () => { if (!NavigationHelper.handleBackPressed()) { NavigationHelper.back(); } } })
   }
 
   @Builder
@@ -181,7 +189,8 @@ export struct ItemDetailPage {
           Column({ space: 20 }) {
             if (this.heroPreview !== undefined) {
               Column() {
-                this.detailIdentity({ name: this.heroPreview.name, category: this.heroPreview.category ?? '我的物品', path: this.heroPreview.photoPath ?? '' })
+                this.detailIdentity({ name: this.heroPreview.name, category: this.heroPreview.category ?? '我的物品',
+                  path: this.heroPreview.photoPath ?? '' })
               }.width('100%').padding(24).borderRadius(22).backgroundColor($r('app.color.surface_card'))
             }
             LoadingState({ text: '正在读取物品详情…' })
@@ -237,20 +246,24 @@ export struct ItemDetailPage {
   private detailIdentity($$: DetailIdentityParams) {
     Row({ space: 18 }) {
       Stack() {
-        if ($$.path.length > 0) {
-          if (!this.showPhotoViewer) {
-            Image(localImageSource($$.path)).width('100%').height('100%').objectFit(ImageFit.Cover)
-              .onError(() => { this.photoPath = ''; ItemHeroMotion.updatePhoto(this.itemId, ''); })
-              .geometryTransition(this.reduceAnimation ? '' : `photo-viewer:${this.itemId}`)
-          }
-        } else {
-          Image($r('app.media.ui_box')).width(38).height(38).fillColor($r('app.color.brand_primary'))
+        if (this.sharedPhotoId.length === 0 || this.sharedItemExpanded) {
+          Stack() {
+            if ($$.path.length > 0) {
+              if (!this.showPhotoViewer) {
+                Image(localImageSource($$.path)).width('100%').height('100%').objectFit(ImageFit.Cover)
+                  .onError(() => this.photoPath = '')
+                  .geometryTransition(this.reduceAnimation ? '' : `photo-viewer:${this.itemId}`)
+              }
+            } else {
+              Image($r('app.media.ui_box')).width('46%').height('46%').objectFit(ImageFit.Contain)
+                .fillColor($r('app.color.brand_primary'))
+            }
+          }.width(84).height(96).borderRadius(18).clip(true)
+            .backgroundColor($r('app.color.surface_accent'))
+            .geometryTransition(this.reduceAnimation ? '' : this.sharedPhotoId)
         }
-      }.width(84).height(96).borderRadius(18).clip(true)
-        .backgroundColor($r('app.color.surface_accent'))
-        .id(`item-detail-photo:${this.itemId}`)
-        .opacity(this.heroActiveItem === this.itemId ? 0 : 1)
-        .onAreaChange(() => ItemHeroMotion.reportTarget(this.getUIContext(), this.itemId, `item-detail-photo:${this.itemId}`))
+      }.width(84).height(96)
+        .onAreaChange(() => { if (this.sharedPhotoId.length > 0) { SharedRouteMotion.targetReady(this.itemId); } })
         .onClick(() => { if (this.photoPath.length > 0) {
           this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.42, 0.85), () => this.showPhotoViewer = true);
         } })
@@ -260,16 +273,15 @@ export struct ItemDetailPage {
         Text($$.name).fontSize(27).fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.text_primary')).width('100%')
         ExpiryStatusTag({ status: this.expiryStatus })
-        if (!this.reduceAnimation && this.heroPreview !== undefined) {
-          Text('向右滑动返回').fontSize(10).fontColor($r('app.color.text_tertiary'))
-        }
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
     }.width('100%')
       .gesture(PanGesture({ direction: PanDirection.Right, distance: 16 })
-        .onActionStart(() => { if (!this.reduceAnimation && !this.deleting && !this.consuming) { ItemHeroMotion.startReturn(this.itemId); } })
-        .onActionUpdate((event: GestureEvent) => ItemHeroMotion.updateReturn(event.offsetX / this.viewportWidth))
-        .onActionEnd((event: GestureEvent) => ItemHeroMotion.endReturn(event.offsetX / this.viewportWidth > 0.3 || event.velocityX > 700))
-        .onActionCancel(() => ItemHeroMotion.endReturn(false)))
+        .onActionStart(() => {
+          if (!this.reduceAnimation && !this.deleting && !this.consuming) { SharedRouteMotion.startReturn(this.itemId); }
+        })
+        .onActionUpdate((event: GestureEvent) => SharedRouteMotion.updateReturn(event.offsetX / this.viewportWidth))
+        .onActionEnd((event: GestureEvent) => SharedRouteMotion.endReturn(event.offsetX / this.viewportWidth > 0.3 || event.velocityX > 700))
+        .onActionCancel(() => SharedRouteMotion.endReturn(false)))
   }
 
   @Builder
@@ -340,7 +352,6 @@ export struct ItemDetailPage {
       .width('100%')
       .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: $r('app.float.space_6') })
       .alignItems(HorizontalAlign.Start)
-      .opacity(this.heroContentOpacity)
     }.clip(false)
     .layoutWeight(1)
   }
@@ -706,7 +717,6 @@ export struct ItemDetailPage {
     } else {
       this.photoPath = '';
     }
-    ItemHeroMotion.updatePhoto(this.itemId, this.photoPath);
   }
 
   @Builder

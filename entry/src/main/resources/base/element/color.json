@@ -92,10 +92,6 @@
       "value": "#ECFFFFFF"
     },
     {
-      "name": "dock_selected",
-      "value": "#E8EDE6"
-    },
-    {
       "name": "surface_input",
       "value": "#F4F5F1"
     },

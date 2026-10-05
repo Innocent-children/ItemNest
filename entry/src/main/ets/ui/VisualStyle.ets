@@ -1,21 +1,58 @@
-import { curves, uiMaterial } from '@kit.ArkUI';
+import { curves, uiMaterial, SymbolGlyphModifier } from '@kit.ArkUI';
 import { deviceInfo } from '@kit.BasicServicesKit';
 import { hdsEffect } from '@kit.UIDesignKit';
+
+export const dockBarHeight: number = 56;
+
+/**
+ * 图标、文字和点击反馈都由原生页签绘制，避免叠加两套选中背景。
+ */
+export function bottomTabStyle(label: string, symbol: Resource, reduceAnimation: boolean): BottomTabBarStyle {
+  return BottomTabBarStyle.of({
+    normal: new SymbolGlyphModifier(symbol).fontSize(22).fontColor([$r('app.color.text_secondary')])
+      .symbolEffect(new BounceSymbolEffect(), -1),
+    selected: new SymbolGlyphModifier(symbol).fontSize(22).fontColor([$r('app.color.brand_primary')])
+      .symbolEffect(new BounceSymbolEffect(), reduceAnimation ? -1 : 1)
+  }, label)
+    .layoutMode(LayoutMode.VERTICAL)
+    .padding({ top: 5, bottom: 5, left: 4, right: 4 })
+    .labelStyle({ font: { size: 11, weight: FontWeight.Medium },
+      selectedColor: $r('app.color.brand_primary'), unselectedColor: $r('app.color.text_secondary') });
+}
 
 /**
  * 系统减少动画开启时，同时关闭弹簧效果和过渡时间。
  */
 export function uiSpring(reduceAnimation: boolean, response: number = 0.38,
-  damping: number = 0.62): AnimateParam {
+  damping: number = 0.82): AnimateParam {
   return reduceAnimation ? { duration: 0, curve: Curve.Linear } :
     { curve: curves.springMotion(response, damping, 0.12) };
 }
 
 export function uiReveal(reduceAnimation: boolean): TransitionEffect {
   return TransitionEffect.OPACITY
-    .combine(TransitionEffect.translate({ y: reduceAnimation ? 0 : 28 }))
-    .combine(TransitionEffect.scale({ x: reduceAnimation ? 1 : 0.92, y: reduceAnimation ? 1 : 0.92 }))
-    .animation(uiSpring(reduceAnimation, 0.46, 0.58));
+    .combine(TransitionEffect.translate({ y: reduceAnimation ? 0 : 24 }))
+    .combine(TransitionEffect.scale({ x: reduceAnimation ? 1 : 0.96, y: reduceAnimation ? 1 : 0.96 }))
+    .animation(uiSpring(reduceAnimation, 0.42, 0.82));
+}
+
+export class SearchFieldStyle implements AttributeModifier<StackAttribute> {
+  private reduceAnimation: boolean;
+
+  constructor(reduceAnimation: boolean) {
+    this.reduceAnimation = reduceAnimation;
+  }
+
+  applyNormalAttribute(instance: StackAttribute): void {
+    instance.borderRadius(16).backgroundColor($r('app.color.surface_card'))
+      .border({ width: 1, color: $r('app.color.chrome_border') });
+    if (deviceInfo.sdkApiVersion >= 26) {
+      if (deviceInfo.apiAvailable('26.0.0')) {
+        instance.backgroundColor(Color.Transparent)
+          .systemMaterial(immersiveMaterial(this.reduceAnimation, uiMaterial.ImmersiveStyle.REGULAR));
+      }
+    }
+  }
 }
 
 /**
@@ -69,9 +106,11 @@ export class FloatingTabsStyle implements AttributeModifier<TabsAttribute> {
   applyNormalAttribute(instance: TabsAttribute): void {
     if (deviceInfo.sdkApiVersion >= 26) {
       if (deviceInfo.apiAvailable('26.0.0')) {
-        instance.barFloatingStyle({ barSideMargin: 24, barBottomMargin: 18,
+        instance.barFloatingStyle({
+          barWidth: { smallBarWidth: 296, mediumBarWidth: 320, largeBarWidth: 320 },
+          barSideMargin: 32, barBottomMargin: 14,
           systemMaterial: immersiveMaterial(this.reduceAnimation),
-          maskColor: $r('app.color.chrome_glass'), maskHeight: 100 });
+          maskColor: $r('app.color.chrome_glass'), maskHeight: 84 });
         return;
       }
     }
@@ -111,7 +150,7 @@ export function dockContentInset(isMainTab: boolean, keyboardVisible: boolean, s
   if (keyboardVisible) {
     return 24;
   }
-  return (isMainTab ? 96 : 24) + safeAreaBottom;
+  return (isMainTab ? dockBarHeight + 30 : 24) + safeAreaBottom;
 }
 
 /**
@@ -135,6 +174,6 @@ export class RoundedButtonStyle implements AttributeModifier<ButtonAttribute> {
   }
 
   applyPressedAttribute(instance: ButtonAttribute): void {
-    instance.scale({ x: this.reduceAnimation ? 1 : 0.92, y: this.reduceAnimation ? 1 : 0.92 });
+    instance.scale({ x: this.reduceAnimation ? 1 : 0.97, y: this.reduceAnimation ? 1 : 0.97 });
   }
 }
