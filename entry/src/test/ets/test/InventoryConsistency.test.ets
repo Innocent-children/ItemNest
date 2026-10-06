@@ -326,7 +326,7 @@ export default function inventoryConsistencyTest() {
 
     it('保留v10迁移并在v12替换汇总与单位约束', 0, () => {
       const sql = INVENTORY_V10_MIGRATION_STATEMENTS.join('\n');
-      expect(DATABASE_VERSION).assertEqual(12);
+      expect(DATABASE_VERSION).assertEqual(13);
       expect(INVENTORY_V10_TRIGGER_NAMES.length).assertEqual(10);
       expect(sql.includes('WHERE NOT EXISTS')).assertTrue();
       expect(sql.includes('AFTER INSERT ON item')).assertTrue();

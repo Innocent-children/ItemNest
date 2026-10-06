@@ -1,4 +1,8 @@
 export enum RouteName {
+  SYSTEM_FEATURES = 'pages/SystemFeaturesPage',
+  LOCATION_LABEL = 'pages/LocationLabelPage',
+  SHARE_PREVIEW = 'pages/SharePreviewPage',
+  ITEM_ACTION = 'pages/ItemActionPage',
   HOME = 'pages/Index',
   ITEM_LIST = 'pages/ItemListPage',
   ITEM_DETAIL = 'pages/ItemDetailPage',

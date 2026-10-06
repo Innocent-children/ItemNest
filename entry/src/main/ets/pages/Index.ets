@@ -1,3 +1,11 @@
+import { StartupBrand } from '../components/StartupBrand';
+import { KeyCode } from '@kit.InputKit';
+import { SystemFeaturesPage } from './SystemFeaturesPage';
+import { LocationLabelPage } from './LocationLabelPage';
+import { SharePreviewPage } from './SharePreviewPage';
+import { ItemActionPage } from './ItemActionPage';
+import { ExternalRequest } from '../model/SystemFeatures';
+import { ExternalNavigation } from '../navigation/ExternalNavigation';
 import { PageHeader } from '../components/PageHeader';
 import { SharedSearchField } from '../components/SharedSearchField';
 import { SharedRouteMotion } from '../ui/SharedRouteMotion';
@@ -44,7 +52,8 @@ interface HomeSummarySectionParams {
 @Entry
 @Component
 struct Index {
-  @StorageLink('itemtrace.widgetRequest') @Watch('onWidgetRequested') private widgetRequest: string = '';
+  @StorageLink('itemtrace.entryError') @Watch('showEntryError') private entryError: string = '';
+  @StorageLink('itemtrace.externalRevision') @Watch('onExternalRequested') private externalRevision: number = 0;
   @StorageLink('itemtrace.dataRevision') @Watch('onRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.preferenceRevision') @Watch('onRevisionChanged') private preferenceRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
@@ -52,6 +61,8 @@ struct Index {
   @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
   @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @State private viewportWidth: number = 360;
+  @State private sidebarLocation: string = '';
   @State private mainTabIndex: number = 0;
   @State private selectedTabIndex: number = 0;
   @State private navigationRootVisible: boolean = true;
@@ -59,6 +70,7 @@ struct Index {
   @State private dockRoute: string = RouteName.HOME;
   private mainTabRoutes: string[] = [RouteName.HOME, RouteName.ITEM_LIST, RouteName.SEARCH, RouteName.SETTINGS];
   @State private loading: boolean = true;
+  @State private initialLoadComplete: boolean = false;
   @State private totalItemCount: number = 0;
   @State private unconfiguredStockCount: number = 0;
   @State private outstandingLoanCount: number = 0;
@@ -75,7 +87,7 @@ struct Index {
   @State private showStockSection: boolean = true;
   private dataRefreshListenerId: number = 0;
   private routeResultListenerId: number = 0;
-  private widgetOpening: boolean = false;
+  private externalOpening: boolean = false;
   private summaryLoadId: number = 0;
   private lastRouteRefreshAt: number = 0;
   private lastHandledDataRevision: number = -1;
@@ -122,11 +134,18 @@ struct Index {
     if (!this.refreshForRevisionChange(false) && !this.handleRouteRefreshParams()) {
       this.refreshSummaryForCurrentRevision(false);
     }
-    this.openWidgetIfRequested();
+    this.openExternalIfRequested();
+    this.showEntryError();
   }
 
-  private onWidgetRequested(): void {
-    this.openWidgetIfRequested();
+  private showEntryError(): void {
+    if (this.entryError.length === 0) { return; }
+    try { this.getUIContext().getPromptAction().showToast({ message: this.entryError }); } catch (_) {}
+    AppStorage.setOrCreate<string>('itemtrace.entryError', '');
+  }
+
+  private onExternalRequested(): void {
+    this.openExternalIfRequested();
   }
 
   private applyAnimationPreference(enabled: boolean): void {
@@ -187,27 +206,23 @@ struct Index {
     this.loadSummary(showLoading);
   }
 
-  private openWidgetIfRequested(): void {
-    if (this.widgetRequest.length === 0 || this.widgetOpening) {
-      return;
-    }
-    const request = this.widgetRequest;
-    this.widgetOpening = true;
-    const action = request.split(':')[0];
-    NavigationHelper.pushUrl(action === 'add' ? { url: RouteName.ITEM_FORM,
-      params: { mode: 'create', returnTo: RouteName.HOME } } : action === 'reminders' ? {
-        url: RouteName.ITEM_LIST, params: { attention: 'reminders' }
-      } : { url: RouteName.ITEM_LIST, params: { attention: 'expiry' } }).then((opened: boolean) => {
-      this.widgetOpening = false;
-      if (!opened) {
-        return;
+  private async openExternalIfRequested(): Promise<void> {
+    const raw = AppStorage.get<string>('itemtrace.externalRequest') ?? '';
+    if (raw.length === 0 || this.externalOpening) { return; }
+    this.externalOpening = true;
+    try {
+      const opened = await ExternalNavigation.open(JSON.parse(raw) as ExternalRequest);
+      if (opened && AppStorage.get<string>('itemtrace.externalRequest') === raw) {
+        AppStorage.setOrCreate<string>('itemtrace.externalRequest', '');
       }
-      if (this.widgetRequest === request) {
-        AppStorage.setOrCreate<string>('itemtrace.widgetRequest', '');
-      } else {
-        this.openWidgetIfRequested();
+    } catch (error) {
+      if (AppStorage.get<string>('itemtrace.externalRequest') === raw) {
+        AppStorage.setOrCreate<string>('itemtrace.externalRequest', '');
       }
-    });
+      this.getUIContext().getPromptAction().showToast({ message: (error as Error).message || '入口暂不可用' });
+    } finally { this.externalOpening = false; }
+    const next = AppStorage.get<string>('itemtrace.externalRequest') ?? '';
+    if (next.length > 0 && next !== raw) { this.openExternalIfRequested(); }
   }
 
   /**
@@ -232,12 +247,19 @@ struct Index {
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       this.mainNavigation()
+      if (!this.initialLoadComplete) { StartupBrand() }
     }
     .width('100%')
     .height('100%')
     .padding({ top: this.safeAreaTop })
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     .backgroundColor($r('app.color.surface_app'))
+    .onKeyEvent((event: KeyEvent) => {
+      if (event.type === KeyType.Down && event.getModifierKeyState?.(['Ctrl'])) {
+        if (event.keyCode === KeyCode.KEYCODE_F) { this.selectMainTab(RouteName.SEARCH); event.stopPropagation(); }
+        if (event.keyCode === KeyCode.KEYCODE_N) { this.openCreateMenu(); event.stopPropagation(); }
+      }
+    })
   }
 
   @Builder
@@ -249,7 +271,7 @@ struct Index {
       nativeTitleOptions(this.reduceAnimation))
     .hideBackButton(true)
     .mode(NavigationMode.Auto)
-    .navBarWidthRange([320, 420])
+    .navBarWidthRange(this.viewportWidth >= 1180 ? [560, 640] : [320, 420])
     .minContentWidth(420)
     .onNavBarStateChange((visible: boolean) => {
       this.navigationRootVisible = visible;
@@ -258,8 +280,9 @@ struct Index {
         this.refreshSummaryForCurrentRevision(false);
       }
     })
-    .onAppear(() => this.openWidgetIfRequested())
+    .onAppear(() => this.openExternalIfRequested())
     .navDestination(this.navDestinationBuilder)
+    .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
     .customNavContentTransition((from, to, operation) =>
       this.reduceAnimation ? undefined : SharedRouteMotion.transition(from, to, operation))
     .width('100%').height('100%')
@@ -299,42 +322,58 @@ struct Index {
 
   @Builder
   private mainTabs() {
-    Tabs({ index: this.mainTabIndex, controller: this.tabsController }) {
-      TabContent() {
-        this.homeContent()
-      }.tabBar(bottomTabStyle('首页', $r('sys.symbol.house'), this.reduceAnimation))
-      TabContent() {
-        ItemListPage({ isMainTab: true })
-      }.tabBar(bottomTabStyle('物品', $r('sys.symbol.archivebox'), this.reduceAnimation))
-      TabContent() {
-        SearchPage({ isMainTab: true })
-      }.tabBar(bottomTabStyle('查找', $r('sys.symbol.magnifyingglass'), this.reduceAnimation))
-      TabContent() {
-        SettingsPage({ isMainTab: true })
-      }.tabBar(bottomTabStyle('我的', $r('sys.symbol.person'), this.reduceAnimation))
-    }
-    .attributeModifier(new FloatingTabsStyle(this.reduceAnimation))
-    .barPosition(BarPosition.End)
-    .barOverlap(true)
-    .barHeight(this.keyboardVisible ? 0 : dockBarHeight)
-    .animationMode(AnimationMode.CONTENT_FIRST_WITH_JUMP)
-    .animationCurve(Curve.Friction)
-    .animationDuration(this.reduceAnimation ? 0 : 320)
-    .scrollable(true)
-    .width('100%')
-    .height('100%')
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-    .backgroundColor($r('app.color.surface_app'))
-    .onSelected((index: number) => {
-      this.selectedTabIndex = index;
-      this.dockRoute = this.mainTabRoutes[index];
-    })
-    .onChange((index: number) => {
-      this.mainTabIndex = index;
-      if (this.navigationRootVisible) {
-        this.dockRoute = this.mainTabRoutes[index];
+    Row() {
+      if (this.viewportWidth >= 1180) {
+        Scroll() {
+          Column({ space: 10 }) {
+            Text('存放位置').fontSize(17).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
+            Button('全部物品').width('100%').onClick(() => { this.sidebarLocation = ''; this.selectMainTab(RouteName.ITEM_LIST); })
+            ForEach(this.locationPaths, (path: string) => {
+              Button(path).width('100%').height('auto').padding(12)
+                .fontColor($r('app.color.brand_primary'))
+                .backgroundColor(path === this.sidebarLocation ? $r('app.color.surface_accent') : Color.Transparent)
+                .onClick(() => { this.sidebarLocation = path; this.selectMainTab(RouteName.ITEM_LIST); })
+            }, (path: string) => path)
+          }.width('100%').padding(12)
+        }.width(190).height('100%')
       }
-    })
+      Tabs({ index: this.mainTabIndex, controller: this.tabsController }) {
+        TabContent() {
+          this.homeContent()
+        }.tabBar(bottomTabStyle('首页', $r('sys.symbol.house'), this.reduceAnimation))
+        TabContent() {
+          ItemListPage({ isMainTab: true, locationFilter: this.sidebarLocation })
+        }.tabBar(bottomTabStyle('物品', $r('sys.symbol.archivebox'), this.reduceAnimation))
+        TabContent() {
+          SearchPage({ isMainTab: true })
+        }.tabBar(bottomTabStyle('查找', $r('sys.symbol.magnifyingglass'), this.reduceAnimation))
+        TabContent() {
+          SettingsPage({ isMainTab: true })
+        }.tabBar(bottomTabStyle('我的', $r('sys.symbol.person'), this.reduceAnimation))
+      }
+      .attributeModifier(new FloatingTabsStyle(this.reduceAnimation))
+      .barPosition(BarPosition.End)
+      .barOverlap(true)
+      .barHeight(this.keyboardVisible ? 0 : dockBarHeight)
+      .animationMode(AnimationMode.CONTENT_FIRST_WITH_JUMP)
+      .animationCurve(Curve.Friction)
+      .animationDuration(this.reduceAnimation ? 0 : 320)
+      .scrollable(true)
+      .layoutWeight(1)
+      .height('100%')
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+      .backgroundColor($r('app.color.surface_app'))
+      .onSelected((index: number) => {
+        this.selectedTabIndex = index;
+        this.dockRoute = this.mainTabRoutes[index];
+      })
+      .onChange((index: number) => {
+        this.mainTabIndex = index;
+        if (this.navigationRootVisible) {
+          this.dockRoute = this.mainTabRoutes[index];
+        }
+      })
+        }.width('100%').height('100%')
   }
 
   @Builder
@@ -421,7 +460,15 @@ struct Index {
 
   @Builder
   private navDestinationBuilder(name: string, param: Object) {
-      if (name === RouteName.ITEM_LIST) {
+      if (name === RouteName.SYSTEM_FEATURES) {
+        SystemFeaturesPage()
+      } else if (name === RouteName.LOCATION_LABEL) {
+        LocationLabelPage()
+      } else if (name === RouteName.SHARE_PREVIEW) {
+        SharePreviewPage()
+      } else if (name === RouteName.ITEM_ACTION) {
+        ItemActionPage()
+      } else if (name === RouteName.ITEM_LIST) {
         ItemListPage()
       } else if (name === RouteName.ITEM_DETAIL) {
         ItemDetailPage()
@@ -616,6 +663,7 @@ struct Index {
     } finally {
       if (loadId === this.summaryLoadId) {
         this.loading = false;
+        this.initialLoadComplete = true;
       }
     }
   }

@@ -90,7 +90,7 @@ export class ReminderService {
     const userPreferences = preferenceResult.getData();
     const plan: ReminderPlan = userPreferences.reminderEnabled ? this.calculatePlan(item, userPreferences.defaultReminderDays) :
       { reason: '到期通知已关闭，当前不会发送通知。' };
-    const signature = `${item.name}\n${item.expirationDate ?? ''}`;
+    const signature = `${item.name}\n${item.expirationDate ?? ''}\n${item.activeLocationPaths?.join('、') || item.locationPath || ''}\nitem-detail`;
     const samePlan = plan.key !== undefined && (currentRecord?.planKey === plan.key ||
       (currentRecord?.planKey === undefined && currentRecord?.scheduledAt === plan.originalAt));
 

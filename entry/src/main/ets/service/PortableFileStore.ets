@@ -29,7 +29,7 @@ export class PortableFileStore {
     }
   }
 
-  async saveBackup(context: Context, text: string): Promise<Result<boolean>> {
+  async saveBackup(context: Context, text: string, beforeWrite?: () => void): Promise<Result<boolean>> {
     try {
       const options = new picker.DocumentSaveOptions();
       const appName = context.resourceManager.getStringSync($r('app.string.app_name').id);
@@ -39,6 +39,7 @@ export class PortableFileStore {
       if (uris.length === 0) {
         return success<boolean>(false);
       }
+      if (beforeWrite !== undefined) { beforeWrite(); }
       const bytes = new util.TextEncoder().encodeInto(text);
       await this.writeBytes(uris[0], bytes, false);
       return success<boolean>(true);

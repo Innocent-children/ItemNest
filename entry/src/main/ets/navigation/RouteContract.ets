@@ -1,8 +1,11 @@
+import { ExternalRequest } from '../model/SystemFeatures';
 import { AppError, AppErrorCode } from '../common/AppError';
 import { failure, Result, success } from '../common/Result';
 import { ItemQuery } from '../model/ItemQuery';
 
 export interface ItemRouteParams {
+  externalRequest?: ExternalRequest;
+  locationId?: string;
   section?: string;
   itemId?: string;
 }
@@ -24,6 +27,7 @@ export interface BatchRouteParams extends ItemRouteParams {
 }
 
 export interface ItemListRouteParams {
+  locationId?: string;
   section?: string;
   attention?: 'expiry' | 'restock' | 'reminders';
   query?: ItemQuery;
@@ -40,6 +44,8 @@ export interface LendingRouteParams extends ItemRouteParams {
 }
 
 export interface NavigationRouteParams extends ManagementRouteParams {
+  externalRequest?: ExternalRequest;
+  locationId?: string;
   section?: string;
   borrowEventId?: string;
   attention?: 'expiry' | 'restock' | 'reminders';

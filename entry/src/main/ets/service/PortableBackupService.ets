@@ -1,3 +1,5 @@
+import { LocationLabelRepository } from '../data/repository/LocationLabelRepository';
+import { BackupProgressService } from './BackupProgressService';
 import { Context } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
 import { relationalStore } from '@kit.ArkData';
@@ -19,6 +21,7 @@ import { PortableFileStore } from './PortableFileStore';
 import { ReminderService } from './ReminderService';
 
 export class PortableBackupService {
+  private readonly progress?: BackupProgressService;
   private readonly exporter: ExportService;
   private readonly thresholds: StockThresholdRepository;
   private readonly assets: AssetRepositoryPort;
@@ -29,7 +32,8 @@ export class PortableBackupService {
   private readonly photoCodec: BackupPhotoCodec = new BackupPhotoCodec();
 
   constructor(exporter: ExportService, thresholds: StockThresholdRepository, assets: AssetRepositoryPort,
-    files: PortableFileStore, database: RdbDatabase, reminders: ReminderService) {
+    files: PortableFileStore, database: RdbDatabase, reminders: ReminderService, progress?: BackupProgressService) {
+    this.progress = progress;
     this.exporter = exporter;
     this.thresholds = thresholds;
     this.assets = assets;
@@ -38,7 +42,7 @@ export class PortableBackupService {
     this.reminders = reminders;
   }
 
-  async exportJson(): Promise<Result<string>> {
+  async exportJson(progress?: BackupProgressService): Promise<Result<string>> {
     const exported = await this.exporter.exportJson();
     if (!exported.ok) {
       return failure<string>(exported.getError());
@@ -53,6 +57,7 @@ export class PortableBackupService {
       const photos: BackupPhoto[] = [];
       let photoBytes = 0;
       for (const item of data.items) {
+        if (progress !== undefined) { await progress.report('整理物品与照片', items.length, data.items.length); }
         if (item.photoState === PhotoState.LOCAL && item.photoLocalId === undefined) {
           return failure<string>(new AppError(AppErrorCode.ASSET_STORAGE, '物品照片记录不完整，无法生成完整备份'));
         }
@@ -87,6 +92,7 @@ export class PortableBackupService {
         categories: data.categories,
         traceEvents: data.traceEvents,
         thresholds: thresholdResult.getData(),
+        locationLabels: await new LocationLabelRepository(this.database).list(),
         photos: photos
       };
       const text = JSON.stringify(payload);
@@ -104,11 +110,18 @@ export class PortableBackupService {
   }
 
   async saveToUserFile(context: Context): Promise<Result<boolean>> {
-    const exported = await this.exportJson();
-    if (!exported.ok) {
-      return failure<boolean>(exported.getError());
-    }
-    return this.files.saveBackup(context, exported.getData());
+    await this.progress?.begin('正在准备备份');
+    let message = '备份未完成';
+    try {
+      const exported = await this.exportJson(this.progress);
+      if (!exported.ok) { message = exported.getError().message; return failure<boolean>(exported.getError()); }
+      this.progress?.check();
+      await this.progress?.report('选择备份保存位置', 0, 0);
+      const saved = await this.files.saveBackup(context, exported.getData(), () => this.progress?.seal());
+      message = !saved.ok ? saved.getError().message : saved.getData() ? '备份已保存' : '已取消保存';
+      return saved;
+    } catch (_) { return failure<boolean>(new AppError(AppErrorCode.ASSET_STORAGE, '备份已取消或保存失败')); }
+    finally { await this.progress?.finish(message); }
   }
 
   async selectUserFile(context: Context): Promise<Result<string | undefined>> {
@@ -146,16 +159,28 @@ export class PortableBackupService {
     }
     try {
       const data = JSON.parse(exported.getData()) as ItemTraceExportPayload;
+      const locationLabelCount = (await new LocationLabelRepository(this.database).list()).length;
       const photoCount = data.items.filter((item: Item) => item.photoState === PhotoState.LOCAL).length;
       return success(new ImportPreview(data.items.length, data.batches.length, data.locations.length,
         data.categories.length, data.traceEvents.length, undefined, photoCount, thresholds.getData().length,
-        data.items.slice(0, 5).map((item: Item) => item.name)));
+        data.items.slice(0, 5).map((item: Item) => item.name), locationLabelCount));
     } catch (_) {
       return failure<ImportPreview>(new AppError(AppErrorCode.DATABASE_READ, '无法核对当前数据，请重试预览'));
     }
   }
 
   async restore(text: string, confirmed: boolean): Promise<Result<string>> {
+    await this.progress?.begin('正在准备恢复');
+    let message = '恢复未完成';
+    try {
+      const result = await this.restoreContents(text, confirmed);
+      message = result.ok ? result.getData() : result.getError().message;
+      return result;
+    } catch (_) { return failure<string>(new AppError(AppErrorCode.DATABASE_WRITE, '恢复已取消或失败，现有数据已保留')); }
+    finally { await this.progress?.finish(message); }
+  }
+
+  private async restoreContents(text: string, confirmed: boolean): Promise<Result<string>> {
     if (!confirmed) {
       return failure<string>(new AppError(AppErrorCode.VALIDATION, '恢复前需要明确确认'));
     }
@@ -167,7 +192,7 @@ export class PortableBackupService {
     if (!validated.ok) {
       return failure<string>(validated.getError());
     }
-    const current = await this.exportJson();
+    const current = await this.exportJson(this.progress);
     if (!current.ok) {
       return failure<string>(new AppError(AppErrorCode.ASSET_STORAGE, '无法保存恢复前的安全备份，现有数据未改动'));
     }
@@ -196,12 +221,15 @@ export class PortableBackupService {
     const cancelledItems: Item[] = [];
     try {
       for (const photo of payload.photos) {
+        await this.progress?.report('恢复照片', staged.length, payload.photos.length);
         const bytes = this.photoCodec.decode(photo.bytesBase64);
         const id = `restored-${Date.now()}-${Math.floor(Math.random() * 1000000000)}`;
         const path = await this.files.writeOwnedPhoto(id, bytes);
         staged.push({ id: id, itemId: photo.itemId, localPath: path,
           source: AssetSource.PHOTO_PICKER, createdAt: Date.now() });
       }
+      await this.progress?.report('正在更新物品数据', 0, 0);
+      this.progress?.seal();
       for (const item of oldItems) {
         const cancelled = await this.reminders.cancelForItem(item.id);
         if (!cancelled.ok) {
@@ -243,11 +271,15 @@ export class PortableBackupService {
 
   private async replaceRows(store: relationalStore.Transaction, payload: PortableBackupPayload, assets: ItemAsset[]): Promise<void> {
     await store.execute('DELETE FROM item');
+    await store.execute('DELETE FROM location_label');
     await store.execute('DELETE FROM managed_location');
     await store.execute('DELETE FROM managed_category');
     for (const location of payload.locations) {
       await store.insert('managed_location', { id: location.id, name: location.name, parent_id: location.parentId ?? null,
         path: location.path, active: location.active ? 1 : 0, created_at: location.createdAt, updated_at: location.updatedAt });
+    }
+    for (const label of payload.locationLabels ?? []) {
+      await store.insert('location_label', { token: label.token, location_id: label.locationId });
     }
     for (const category of payload.categories) {
       await store.insert('managed_category', { id: category.id, name: category.name, active: category.active ? 1 : 0,

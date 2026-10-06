@@ -1,3 +1,4 @@
+import { LocationLabel } from '../model/LocationLabel';
 import { AppError, AppErrorCode } from './AppError';
 import { failure, Result, success } from './Result';
 import { ImportPreview, ItemTraceExportPayload } from './ImportValidation';
@@ -18,6 +19,7 @@ export interface BackupPhoto {
 }
 
 export interface PortableBackupPayload extends ItemTraceExportPayload {
+  locationLabels?: LocationLabel[];
   thresholds: StockThreshold[];
   photos: BackupPhoto[];
 }
@@ -139,6 +141,19 @@ export class PortableBackupValidation {
           current = locationParents.get(current);
         }
       }
+      if (payload.locationLabels !== undefined) {
+        if (!Array.isArray(payload.locationLabels) || payload.locationLabels.length > 10000) {
+          return this.invalid('备份中的收纳标签结构无效');
+        }
+        const tokens = new Set<string>();
+        for (const label of payload.locationLabels) {
+          if (!label || typeof label.token !== 'string' || !/^[a-fA-F0-9-]{32,36}$/.test(label.token) ||
+            tokens.has(label.token) || !locationIds.has(label.locationId)) {
+            return this.invalid('备份包含重复或没有对应位置的收纳标签');
+          }
+          tokens.add(label.token);
+        }
+      }
       for (const category of payload.categories) {
         if (!category || !this.validId(category.id) || categoryIds.has(category.id) ||
           typeof category.name !== 'string' || category.name.length === 0 || category.name.length > 40 ||
@@ -205,7 +220,7 @@ export class PortableBackupValidation {
   preview(payload: PortableBackupPayload): ImportPreview {
     return new ImportPreview(payload.items.length, payload.batches.length, payload.locations.length,
       payload.categories.length, payload.traceEvents.length, payload.exportedAt, payload.photos.length,
-      payload.thresholds.length, payload.items.slice(0, 5).map((item: Item) => item.name));
+      payload.thresholds.length, payload.items.slice(0, 5).map((item: Item) => item.name), payload.locationLabels?.length ?? 0);
   }
 
   private validReturnRelations(events: TraceEvent[]): boolean {

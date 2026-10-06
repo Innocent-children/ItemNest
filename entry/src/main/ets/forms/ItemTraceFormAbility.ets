@@ -97,14 +97,8 @@ export default class ItemTraceFormAbility extends FormExtensionAbility {
     try {
       AppServices.configure(this.context);
       const snapshotResult = await AppServices.get().formSnapshot.getSnapshot();
-      if (!snapshotResult.ok) {
-        return;
-      }
-      const snapshot = snapshotResult.getData();
-      const bindingData = formBindingData.createFormBindingData({
-        dueSoonCount: snapshot.dueSoonCount.toString(),
-        todayReminderCount: snapshot.todayReminderCount.toString()
-      });
+      const snapshot = snapshotResult.ok ? snapshotResult.getData() : AppServices.get().formSnapshot.failedSnapshot();
+      const bindingData = formBindingData.createFormBindingData(snapshot);
       const formIds = Array.from(this.formIds);
       for (let index = 0; index < formIds.length; index++) {
         try {

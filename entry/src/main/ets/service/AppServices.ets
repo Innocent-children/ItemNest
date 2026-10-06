@@ -1,3 +1,11 @@
+import { LocationLabelRepository } from '../data/repository/LocationLabelRepository';
+import { BackupProgressService } from './BackupProgressService';
+import { SystemFeatureService } from './SystemFeatureService';
+import { CaptureDraftService } from './CaptureDraftService';
+import { TextRecognitionAdapter } from './adapter/TextRecognitionAdapter';
+import { PhotoSearchService } from './PhotoSearchService';
+import { LocationLabelService } from './LocationLabelService';
+import { ShareService } from './ShareService';
 import { Context } from '@kit.AbilityKit';
 import { ItemValidator } from '../common/ItemValidator';
 import { ItemDao } from '../data/dao/ItemDao';
@@ -53,6 +61,13 @@ import { SystemAppIconAdapter } from './adapter/AppIconAdapter';
 export class AppServices {
   private static instance?: AppServices;
 
+  readonly backupProgress: BackupProgressService;
+  readonly systemFeatures: SystemFeatureService;
+  readonly captureDraft: CaptureDraftService = new CaptureDraftService();
+  readonly textRecognition: TextRecognitionAdapter = new TextRecognitionAdapter();
+  readonly photoSearch: PhotoSearchService;
+  readonly locationLabels: LocationLabelService;
+  readonly sharing: ShareService = new ShareService();
   readonly database: RdbDatabase;
   readonly repository: ItemRepository;
   readonly createItem: ItemCreateService;
@@ -94,6 +109,8 @@ export class AppServices {
     const expiryService = new ExpiryService();
     const listItems = new ItemListService(repository, expiryService);
 
+    this.systemFeatures = new SystemFeatureService(context);
+    this.backupProgress = new BackupProgressService(this.systemFeatures);
     this.database = database;
     this.repository = repository;
     this.createItem = new ItemCreateService(repository, validator);
@@ -117,19 +134,22 @@ export class AppServices {
     this.photos = photoService;
     this.photoMaintenance = new PhotoMaintenanceService(assetRepository, repository, assetStorage);
     this.imageSource = new SystemImageSourceAdapter();
-    this.formSnapshot = new FormSnapshotProvider(this.homeSummary, reminderRepository);
+
+    this.photoSearch = new PhotoSearchService(context, repository, assetRepository, this.searchItems, this.systemFeatures);
     this.scan = new ScanService(new SystemScanAdapter());
     this.batches = new BatchService(batchRepository, repository);
     this.lowStock = new LowStockService(thresholdRepository, repository);
     this.lowStockReminder = new LowStockReminderService();
     this.lending = new LendingService(traceRepository, repository);
+    this.formSnapshot = new FormSnapshotProvider(this.homeSummary, reminderRepository, this.lending);
     this.locations = new LocationService(locationRepository, repository, () => Date.now(), batchRepository);
+    this.locationLabels = new LocationLabelService(new LocationLabelRepository(database), this.locations);
     this.categories = new CategoryService(categoryRepository);
     this.exportData = new ExportService(repository, batchRepository, locationRepository, categoryRepository, traceRepository);
     this.importData = new ImportService();
     this.backup = new BackupService(this.exportData);
     this.portableBackup = new PortableBackupService(this.exportData, thresholdRepository, assetRepository,
-      new PortableFileStore(context), database, reminderService);
+      new PortableFileStore(context), database, reminderService, this.backupProgress);
     this.restore = new RestoreService(this.importData);
     this.searchSuggestions = new SearchSuggestionService(new SearchHistoryRepository(database), repository);
   }

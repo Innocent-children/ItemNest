@@ -330,6 +330,7 @@ export struct ItemDetailPage {
 
         this.locationSection({ item: $$.item })
         this.managementSection({ item: $$.item })
+        Button('分享物品').width('100%').onClick(() => NavigationHelper.pushUrl({ url: RouteName.SHARE_PREVIEW, params: { itemId: $$.item.id } }))
         this.expirySection({ item: $$.item })
         if ($$.item.notes !== undefined || $$.item.barcode !== undefined) {
           this.notesSection({ item: $$.item })

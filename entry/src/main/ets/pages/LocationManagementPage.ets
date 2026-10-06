@@ -96,7 +96,7 @@ export struct LocationManagementPage {
             Text('停用前需先移走该位置及子位置中的物品。改名会同步更新已有物品的位置。').fontSize(12).fontColor($r('app.color.text_secondary')).width('100%')
             Text('全部位置').fontSize(18).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary')).width('100%').margin({ top: 12 })
             ForEach(this.visibleLocations(), (location: LocationRecord) => {
-              Row() {
+              Flex({ wrap: FlexWrap.Wrap, alignItems: ItemAlign.Center }) {
                 if (this.locations.some((child: LocationRecord) => child.parentId === location.id)) {
                   Button({ type: ButtonType.Normal }) {
                     Image($r('app.media.ui_chevron')).width(16).height(16).fillColor($r('app.color.brand_primary'))
@@ -122,6 +122,10 @@ export struct LocationManagementPage {
                   Button('选择').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
                     .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
                     .enabled(!this.operating).onClick(() => this.selectEntry(location.path))
+                }
+                if (!this.selectionMode && location.active) {
+                  Button('标签').fontSize(13).onClick(() => NavigationHelper.pushUrl({ url: RouteName.LOCATION_LABEL, params: { locationId: location.id } }))
+                  Button('分享').fontSize(13).onClick(() => NavigationHelper.pushUrl({ url: RouteName.SHARE_PREVIEW, params: { locationId: location.id } }))
                 }
                 Button('改名').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
                   .fontColor($r('app.color.brand_primary')).backgroundColor(Color.Transparent)

@@ -1,41 +1,41 @@
-class ItemTraceFormLinkParams {
+import { FormEntry } from '../../model/FormSnapshot';
+
+class FormTarget {
   source: string = 'itemtrace-form';
   action: string;
-
-  constructor(action: string) {
-    this.action = action;
-  }
+  itemId: string;
+  constructor(action: string, itemId: string = '') { this.action = action; this.itemId = itemId; }
 }
 
-@Entry
+let storage = new LocalStorage();
+
+@Entry(storage)
 @Component
 struct ItemTraceFormCard {
+  @LocalStorageProp('ohos.extra.param.key.form_dimension') dimension: number = 2;
+  @State expiryEntries: FormEntry[] = [];
   @State dueSoonCount: string = '—';
-  @State todayReminderCount: string = '—';
-
+  @State updatedLabel: string = '';
+  @State error: string = '';
   build() {
     Column({ space: 8 }) {
-      Text($r('app.string.app_name')).letterSpacing(2).fontSize(12)
-        .fontWeight(FontWeight.Bold).fontColor($r('app.color.hero_text'))
-      Row({ space: 12 }) {
-        this.countLink(this.dueSoonCount, '到期待处理', 'expiry')
-        this.countLink(this.todayReminderCount, '今日提醒', 'reminders')
-      }.width('100%')
-      FormLink({ action: 'router', abilityName: 'EntryAbility', params: new ItemTraceFormLinkParams('add') }) {
-        Text('+ 记录一件物品').fontSize(13).fontColor($r('app.color.hero_secondary'))
-          .width('100%').padding({ top: 8, bottom: 8 })
-      }.width('100%')
-    }.width('100%').height('100%').padding(20).alignItems(HorizontalAlign.Start)
-      .backgroundColor($r('app.color.hero_start'))
-  }
-
-  @Builder
-  private countLink(count: string, label: string, action: string) {
-    FormLink({ action: 'router', abilityName: 'EntryAbility', params: new ItemTraceFormLinkParams(action) }) {
-      Column({ space: 2 }) {
-        Text(count).fontSize(26).fontWeight(FontWeight.Bold).fontColor($r('app.color.hero_text'))
-        Text(label).fontSize(12).fontColor($r('app.color.hero_secondary'))
-      }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 4, bottom: 4 })
-    }.layoutWeight(1)
+      FormLink({ action: 'router', abilityName: 'EntryAbility', params: new FormTarget('expiry') }) {
+        Text('临期物品 · ' + this.dueSoonCount).fontSize(16).fontWeight(FontWeight.Bold).fontColor($r('app.color.hero_text'))
+      }
+      ForEach(this.expiryEntries.slice(0, this.dimension === 3 ? 2 : 1), (entry: FormEntry, index: number) => {
+        FormLink({ action: 'router', abilityName: 'EntryAbility', params: new FormTarget('item', entry.itemId) }) {
+          Column({ space: 4 }) {
+            Text(entry.title).fontSize(15).fontColor($r('app.color.hero_text')).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            Text(entry.subtitle).fontSize(12).fontColor($r('app.color.hero_secondary')).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+          }.width('100%').alignItems(HorizontalAlign.Start)
+        }
+      }, (entry: FormEntry, index: number) => entry.itemId + ':' + index)
+      if (this.expiryEntries.length === 0) {
+        Text(this.error || (this.dueSoonCount === '—' ? '正在读取…' : '暂无临期物品'))
+          .fontSize(13).fontColor($r('app.color.hero_secondary'))
+      }
+      Blank()
+      Text(this.updatedLabel).fontSize(10).fontColor($r('app.color.hero_secondary'))
+    }.width('100%').height('100%').padding(16).alignItems(HorizontalAlign.Start).backgroundColor($r('app.color.hero_start'))
   }
 }

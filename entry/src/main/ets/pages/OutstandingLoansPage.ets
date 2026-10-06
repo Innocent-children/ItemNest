@@ -39,7 +39,7 @@ export struct OutstandingLoansPage {
 
   @Builder
   private header() {
-    PageHeader({ title: '借出未还', subtitle: '借给谁、还剩多少，一起看清。', showBack: true })
+    PageHeader({ title: '借出未还', subtitle: '借给谁、还剩多少，一起看清。', showBack: true, actionText: '分享清单', onAction: () => NavigationHelper.pushUrl({ url: RouteName.SHARE_PREVIEW, params: { section: 'loans' } }) })
   }
 
   build() {

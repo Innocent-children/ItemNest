@@ -25,11 +25,13 @@ export class ImportPreview {
   readonly exportedAt?: number;
   readonly photoCount: number;
   readonly thresholdCount: number;
+  readonly locationLabelCount: number;
   readonly sampleNames: string[];
 
   constructor(itemCount: number, batchCount: number, locationCount: number, categoryCount: number,
     traceEventCount: number, exportedAt?: number, photoCount: number = 0, thresholdCount: number = 0,
-    sampleNames: string[] = []) {
+    sampleNames: string[] = [], locationLabelCount: number = 0) {
+    this.locationLabelCount = locationLabelCount;
     this.itemCount = itemCount;
     this.batchCount = batchCount;
     this.locationCount = locationCount;

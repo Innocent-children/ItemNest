@@ -26,6 +26,7 @@ export struct SettingsPage {
   @State private savedPreferenceSignature: string = '';
   @State private preferencesReady: boolean = false;
   @Prop isMainTab: boolean = false;
+  @State private backupOnly: boolean = false;
   @State private remindersOnly: boolean = false;
   private closing: boolean = false;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
@@ -54,6 +55,10 @@ export struct SettingsPage {
   @State private loading: boolean = false;
   @State private saving: boolean = false;
   @State private errorMessage: string = '';
+  @StorageLink('itemtrace.backupActive') private backupActive: boolean = false;
+  @StorageLink('itemtrace.backupCancellable') private backupCancellable: boolean = false;
+  @StorageLink('itemtrace.backupProgress') private backupProgress: string = '';
+  @StorageLink('itemtrace.backupPercent') private backupPercent: number = 0;
   @State private backupBusy: boolean = false;
   @State private confirmingRestore: boolean = false;
   @State private backupPreview: string = '';
@@ -68,6 +73,7 @@ export struct SettingsPage {
     if (!this.isMainTab && (NavigationHelper.getParams() as NavigationRouteParams | undefined)?.section === 'reminders') {
       this.remindersOnly = true;
     }
+    this.backupOnly = !this.isMainTab && (NavigationHelper.getParams() as NavigationRouteParams | undefined)?.section === 'backup';
     this.load();
     this.loadNotificationStatus();
     this.loadAppIcon();
@@ -79,7 +85,14 @@ export struct SettingsPage {
     } else {
       NavDestination() {
         if (this.remindersOnly) { this.reminderSettingsSheet() }
-        else { this.pageContent() }
+        else if (this.backupOnly) {
+          Scroll() {
+            Column({ space: 16 }) {
+              this.backupProgressStatus()
+              this.backupCard()
+            }.width('100%').padding(24)
+          }.align(Alignment.TopStart).width('100%').height('100%').padding({ bottom: this.safeAreaBottom })
+        } else { this.pageContent() }
       }
       .title({ builder: this.pageHeader, height: 76 }, nativeTitleOptions(this.reduceAnimation))
       .hideBackButton(true)
@@ -91,8 +104,19 @@ export struct SettingsPage {
   }
 
   @Builder
+  private backupProgressStatus() {
+    if (this.backupProgress.length > 0) {
+      Text(this.backupProgress).fontSize(14).fontColor($r('app.color.text_secondary'))
+      if (this.backupActive) {
+        Progress({ value: this.backupPercent, total: 100, type: ProgressType.Linear }).width('100%')
+        Button('取消当前操作').enabled(this.backupCancellable).onClick(() => AppServices.get().backupProgress.cancel())
+      }
+    }
+  }
+
+  @Builder
   private pageHeader() {
-    PageHeader({ title: this.remindersOnly ? '到期通知' : '我的空间',
+    PageHeader({ title: this.remindersOnly ? '到期通知' : this.backupOnly ? '备份与恢复' : '我的空间',
         subtitle: this.remindersOnly ? '保存后自动安排已有物品的通知。' : '让整理，更合你的习惯。',
         onBack: () => this.requestClose(),
         eyebrow: this.isMainTab ? 'MAKE IT YOURS' : '', showBack: !this.isMainTab })
@@ -122,11 +146,14 @@ export struct SettingsPage {
           Row() {
             Column({ space: $r('app.float.space_4') }) {
               this.reminderEntry()
+              Button('系统能力与隐私').width('100%').onClick(() => NavigationHelper.pushUrl({ url: RouteName.SYSTEM_FEATURES }))
+              Button('收纳位置二维码与 NFC 标签').width('100%').onClick(() => NavigationHelper.pushUrl({ url: RouteName.LOCATION_LABEL }))
               this.managementCard()
               this.themeCard()
               this.appIconEntry()
               this.homeCard()
               this.sortCard()
+              this.backupProgressStatus()
               this.backupCard()
               if (this.errorMessage.length > 0) {
                 Text(this.errorMessage)
@@ -496,7 +523,7 @@ export struct SettingsPage {
         .width('100%')
         .fontColor($r('app.color.brand_primary'))
         .backgroundColor($r('app.color.surface_accent'))
-        .enabled(!this.backupBusy)
+        .enabled(!this.backupBusy && !this.backupActive)
         .onClick(() => this.saveBackupFile())
       Button('选择备份文件并预览')
         .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
@@ -504,7 +531,7 @@ export struct SettingsPage {
         .width('100%')
         .fontColor($r('app.color.brand_primary'))
         .backgroundColor($r('app.color.surface_accent'))
-        .enabled(!this.backupBusy)
+        .enabled(!this.backupBusy && !this.backupActive)
         .onClick(() => this.selectBackupFile())
       if (this.backupPreview.length > 0) {
         Column({ space: $r('app.float.space_3') }) {
@@ -534,7 +561,7 @@ export struct SettingsPage {
         .width('100%')
         .fontColor($r('app.color.brand_primary'))
         .backgroundColor($r('app.color.surface_accent'))
-        .enabled(!this.backupBusy)
+        .enabled(!this.backupBusy && !this.backupActive)
         .onClick(() => this.saveSafetyBackupFile())
       if (this.backupMessage.length > 0) {
         Text(this.backupMessage)
@@ -814,7 +841,7 @@ export struct SettingsPage {
   private describeCounts(preview: ImportPreview): string {
     return `${preview.itemCount} 个物品、${preview.batchCount} 个批次、${preview.locationCount} 个位置、` +
       `${preview.categoryCount} 个分类、${preview.traceEventCount} 条借还记录、` +
-      `${preview.thresholdCount} 个库存阈值、${preview.photoCount} 张照片。`;
+      `${preview.thresholdCount} 个库存阈值、${preview.photoCount} 张照片、${preview.locationLabelCount} 个收纳标签。`;
   }
 
   private formatBackupTime(timestamp: number): string {

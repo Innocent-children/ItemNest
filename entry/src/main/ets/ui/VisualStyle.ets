@@ -1,5 +1,4 @@
 import { curves, uiMaterial, SymbolGlyphModifier } from '@kit.ArkUI';
-import { deviceInfo } from '@kit.BasicServicesKit';
 import { hdsEffect } from '@kit.UIDesignKit';
 
 export const dockBarHeight: number = 56;
@@ -46,49 +45,32 @@ export class SearchFieldStyle implements AttributeModifier<StackAttribute> {
   applyNormalAttribute(instance: StackAttribute): void {
     instance.borderRadius(16).backgroundColor($r('app.color.surface_card'))
       .border({ width: 1, color: $r('app.color.chrome_border') });
-    if (deviceInfo.sdkApiVersion >= 26) {
-      if (deviceInfo.apiAvailable('26.0.0')) {
-        instance.backgroundColor(Color.Transparent)
-          .systemMaterial(immersiveMaterial(this.reduceAnimation, uiMaterial.ImmersiveStyle.REGULAR));
-      }
-    }
+    instance.backgroundColor(Color.Transparent)
+      .systemMaterial(immersiveMaterial(this.reduceAnimation, uiMaterial.ImmersiveStyle.REGULAR));
   }
 }
 
 /**
- * 材质由系统按设备算力适配，低版本只使用已有的模糊背景。
+ * 由系统按设备算力绘制材质，并遵循减少动画设置。
  */
 export function immersiveMaterial(reduceAnimation: boolean = false,
-  style?: uiMaterial.ImmersiveStyle): uiMaterial.ImmersiveMaterial | undefined {
-  if (deviceInfo.sdkApiVersion < 26) { return undefined; }
-  if (deviceInfo.apiAvailable('26.0.0')) {
-    return new uiMaterial.ImmersiveMaterial({
-      style: style ?? uiMaterial.ImmersiveStyle.THIN, interactive: !reduceAnimation,
-      lightEffect: reduceAnimation ? null : { color: $r('app.color.brand_primary') }
-    });
-  }
-  return undefined;
+  style?: uiMaterial.ImmersiveStyle): uiMaterial.ImmersiveMaterial {
+  return new uiMaterial.ImmersiveMaterial({
+    style: style ?? uiMaterial.ImmersiveStyle.THIN, interactive: !reduceAnimation,
+    lightEffect: reduceAnimation ? null : { color: $r('app.color.brand_primary') }
+  });
 }
 
 export function nativeSheetOptions(options: SheetOptions, reduceAnimation: boolean): SheetOptions {
-  if (deviceInfo.sdkApiVersion < 26) { return options; }
-  if (deviceInfo.apiAvailable('26.0.0')) {
-    options.systemMaterial = immersiveMaterial(reduceAnimation, uiMaterial.ImmersiveStyle.REGULAR);
-    options.backgroundColor = Color.Transparent;
-  }
+  options.systemMaterial = immersiveMaterial(reduceAnimation, uiMaterial.ImmersiveStyle.REGULAR);
+  options.backgroundColor = Color.Transparent;
   return options;
 }
 
 export function nativeTitleOptions(reduceAnimation: boolean): NavigationTitleOptions {
-  if (deviceInfo.sdkApiVersion >= 26) {
-    if (deviceInfo.apiAvailable('26.0.0')) {
-      return { barStyle: BarStyle.STANDARD, backgroundColor: Color.Transparent,
-        systemMaterial: immersiveMaterial(reduceAnimation),
-        scrollEffectOptions: { scrollEffectType: ScrollEffectType.GRADUAL_BLUR } };
-    }
-  }
-  return { barStyle: BarStyle.STANDARD, backgroundColor: $r('app.color.chrome_glass'),
-    backgroundBlurStyle: BlurStyle.COMPONENT_REGULAR };
+  return { barStyle: BarStyle.STANDARD, backgroundColor: Color.Transparent,
+    systemMaterial: immersiveMaterial(reduceAnimation),
+    scrollEffectOptions: { scrollEffectType: ScrollEffectType.GRADUAL_BLUR } };
 }
 
 export function numericMotion(reduceAnimation: boolean, value?: number): ContentTransition | undefined {
@@ -104,18 +86,11 @@ export class FloatingTabsStyle implements AttributeModifier<TabsAttribute> {
   }
 
   applyNormalAttribute(instance: TabsAttribute): void {
-    if (deviceInfo.sdkApiVersion >= 26) {
-      if (deviceInfo.apiAvailable('26.0.0')) {
-        instance.barFloatingStyle({
-          barWidth: { smallBarWidth: 296, mediumBarWidth: 320, largeBarWidth: 320 },
-          barSideMargin: 32, barBottomMargin: 14,
-          systemMaterial: immersiveMaterial(this.reduceAnimation),
-          maskColor: $r('app.color.chrome_glass'), maskHeight: 84 });
-        return;
-      }
-    }
-    instance.barBackgroundBlurStyle(BlurStyle.COMPONENT_REGULAR)
-      .barBackgroundColor($r('app.color.chrome_glass'));
+    instance.barFloatingStyle({
+      barWidth: { smallBarWidth: 296, mediumBarWidth: 320, largeBarWidth: 320 },
+      barSideMargin: 32, barBottomMargin: 14,
+      systemMaterial: immersiveMaterial(this.reduceAnimation),
+      maskColor: $r('app.color.chrome_glass'), maskHeight: 84 });
   }
 }
 
@@ -127,19 +102,12 @@ export class MaterialButtonStyle implements AttributeModifier<ButtonAttribute> {
   }
 
   applyNormalAttribute(instance: ButtonAttribute): void {
-    instance.borderRadius(22).backgroundColor(Color.Transparent).scale({ x: 1, y: 1 });
-    if (deviceInfo.sdkApiVersion >= 26) {
-      if (deviceInfo.apiAvailable('26.0.0')) {
-        instance.systemMaterial(immersiveMaterial(this.reduceAnimation));
-        return;
-      }
-    }
-    instance.backgroundColor($r('app.color.chrome_button'));
+    instance.borderRadius(22).backgroundColor(Color.Transparent).scale({ x: 1, y: 1 })
+      .systemMaterial(immersiveMaterial(this.reduceAnimation));
   }
 
   applyPressedAttribute(instance: ButtonAttribute): void {
-    instance.scale({ x: this.reduceAnimation || deviceInfo.sdkApiVersion >= 26 ? 1 : 0.94,
-      y: this.reduceAnimation || deviceInfo.sdkApiVersion >= 26 ? 1 : 0.94 });
+    instance.scale({ x: 1, y: 1 });
   }
 }
 

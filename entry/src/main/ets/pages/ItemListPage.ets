@@ -19,8 +19,10 @@ import { AppServices } from '../service/AppServices';
 export struct ItemListPage {
   private pageScroller: Scroller = new Scroller();
   @State private attention: 'expiry' | 'restock' | 'reminders' | undefined = undefined;
+  @State private locationId: string = '';
   @State private settingStock: boolean = false;
   @State private filterNotice: string = '';
+  @Prop @Watch('onLocationFilterChanged') locationFilter: string = '';
   @Prop isMainTab: boolean = false;
   @State private contentWidth: number = 0;
   @State private selectedSort: ItemSortMode | undefined = undefined;
@@ -43,8 +45,17 @@ export struct ItemListPage {
   private loadRequestCoordinator: LatestRequestCoordinator = new LatestRequestCoordinator();
 
   aboutToAppear(): void {
+    this.locationId = (NavigationHelper.getParams() as ItemListRouteParams | undefined)?.locationId ?? '';
     this.readQuery();
+    if (this.isMainTab && this.locationFilter.length > 0) { this.query = new ItemQuery('', this.locationFilter); }
     this.loadItemsForCurrentRevision(true);
+  }
+
+  private onLocationFilterChanged(): void {
+    if (this.isMainTab) {
+      this.query = new ItemQuery('', this.locationFilter || undefined);
+      this.loadItemsForCurrentRevision(true);
+    }
   }
 
   onPageShow(): void {
@@ -117,6 +128,10 @@ export struct ItemListPage {
   @Builder
   private pageContent() {
     Column() {
+      if (this.query.locationPath !== undefined) {
+        Button('在此位置记录物品').onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM,
+          params: { mode: 'create', externalRequest: { action: 'add', locationPath: this.query.locationPath } } }))
+      }
       if (this.filterNotice.length > 0) {
         Text(this.filterNotice).fontSize(12).fontColor($r('app.color.text_secondary')).padding({ left: 24, right: 24, bottom: 8 })
       }

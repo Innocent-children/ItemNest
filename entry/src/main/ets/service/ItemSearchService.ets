@@ -5,6 +5,7 @@ import { ItemRepositoryPort } from '../data/repository/ItemRepository';
 import { ItemListService } from './ItemListService';
 
 export class SearchResult {
+  photoNotice: string = '';
   readonly query: ItemQuery;
   readonly items: ItemSummary[];
   readonly hasNoResult: boolean;

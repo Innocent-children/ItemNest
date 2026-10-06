@@ -1,3 +1,8 @@
+import { RecognitionPanel } from '../components/RecognitionPanel';
+import { CaptureDraft, ExternalRequest } from '../model/SystemFeatures';
+import { ItemQuery } from '../model/ItemQuery';
+import { ExternalRequestParser } from '../navigation/ExternalRequestParser';
+import { ExternalNavigation } from '../navigation/ExternalNavigation';
 import { OptionalDateField } from '../components/OptionalDateField';
 import { notificationManager } from '@kit.NotificationKit';
 import { ManagementRouteParams } from '../navigation/RouteContract';
@@ -42,6 +47,7 @@ export struct ItemFormPage {
   @State private reminderDaysText: string = '';
   @State private notes: string = '';
   @State private scanText: string = '';
+  @State private scannedMatches: Item[] = [];
   @State private scanning: boolean = false;
   @State private quantityError: string = '';
   @State private errorMessage: string = '';
@@ -152,6 +158,7 @@ export struct ItemFormPage {
     if (this.quickEntryHandled || this.editMode) { return; }
     this.quickEntryHandled = true;
     const params = NavigationHelper.getParams() as ItemFormRouteParams | undefined;
+    if (this.pendingPhotoUri.length > 0) { this.showPhotoSection = true; return; }
     if (params?.source === 'scan') {
       this.showNotesSection = true;
       this.scanBarcode();
@@ -179,6 +186,17 @@ export struct ItemFormPage {
         } else {
           Scroll(this.pageScroller) {
             Column({ space: $r('app.float.space_4') }) {
+              if (this.scannedMatches.length > 0) {
+                Text('已有相同条码的物品，可选择补入批次，或继续填写新物品。').fontSize(14)
+                  .fontColor($r('app.color.text_secondary'))
+                ForEach(this.scannedMatches, (item: Item) => {
+                  Button('补入：' + item.name).width('100%').onClick(() => {
+                    NavigationHelper.pushUrl({ url: RouteName.BATCH_FORM, params: { itemId: item.id, mode: 'create',
+                      externalRequest: { action: 'add', photoUri: this.pendingPhotoUri,
+                        expirationDate: this.expirationDate, locationPath: this.locationPath } } });
+                  })
+                }, (item: Item) => item.id)
+              }
               this.coreSection()
               this.locationSection()
 
@@ -603,7 +621,12 @@ export struct ItemFormPage {
   private photoSection() {
     Column({ space: $r('app.float.space_3') }) {
       if (this.pendingPhotoUri.length > 0) {
-        Image(this.pendingPhotoUri).width('100%').height(180).objectFit(ImageFit.Cover).borderRadius(14)
+        RecognitionPanel({ photoUri: this.pendingPhotoUri, inputEnabled: !this.saving, onApply: (draft: CaptureDraft) => {
+          if (draft.name.length > 0) { this.name = draft.name; }
+          if (!this.editMode || this.singleBatchId.length > 0) {
+            if (draft.expirationDate.length > 0) { this.expirationDate = draft.expirationDate; this.showExpirySection = true; }
+          }
+        } })
       }
       Text(this.hasPhoto() ? '当前物品已有照片；重新选择后保存会替换照片。' : '可选择系统相册照片，或在系统选择器中拍摄。')
         .fontSize($r('app.float.font_caption'))
@@ -651,6 +674,23 @@ export struct ItemFormPage {
     this.editMode = params?.mode === 'edit';
     this.returnToRoute = params?.returnTo ?? (this.editMode ? RouteName.ITEM_DETAIL : RouteName.HOME);
     if (!this.editMode) {
+      const draft = params?.externalRequest;
+      if (draft !== undefined) {
+        this.name = draft.name ?? '';
+        this.quantityText = draft.quantity?.toString() ?? '1';
+        if (ITEM_UNIT_OPTIONS.includes(draft.unit as ItemUnit)) { this.unit = draft.unit as ItemUnit; }
+        this.locationPath = draft.locationPath ?? '';
+        this.expirationDate = draft.expirationDate ?? '';
+        this.notes = (draft.text ?? '').slice(0, 500);
+        this.pendingPhotoUri = draft.photoUri ?? '';
+        this.showPhotoSection = this.pendingPhotoUri.length > 0;
+        this.showExpirySection = this.expirationDate.length > 0;
+        this.showNotesSection = this.notes.length > 0;
+        if (draft.text !== undefined && this.name.length === 0) {
+          const recognized = AppServices.get().captureDraft.parse(draft.text);
+          this.name = recognized.name;
+        }
+      }
       return;
     }
     const itemIdResult = requireItemId(params);
@@ -1059,7 +1099,19 @@ export struct ItemFormPage {
         if (scanned.length > 256) {
           this.showToast('条码内容超过 256 个字符，请手动整理后输入');
         } else {
+          const external = ExternalRequestParser.parseUri(scanned);
+          if (external !== undefined) { await ExternalNavigation.open(external); return; }
           this.scanText = scanned;
+          if (!this.editMode) {
+            const matches = await AppServices.get().repository.listAll();
+            if (matches.ok) {
+              const known = matches.getData().filter((item: Item) => item.barcode === scanned);
+              if (known.length > 0) {
+                this.scannedMatches = known;
+                this.showToast('已找到相同条码的物品，可选择补入批次');
+              }
+            }
+          }
           this.showToast('条码已填写，请继续填写名称和存放位置');
         }
       }

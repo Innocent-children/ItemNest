@@ -132,6 +132,24 @@ function enabledPreferences(): UserPreferences {
 
 export default function reminderServiceTest() {
   describe('ReminderService', () => {
+    it('位置变动会更新提醒内容且不推迟原时间', 0, async () => {
+      const preferences = new FakePreferenceRepository();
+      preferences.value = enabledPreferences();
+      const records = new FakeReminderRepository();
+      const adapter = new FakeReminderAdapter();
+      const items = new FakeItemRepository();
+      items.items.push(buildItem('move'));
+      items.items[0].activeLocationPaths = ['厨房 / 柜子'];
+      const service = new ReminderService(records, new PreferenceService(preferences), adapter, items,
+        () => new Date(2030, 0, 1, 10, 0, 0).getTime());
+      const before = await service.reconcileLatest('move');
+      items.items[0].activeLocationPaths = ['厨房 / 冰箱'];
+      const after = await service.reconcileLatest('move');
+      expect(after.ok).assertTrue();
+      expect(adapter.scheduleCalls).assertEqual(2);
+      expect(after.getData().scheduledAt).assertEqual(before.getData().scheduledAt);
+      expect(after.getData().contentSignature?.includes('厨房 / 冰箱')).assertTrue();
+    });
     it('关闭通知单独计数并取消原计划，不再报告无需提醒', 0, async () => {
       const preferences = new FakePreferenceRepository();
       const records = new FakeReminderRepository();
@@ -212,7 +230,7 @@ export default function reminderServiceTest() {
       records.records.push({
         itemId: 'item-1', scheduledAt: scheduledAt, systemReminderId: 7,
         status: ReminderRecordStatus.SCHEDULED, planKey: '2030-01-10|7',
-        contentSignature: '物品-item-1\n2030-01-10', updatedAt: 1
+        contentSignature: '物品-item-1\n2030-01-10\n\nitem-detail', updatedAt: 1
       });
       const adapter = new FakeReminderAdapter();
       const items = new FakeItemRepository();

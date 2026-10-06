@@ -1,3 +1,5 @@
+import { RecognitionPanel } from '../components/RecognitionPanel';
+import { CaptureDraft } from '../model/SystemFeatures';
 import { OptionalDateField } from '../components/OptionalDateField';
 import { PageHeader } from '../components/PageHeader';
 import { RoundedButtonStyle, uiSpring, nativeTitleOptions } from '../ui/VisualStyle';
@@ -14,6 +16,7 @@ import { AppServices } from '../service/AppServices';
 
 @Component
 export struct BatchFormPage {
+  @State private recognitionPhoto: string = '';
   private pageScroller: Scroller = new Scroller();
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @State private focusedField: string = '';
@@ -133,6 +136,15 @@ export struct BatchFormPage {
               .padding($r('app.float.space_3'))
               .backgroundColor($r('app.color.surface_accent'))
               .borderRadius($r('app.float.radius_control'))
+              Button('拍照或选择包装，识别到期日期').enabled(!this.saving).onClick(async () => {
+                const result = await AppServices.get().imageSource.captureWithSystemPicker();
+                if (result.ok) { this.recognitionPhoto = result.getData() ?? ''; }
+                else { this.errorMessage = result.getError().message; }
+              })
+              if (this.recognitionPhoto.length > 0) {
+                RecognitionPanel({ photoUri: this.recognitionPhoto, inputEnabled: !this.saving,
+                  onApply: (draft: CaptureDraft) => { if (draft.expirationDate.length > 0) { this.expirationDate = draft.expirationDate; } } })
+              }
               Text('到期日期（可选）').fontSize(15).fontColor($r('app.color.text_primary')).width('100%')
               OptionalDateField({ value: $expirationDate, editable: !this.saving })
               TextInput({ text: this.locationPath, placeholder: '存放位置，可选' })
@@ -221,6 +233,12 @@ export struct BatchFormPage {
         return;
       }
       this.unit = itemResult.getData().unit;
+      if (!this.editMode) {
+        const draft = (NavigationHelper.getParams() as BatchRouteParams | undefined)?.externalRequest;
+        this.recognitionPhoto = draft?.photoUri ?? '';
+        this.expirationDate = draft?.expirationDate ?? '';
+        this.locationPath = draft?.locationPath || itemResult.getData().locationPath || '';
+      }
       if (this.editMode) {
         const result = await AppServices.get().batches.listByItemId(this.itemId);
         if (!result.ok) {

@@ -1,3 +1,4 @@
+import { LocationLabelRepository } from '../../../main/ets/data/repository/LocationLabelRepository';
 import { describe, it, expect } from '@ohos/hypium';
 import { Context } from '@kit.AbilityKit';
 import { relationalStore } from '@kit.ArkData';
@@ -118,15 +119,22 @@ export default function inventoryUpgradeDeviceTest() {
         expect((await lending.returnItem('backup-owned', 1, undefined, '原归还备注', borrowed.id)).ok).assertTrue();
         expect((await new BatchService(batches, items).consume('backup-owned', 1)).ok).assertTrue();
         await thresholds.save({ itemId: 'backup-owned', threshold: 2, enabled: true, updatedAt: 1 });
+        const labels = new LocationLabelRepository(db);
+        expect((await new LocationRepository(db).create({ id: 'label-location', name: '标签测试位置', path: '标签测试位置',
+          active: true, createdAt: 1, updatedAt: 1 })).ok).assertTrue();
+        await labels.save({ token: '12345678123412341234123456789012', locationId: 'label-location' });
         const exported = await portable.exportJson();
         expect(exported.ok).assertTrue();
         const preview = portable.preview(exported.getData()).getData();
         expect(preview.thresholdCount).assertEqual(1);
+        expect(preview.locationLabelCount).assertEqual(1);
+        await labels.remove('12345678123412341234123456789012');
         expect(preview.traceEventCount).assertEqual(4);
         expect(preview.sampleNames[0]).assertEqual('独立测试物品');
         await items.create(fixtureItem('temporary-replacement', 3));
         expect((await portable.restore(exported.getData(), true)).ok).assertTrue();
         expect(files.safetyText.includes('temporary-replacement')).assertTrue();
+        expect((await labels.list())[0].locationId).assertEqual('label-location');
         expect((await items.listAll()).getData().length).assertEqual(1);
         const state = (await lending.getState('backup-owned')).getData();
         expect(state.totalQuantity).assertEqual(5);

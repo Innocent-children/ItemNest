@@ -1,0 +1,101 @@
+{
+  "insightIntents": [
+    {
+      "domain": "ToolsDomain",
+      "intentVersion": "1.0.1",
+      "srcEntry": "./ets/insightintents/FunctionIntentExecutor.ets",
+      "uiAbility": {
+        "ability": "EntryAbility",
+        "executeMode": [
+          "foreground"
+        ]
+      },
+      "intentName": "JumpFunctionPage",
+      "inputParams": [
+        {
+          "properties": {
+            "pageId": {
+              "type": "string",
+              "enum": [
+                {
+                  "value": "add",
+                  "displayName": "记录物品",
+                  "keywords": [
+                    "新增物品"
+                  ],
+                  "displayDescription": "记录物品"
+                },
+                {
+                  "value": "scan",
+                  "displayName": "扫码录入",
+                  "keywords": [
+                    "扫一扫"
+                  ],
+                  "displayDescription": "扫码录入"
+                },
+                {
+                  "value": "camera",
+                  "displayName": "拍照录入",
+                  "keywords": [
+                    "识别包装"
+                  ],
+                  "displayDescription": "拍照录入"
+                },
+                {
+                  "value": "search",
+                  "displayName": "查找物品",
+                  "keywords": [
+                    "物品在哪"
+                  ],
+                  "displayDescription": "查找物品"
+                },
+                {
+                  "value": "expiry",
+                  "displayName": "临期物品",
+                  "keywords": [
+                    "即将过期"
+                  ],
+                  "displayDescription": "临期物品"
+                },
+                {
+                  "value": "loans",
+                  "displayName": "借出待还",
+                  "keywords": [
+                    "归还物品"
+                  ],
+                  "displayDescription": "借出待还"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "domain": "ToolsDomain",
+      "intentVersion": "1.0.1",
+      "srcEntry": "./ets/insightintents/FunctionIntentExecutor.ets",
+      "uiAbility": {
+        "ability": "EntryAbility",
+        "executeMode": [
+          "foreground"
+        ]
+      },
+      "intentName": "ViewSearchPageLocal"
+    }
+  ],
+  "insightIntentsSrcEntry": [
+    {
+      "srcEntry": "./ets/insightintents/QueryItemsIntent.ets"
+    },
+    {
+      "srcEntry": "./ets/insightintents/ManageItemIntent.ets"
+    },
+    {
+      "srcEntry": "./ets/insightintents/ViewItemIntent.ets"
+    },
+    {
+      "srcEntry": "./ets/insightintents/ItemIntentEntity.ets"
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+import { ExternalRequestParser } from '../navigation/ExternalRequestParser';
+import { NfcLabelAdapter } from '../service/adapter/NfcLabelAdapter';
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
@@ -17,6 +19,9 @@ interface SafeAreaInsets {
 }
 
 export default class EntryAbility extends UIAbility {
+  private dayTimer: number = -1;
+  private currentDay: string = '';
+  private refreshTimer: number = -1;
   private mainWindow?: window.Window;
   private avoidAreaChangeCallback?: (options: window.AvoidAreaOptions) => void;
   private formRefreshListenerId: number = 0;
@@ -25,13 +30,16 @@ export default class EntryAbility extends UIAbility {
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     AppServices.configure(this.context);
-    this.formRefreshListenerId = AppEventBus.subscribeDataChanged(() => this.refreshRunningForms());
-    this.handleFormLinkWant(want);
+    this.formRefreshListenerId = AppEventBus.subscribeDataChanged(() => this.scheduleSystemRefresh());
+    this.handleExternalWant(want);
     this.applyTheme();
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
   }
 
   onDestroy(): void {
+    NfcLabelAdapter.stopActive();
+    if (this.dayTimer >= 0) { clearInterval(this.dayTimer); }
+    if (this.refreshTimer >= 0) { clearTimeout(this.refreshTimer); }
     if (this.formRefreshListenerId > 0) {
       AppEventBus.unsubscribeDataChanged(this.formRefreshListenerId);
       this.formRefreshListenerId = 0;
@@ -46,8 +54,10 @@ export default class EntryAbility extends UIAbility {
   }
 
   private async loadMainContent(windowStage: window.WindowStage): Promise<void> {
-    await AppServices.get().photoMaintenance.cleanupOrphans();
     await this.applyImmersiveWindow(windowStage);
+    const iconState = await AppServices.get().appIcon.getState();
+    AppStorage.setOrCreate<string>('itemtrace.launchIcon', iconState.ok ? iconState.getData().current : '');
+    await AppServices.get().photoMaintenance.cleanupOrphans();
     windowStage.loadContent('pages/Index', (err) => {
       if (err.code) {
         hilog.error(DOMAIN, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));
@@ -75,12 +85,18 @@ export default class EntryAbility extends UIAbility {
   onForeground(): void {
     AppStorage.setOrCreate<boolean>('itemtrace.uiForeground', true);
     this.refreshForegroundAppearance();
+    this.currentDay = new Date().toDateString();
+    if (this.dayTimer >= 0) { clearInterval(this.dayTimer); }
+    this.dayTimer = setInterval(() => {
+      const today = new Date().toDateString();
+      if (today !== this.currentDay) { this.currentDay = today; AppEventBus.notifyDataChanged(); }
+    }, 30000);
     AppEventBus.notifyDataChanged();
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onForeground');
   }
 
   onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    this.handleFormLinkWant(want);
+    this.handleExternalWant(want);
   }
 
   private async applyTheme(): Promise<void> {
@@ -236,14 +252,8 @@ export default class EntryAbility extends UIAbility {
         return;
       }
       const snapshotResult = await AppServices.get().formSnapshot.getSnapshot();
-      if (!snapshotResult.ok) {
-        return;
-      }
-      const snapshot = snapshotResult.getData();
-      const bindingData = formBindingData.createFormBindingData({
-        dueSoonCount: snapshot.dueSoonCount.toString(),
-        todayReminderCount: snapshot.todayReminderCount.toString()
-      });
+      const snapshot = snapshotResult.ok ? snapshotResult.getData() : AppServices.get().formSnapshot.failedSnapshot();
+      const bindingData = formBindingData.createFormBindingData(snapshot);
       for (let index = 0; index < itemTraceFormIds.length; index++) {
         try {
           await formProvider.updateForm(itemTraceFormIds[index], bindingData);
@@ -256,15 +266,42 @@ export default class EntryAbility extends UIAbility {
     }
   }
 
-  private handleFormLinkWant(want: Want): void {
-    const source = want.parameters?.['source'];
-    const action = want.parameters?.['action'];
-    if (source === FORM_SOURCE && (action === 'add' || action === 'expiry' || action === 'reminders')) {
-      AppStorage.setOrCreate<string>('itemtrace.widgetRequest', `${action}:${Date.now()}`);
+  private scheduleSystemRefresh(): void {
+    if (this.refreshTimer >= 0) { clearTimeout(this.refreshTimer); }
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = -1;
+      this.refreshRunningForms();
+      AppServices.get().photoSearch.refresh();
+      AppServices.get().reminders.reconcileAll().catch(() => {});
+    }, 300);
+  }
+
+  private async handleExternalWant(want: Want): Promise<void> {
+    try {
+      let request = ExternalRequestParser.parseUri(want.uri ?? '');
+      if (request === undefined && want.action === 'ohos.nfc.tag.action.TAG_FOUND') {
+        request = ExternalRequestParser.parseUri(await new NfcLabelAdapter().readWant(want));
+      }
+      if (request === undefined && want.action === 'ohos.want.action.sendData') {
+        request = await AppServices.get().sharing.receive(want);
+      }
+      if (request === undefined && want.parameters?.['source'] === FORM_SOURCE) {
+        const action = want.parameters?.['action'];
+        if (typeof action === 'string') {
+          const itemId = want.parameters?.['itemId'];
+          request = action === 'item' && typeof itemId === 'string' ? { action: 'item', itemId: itemId } :
+            ExternalRequestParser.functionRequest(action);
+        }
+      }
+      if (request !== undefined) { ExternalRequestParser.publish(request); }
+    } catch (_) {
+      AppStorage.setOrCreate<string>('itemtrace.entryError', '无法读取分享内容或收纳标签，请重新操作。');
     }
   }
 
   onBackground(): void {
+    NfcLabelAdapter.stopActive();
+    if (this.dayTimer >= 0) { clearInterval(this.dayTimer); this.dayTimer = -1; }
     AppStorage.setOrCreate<boolean>('itemtrace.uiForeground', false);
     // Ability has back to background
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onBackground');

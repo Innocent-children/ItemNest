@@ -11,6 +11,18 @@
     {
       "name": "widget_name",
       "value": "我的家当 · 概览"
+    },
+    {
+      "name": "widget_loans",
+      "value": "我的家当 · 借出待还"
+    },
+    {
+      "name": "widget_quick",
+      "value": "我的家当 · 快速记录"
+    },
+    {
+      "name": "nfc_reason",
+      "value": "读取或写入收纳位置标签"
     }
   ]
 }

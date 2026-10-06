@@ -1,3 +1,4 @@
+import systemEntryTest from './ets/test/SystemEntry.test';
 import pageFlowPolicyTest from './ets/test/PageFlowPolicy.test';
 import appIconServiceTest from './ets/test/AppIconService.test';
 import localUnitTest from './LocalUnit.test';
@@ -24,6 +25,7 @@ import scanAdapterTest from './ets/test/ScanAdapter.test';
 import backupPhotoCodecTest from './ets/test/BackupPhotoCodec.test';
 
 export default function testsuite() {
+  systemEntryTest();
   appIconServiceTest();
   pageFlowPolicyTest();
   localUnitTest();

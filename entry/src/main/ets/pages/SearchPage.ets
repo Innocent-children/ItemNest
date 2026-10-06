@@ -1,3 +1,7 @@
+import { SearchResult } from '../service/ItemSearchService';
+import { Result, success } from '../common/Result';
+import { ExternalRequestParser } from '../navigation/ExternalRequestParser';
+import { ExternalNavigation } from '../navigation/ExternalNavigation';
 import { NavigationRouteParams } from '../navigation/RouteContract';
 import { PageHeader } from '../components/PageHeader';
 import { SharedSearchField } from '../components/SharedSearchField';
@@ -53,6 +57,8 @@ export struct SearchPage {
   @State private history: SearchHistory[] = [];
   @State private filterLoading: boolean = false;
   @State private searchLoading: boolean = false;
+  @State private includePhotos: boolean = false;
+  @State private photoNotice: string = '';
   @State private searched: boolean = false;
   @State private filterErrorMessage: string = '';
   @State private searchErrorMessage: string = '';
@@ -174,6 +180,14 @@ export struct SearchPage {
           .onClick(() => this.openFilters())
       }.width('100%').constraintSize({ maxWidth: 960 })
         .padding({ left: 24, right: 24, bottom: 12 })
+      Row({ space: 12 }) {
+        Toggle({ type: ToggleType.Checkbox, isOn: this.includePhotos }).accessibilityText('同时按照片外观查找')
+          .onChange((value: boolean) => { this.includePhotos = value; this.search(true, false); })
+        Text('同时按照片外观查找').fontSize(14).fontColor($r('app.color.text_secondary'))
+      }.width('100%').constraintSize({ maxWidth: 960 }).padding({ left: 24, right: 24, bottom: 8 })
+      if (this.photoNotice.length > 0) {
+        Text(this.photoNotice).fontSize(12).fontColor($r('app.color.text_secondary')).padding({ left: 24, right: 24 })
+      }
       Scroll(this.pageScroller) {
         Column({ space: 16 }) {
           if (this.filterNotice.length > 0) { Text(this.filterNotice).fontSize(12).fontColor($r('app.color.text_secondary')) }
@@ -465,11 +479,12 @@ export struct SearchPage {
     this.searchLoading = showLoading;
     this.searchErrorMessage = '';
     try {
-      const result = await AppServices.get().searchItems.search(query);
+      const result = await this.queryItems(query);
       if (!this.requestCoordinator.isCurrentSearch(requestId)) {
         return;
       }
       if (result.ok) {
+        this.photoNotice = result.getData().photoNotice;
         const items = result.getData().items;
         await AppServices.get().photos.loadThumbnails(items);
         if (!this.requestCoordinator.isCurrentSearch(requestId)) { return; }
@@ -513,11 +528,12 @@ export struct SearchPage {
     this.searchLoading = showLoading;
     this.searchErrorMessage = '';
     try {
-      const result = await AppServices.get().searchItems.search(query);
+      const result = await this.queryItems(query);
       if (!this.requestCoordinator.isCurrentRefresh(requestId)) {
         return;
       }
       if (result.ok) {
+        this.photoNotice = result.getData().photoNotice;
         const items = result.getData().items;
         await AppServices.get().photos.loadThumbnails(items);
         if (!this.requestCoordinator.isCurrentRefresh(requestId)) { return; }
@@ -587,6 +603,8 @@ export struct SearchPage {
       if (!result.ok) { this.searchErrorMessage = result.getError().message; return; }
       const barcode = result.getData();
       if (barcode === undefined) { return; }
+      const external = ExternalRequestParser.parseUri(barcode);
+      if (external !== undefined) { await ExternalNavigation.open(external); return; }
       if (barcode.length > 256) { this.searchErrorMessage = '条码内容过长，请输入物品名称查找。'; return; }
       this.inputSearchVersion++;
       this.name = barcode;
@@ -645,4 +663,18 @@ export struct SearchPage {
     this.search(false, false);
   }
 
+
+  private async queryItems(query: ItemQuery): Promise<Result<SearchResult>> {
+    const result = await AppServices.get().searchItems.search(query);
+    if (!result.ok || !this.includePhotos || query.name.trim().length === 0) { return result; }
+    const photos = await AppServices.get().photoSearch.search(query);
+    const combined = result.getData();
+    if (!photos.ok) { combined.photoNotice = photos.getError().message + '；名称搜索结果仍可查看。'; return success(combined); }
+    for (const item of photos.getData()) {
+      if (!combined.items.some((existing: ItemSummary) => existing.id === item.id)) { combined.items.push(item); }
+    }
+    const merged = new SearchResult(query, combined.items);
+    merged.photoNotice = '包含照片外观匹配的候选物品，请对照照片确认。';
+    return success(merged);
+  }
 }

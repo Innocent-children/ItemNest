@@ -21,6 +21,19 @@ function backup(): PortableBackupPayload {
 
 export default function portableBackupValidationTest() {
   describe('Portable backup validation', () => {
+    it('收纳标签随位置备份且拒绝悬空和重复标签', 0, () => {
+      const validator = new PortableBackupValidation();
+      const payload = backup();
+      payload.locations.push({ id: 'location-1', name: '书房', path: '书房', active: true, createdAt: 1, updatedAt: 1 });
+      payload.locationLabels = [{ token: '12345678123412341234123456789012', locationId: 'location-1' }];
+      const valid = validator.validate(JSON.stringify(payload));
+      expect(valid.ok).assertTrue();
+      expect(validator.preview(valid.getData()).locationLabelCount).assertEqual(1);
+      payload.locationLabels.push({ token: payload.locationLabels[0].token, locationId: 'location-1' });
+      expect(validator.validate(JSON.stringify(payload)).ok).assertFalse();
+      payload.locationLabels = [{ token: '12345678123412341234123456789012', locationId: 'missing' }];
+      expect(validator.validate(JSON.stringify(payload)).ok).assertFalse();
+    });
     it('预览有效备份的数量', 0, () => {
       const validator = new PortableBackupValidation();
       const result = validator.validate(JSON.stringify(backup()));
