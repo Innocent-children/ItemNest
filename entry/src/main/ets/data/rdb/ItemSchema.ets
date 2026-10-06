@@ -1,7 +1,7 @@
 import { relationalStore } from '@kit.ArkData';
 import { SchemaExecutor } from './SchemaExecutor';
 
-export const DATABASE_NAME: string = 'itemtrace.db';
+export const DATABASE_NAME: string = 'itemnest.db';
 export const DATABASE_VERSION: number = 13;
 export const ITEM_TABLE: string = 'item';
 

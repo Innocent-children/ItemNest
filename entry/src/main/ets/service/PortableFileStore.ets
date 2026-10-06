@@ -59,7 +59,7 @@ export class PortableFileStore {
     if (!this.safeAssetId(assetId) || bytes.length === 0 || bytes.length > MAX_PHOTO_BYTES) {
       throw new AppError(AppErrorCode.ASSET_STORAGE, '图片内容无效');
     }
-    const directory = `${this.context.filesDir}/itemtrace-assets`;
+    const directory = `${this.context.filesDir}/itemnest-assets`;
     try {
       await fileIo.mkdir(directory, true);
     } catch (_) {
@@ -75,7 +75,7 @@ export class PortableFileStore {
   }
 
   async writeSafetyBackup(text: string): Promise<string> {
-    const path = `${this.context.filesDir}/itemtrace-before-restore-${Date.now()}-${Math.floor(Math.random() * 1000000)}.json`;
+    const path = `${this.context.filesDir}/itemnest-before-restore-${Date.now()}-${Math.floor(Math.random() * 1000000)}.json`;
     const temporary = `${path}.tmp`;
     try {
       await this.writeBytes(temporary, new util.TextEncoder().encodeInto(text), true);
@@ -103,7 +103,7 @@ export class PortableFileStore {
 
   private async listSafetyPaths(): Promise<string[]> {
     const names = await fileIo.listFile(this.context.filesDir);
-    const backups = names.filter(name => /^itemtrace-before-restore-[0-9]+-[0-9]+\.json$/.test(name));
+    const backups = names.filter(name => /^itemnest-before-restore-[0-9]+-[0-9]+\.json$/.test(name));
     backups.sort().reverse();
     return backups.map(name => `${this.context.filesDir}/${name}`);
   }
@@ -126,7 +126,7 @@ export class PortableFileStore {
   }
 
   private isOwnedPhotoPath(path: string): boolean {
-    const prefix = `${this.context.filesDir}/itemtrace-assets/`;
+    const prefix = `${this.context.filesDir}/itemnest-assets/`;
     return path.startsWith(prefix) && this.safeAssetId(path.substring(prefix.length));
   }
 

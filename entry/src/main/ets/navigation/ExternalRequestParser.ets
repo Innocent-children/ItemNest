@@ -3,7 +3,7 @@ import { ExternalRequest } from '../model/SystemFeatures';
 export class ExternalRequestParser {
   static parseUri(uri: string): ExternalRequest | undefined {
     if (uri.length > 4096) { return undefined; }
-    const match = /^itemtrace:\/\/(item|location|function)\/([^?#]+)$/.exec(uri);
+    const match = /^itemnest:\/\/(item|location|function)\/([^?#]+)$/.exec(uri);
     if (match === null) { return undefined; }
     try {
       const id = decodeURIComponent(match[2]);
@@ -20,12 +20,12 @@ export class ExternalRequestParser {
   }
 
   static itemUri(id: string): string {
-    return 'itemtrace://item/' + encodeURIComponent(id);
+    return 'itemnest://item/' + encodeURIComponent(id);
   }
 
   static publish(request: ExternalRequest): void {
-    AppStorage.setOrCreate<string>('itemtrace.externalRequest', JSON.stringify(request));
-    AppStorage.setOrCreate<number>('itemtrace.externalRevision',
-      (AppStorage.get<number>('itemtrace.externalRevision') ?? 0) + 1);
+    AppStorage.setOrCreate<string>('itemnest.externalRequest', JSON.stringify(request));
+    AppStorage.setOrCreate<number>('itemnest.externalRevision',
+      (AppStorage.get<number>('itemnest.externalRevision') ?? 0) + 1);
   }
 }

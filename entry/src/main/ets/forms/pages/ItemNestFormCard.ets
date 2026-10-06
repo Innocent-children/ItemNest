@@ -1,7 +1,7 @@
 import { FormEntry } from '../../model/FormSnapshot';
 
 class FormTarget {
-  source: string = 'itemtrace-form';
+  source: string = 'itemnest-form';
   action: string;
   itemId: string;
   constructor(action: string, itemId: string = '') { this.action = action; this.itemId = itemId; }
@@ -11,7 +11,7 @@ let storage = new LocalStorage();
 
 @Entry(storage)
 @Component
-struct ItemTraceFormCard {
+struct ItemNestFormCard {
   @LocalStorageProp('ohos.extra.param.key.form_dimension') dimension: number = 2;
   @State expiryEntries: FormEntry[] = [];
   @State dueSoonCount: string = '—';

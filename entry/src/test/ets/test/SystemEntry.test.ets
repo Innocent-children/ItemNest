@@ -36,14 +36,14 @@ export default function systemEntryTest() {
       expect(request?.itemId).assertEqual('物品/1 #a');
     });
     it('无效链接不能变成写入操作或任意页面', 0, () => {
-      expect(ExternalRequestParser.parseUri('itemtrace://function/delete')).assertUndefined();
-      expect(ExternalRequestParser.parseUri('itemtrace://item/%XX')).assertUndefined();
-      expect(ExternalRequestParser.parseUri('itemtrace://item/%00')).assertUndefined();
+      expect(ExternalRequestParser.parseUri('itemnest://function/delete')).assertUndefined();
+      expect(ExternalRequestParser.parseUri('itemnest://item/%XX')).assertUndefined();
+      expect(ExternalRequestParser.parseUri('itemnest://item/%00')).assertUndefined();
       expect(ExternalRequestParser.parseUri('https://example.com/item/1')).assertUndefined();
-      expect(ExternalRequestParser.parseUri('itemtrace://location/id?delete=true')).assertUndefined();
+      expect(ExternalRequestParser.parseUri('itemnest://location/id?delete=true')).assertUndefined();
     });
     it('标签解析返回标识，不把标签内容当作位置路径', 0, () => {
-      const request = ExternalRequestParser.parseUri('itemtrace://location/token-1');
+      const request = ExternalRequestParser.parseUri('itemnest://location/token-1');
       expect(request?.locationId).assertEqual('token-1');
       expect(request?.locationPath).assertUndefined();
     });

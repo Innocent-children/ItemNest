@@ -3,7 +3,7 @@ import { fileIo } from '@kit.CoreFileKit';
 import { AppError, AppErrorCode } from '../common/AppError';
 import { failure, Result, success } from '../common/Result';
 
-const ASSET_DIRECTORY_NAME = 'itemtrace-assets';
+const ASSET_DIRECTORY_NAME = 'itemnest-assets';
 
 export class LocalAssetStorage {
   private readonly context: Context;

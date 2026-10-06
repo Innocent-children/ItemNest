@@ -3,7 +3,7 @@ import { NavigationHelper } from '../navigation/NavigationHelper';
 
 @Component
 export struct EmptyState {
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @Prop title: string = '暂无物品';
   @Prop description: string = '';
   @Prop actionText: string = '';

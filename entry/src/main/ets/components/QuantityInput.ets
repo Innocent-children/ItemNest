@@ -4,7 +4,7 @@ import { ItemValidator } from '../common/ItemValidator';
 
 @Component
 export struct QuantityInput {
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @State private focusedField: string = '';
   @Link quantityText: string;
   @Link unit: ItemUnit;

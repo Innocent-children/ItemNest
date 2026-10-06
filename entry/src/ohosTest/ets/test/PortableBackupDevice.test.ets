@@ -5,7 +5,7 @@ import { BackupPhotoCodec } from '../../../main/ets/common/BackupPhotoCodec';
 import { migrateToLatest } from '../../../main/ets/data/rdb/RdbDatabase';
 import { ResultSetReader } from '../../../main/ets/data/rdb/ResultSetReader';
 
-const TEST_DATABASE_NAME = 'itemtrace-restore-transaction-test.db';
+const TEST_DATABASE_NAME = 'itemnest-restore-transaction-test.db';
 
 export default function portableBackupDeviceTest() {
   describe('Portable backup device', () => {

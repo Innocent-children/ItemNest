@@ -6,7 +6,7 @@ import { ExternalRequestParser } from '../navigation/ExternalRequestParser';
 @InsightIntentEntry({
   intentName: 'ViewStoredItem', domain: 'ToolsDomain', intentVersion: '1.0.0',
   displayName: '查看已记录物品', displayDescription: '搜索本机物品并打开详情',
-  llmDescription: '通过实时查询的物品实体打开 ItemTrace 物品详情。', keywords: ['找物品', '物品详情'],
+  llmDescription: '通过实时查询的物品实体打开 我的家当 物品详情。', keywords: ['找物品', '物品详情'],
   abilityName: 'EntryAbility', executeMode: [insightIntent.ExecuteMode.UI_ABILITY_FOREGROUND],
   parameters: { type: 'object', properties: { item: { type: 'object', description: '要查看的物品',
     properties: { entityId: { type: 'string' }, name: { type: 'string' }, displayName: { type: 'string' }, location: { type: 'string' } },

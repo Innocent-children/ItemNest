@@ -1,5 +1,5 @@
-export const DATA_REVISION_KEY: string = 'itemtrace.dataRevision';
-export const PREFERENCE_REVISION_KEY: string = 'itemtrace.preferenceRevision';
+export const DATA_REVISION_KEY: string = 'itemnest.dataRevision';
+export const PREFERENCE_REVISION_KEY: string = 'itemnest.preferenceRevision';
 
 type AppEventListener = () => void;
 

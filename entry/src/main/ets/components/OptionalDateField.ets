@@ -2,7 +2,7 @@ import { RoundedButtonStyle, uiSpring } from '../ui/VisualStyle';
 
 @Component
 export struct OptionalDateField {
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @Link value: string;
   @Prop editable: boolean = true;
 

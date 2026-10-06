@@ -1,5 +1,5 @@
 import { failure, Result, success } from '../common/Result';
-import { ItemTraceExportPayload } from '../common/ImportValidation';
+import { ItemNestExportPayload } from '../common/ImportValidation';
 import { BatchRepositoryPort } from '../data/repository/BatchRepository';
 import { CategoryRepository } from '../data/repository/CategoryRepository';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
@@ -45,8 +45,8 @@ export class ExportService {
     if (!traces.ok) {
       return failure<string>(traces.getError());
     }
-    const payload: ItemTraceExportPayload = {
-      version: 'itemtrace.phase3.v1',
+    const payload: ItemNestExportPayload = {
+      version: 'itemnest.phase3.v1',
       exportedAt: this.clock(),
       items: items.getData(),
       batches: batches.getData(),

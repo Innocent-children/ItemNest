@@ -5,8 +5,8 @@ import { SystemFeatures } from '../model/SystemFeatures';
 
 @Component
 export struct SystemFeaturesPage {
-  @StorageLink('itemtrace.safeAreaBottom') private bottom: number = 0;
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.safeAreaBottom') private bottom: number = 0;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @State private assistant: boolean = false;
   @State private search: boolean = false;
   @State private location: boolean = false;

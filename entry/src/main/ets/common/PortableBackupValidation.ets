@@ -1,14 +1,14 @@
 import { LocationLabel } from '../model/LocationLabel';
 import { AppError, AppErrorCode } from './AppError';
 import { failure, Result, success } from './Result';
-import { ImportPreview, ItemTraceExportPayload } from './ImportValidation';
+import { ImportPreview, ItemNestExportPayload } from './ImportValidation';
 import { ItemValidator } from './ItemValidator';
 import { Item, PhotoState } from '../model/Item';
 import { isItemUnit } from '../model/Item';
 import { allocateLegacyReturns, TraceEvent, TraceEventType } from '../model/TraceEvent';
 import { StockThreshold } from '../model/StockThreshold';
 
-export const PORTABLE_BACKUP_VERSION: string = 'itemtrace.backup.v2';
+export const PORTABLE_BACKUP_VERSION: string = 'itemnest.backup.v2';
 export const MAX_BACKUP_BYTES: number = 32 * 1024 * 1024;
 export const MAX_PHOTO_BYTES: number = 5 * 1024 * 1024;
 export const MAX_TOTAL_PHOTO_BYTES: number = 20 * 1024 * 1024;
@@ -18,7 +18,7 @@ export interface BackupPhoto {
   bytesBase64: string;
 }
 
-export interface PortableBackupPayload extends ItemTraceExportPayload {
+export interface PortableBackupPayload extends ItemNestExportPayload {
   locationLabels?: LocationLabel[];
   thresholds: StockThreshold[];
   photos: BackupPhoto[];

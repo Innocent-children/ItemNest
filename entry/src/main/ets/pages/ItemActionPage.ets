@@ -12,8 +12,8 @@ import { AppEventBus } from '../common/AppEventBus';
 
 @Component
 export struct ItemActionPage {
-  @StorageLink('itemtrace.safeAreaBottom') private bottom: number = 0;
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.safeAreaBottom') private bottom: number = 0;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @State private items: ItemSummary[] = [];
   @State private batches: Batch[] = [];
   @State private loans: OutstandingLoan[] = [];

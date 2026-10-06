@@ -1,6 +1,10 @@
 # HarmonyOS 系统能力接入
 
-ItemTrace 的编译、目标和最低运行版本均为 HarmonyOS API 26。应用内业务继续使用原有物品、批次、借还服务；系统入口负责解析参数、查询数据或打开待确认表单。
+「我的家当」（ItemNest）的编译、目标和最低运行版本均为 HarmonyOS API 26。应用内业务继续使用原有物品、批次、借还服务；系统入口负责解析参数、查询数据或打开待确认表单。
+
+## 项目名称与应用标识
+
+英文工程名为 ItemNest，应用显示名和首页标题为「我的家当」。应用包名为 `com.imotong.itemnest`，链接协议为 `itemnest://`，数据库为 `itemnest.db`，桌面卡片注册为 `ItemNestFormAbility`。偏好文件、照片目录、照片检索范围及导出/备份格式中的名称统一使用 ItemNest/itemnest。新包名对应独立的安装和数据目录；旧应用数据、旧格式备份及旧二维码/NFC 标签不自动迁移或兼容。
 
 ## 已实现的功能与入口
 
@@ -12,7 +16,7 @@ ItemTrace 的编译、目标和最低运行版本均为 HarmonyOS API 26。应�
 | 照片外观搜索 | 查找 → 同时按照片外观查找 | PhotoSearchService |
 | 临期、借出待还、快速记录卡片 | 桌面添加服务卡片 | FormSnapshotProvider、forms/pages、form_config.json |
 | 收纳二维码和 NFC | 我的 → 收纳位置二维码与 NFC 标签；位置管理 → 标签 | LocationLabelService、NfcLabelAdapter、LocationLabelPage |
-| 接收照片/文字分享 | 系统分享面板 → ItemTrace | EntryAbility.handleExternalWant、ShareService |
+| 接收照片/文字分享 | 系统分享面板 → 我的家当 | EntryAbility.handleExternalWant、ShareService |
 | 分享物品、借出清单、位置清单 | 对应页面的分享入口 | SharePreviewPage、ShareService |
 | 备份和恢复进度实况窗 | 我的 → 系统能力与隐私 → 备份进度实况窗 | BackupProgressService、PortableBackupService |
 | 通知直达和大屏布局 | 到期通知；宽屏设备 | ReminderAdapter、ExternalNavigation、Index、ItemListPage |
@@ -37,7 +41,7 @@ ItemTrace 的编译、目标和最低运行版本均为 HarmonyOS API 26。应�
 
 ### 小艺与系统搜索
 
-应用包已包含 JumpFunctionPage、ViewSearchPageLocal，以及 QueryStoredItems、RecordStoredItem、ViewStoredItem 自定义意图和可查询的 ItemIntentEntity。平台侧需要以 com.imotong.itemtrace 对应的实际应用身份申请/配置接入，完成调试账号、意图注册和审核。
+应用包已包含 JumpFunctionPage、ViewSearchPageLocal，以及 QueryStoredItems、RecordStoredItem、ViewStoredItem 自定义意图和可查询的 ItemIntentEntity。平台侧需要以 com.imotong.itemnest 对应的实际应用身份申请/配置接入，完成调试账号、意图注册和审核。
 
 功能搜索声明中的页面标识为 add、scan、camera、search、expiry、loans。物品实体查询支持 entityId、name；是否在目标系统入口直接展示内容，必须以平台开通和端到端调试结果确认。编译通过、元数据存在、在应用内开关开启均不能代替平台审核通过。
 
@@ -79,7 +83,7 @@ export PATH=/Applications/DevEco-Studio.app/Contents/tools/node/bin:$JAVA_HOME/b
 ## 本次验证记录（2026-10-06）
 
 - 本地测试：133 项通过，Failure 0、Error 0。
-- Mate 80（设备返回 API 26）实机测试：38 项通过，Failure 0、Error 0。包括 OCR 测试图片、照片建索引/检索/删除、NDEF 标签编码、标签改名与解除关联、数据库升级，以及含标签的备份恢复回归。
+- 改名前的 Mate 80（设备返回 API 26）实机测试：38 项通过，Failure 0、Error 0。本次全量改名重新验证本地测试及新包名的打包、签名，实机功能尚未重新执行。包括 OCR 测试图片、照片建索引/检索/删除、NDEF 标签编码、标签改名与解除关联、数据库升级，以及含标签的备份恢复回归。
 - 应用和测试 HAP 编译、打包、签名成功。检查了安装包内的自定义意图、可查询实体和三种卡片声明。
 - 实机打开系统能力设置页成功。未保存的新建表单被外部入口覆盖后返回，输入仍保留；测试草稿已放弃，没有新增用户物品。
 - 尚未完成：小艺/系统内容搜索在平台开通后的端到端调用、PROGRESS 实况窗权益验证、实体 NFC 标签贴近读写，以及平板/折叠屏设备上的布局检查。

@@ -6,7 +6,7 @@ import { RouteName } from './RouteName';
 
 export class ExternalNavigation {
   static async open(request: ExternalRequest): Promise<boolean> {
-    if (AppStorage.get<boolean>('itemtrace.backupActive') && request.action !== 'backup') {
+    if (AppStorage.get<boolean>('itemnest.backupActive') && request.action !== 'backup') {
       throw new Error('备份或恢复正在执行，请完成后再操作物品');
     }
     let options: NavigationOptions;

@@ -27,7 +27,7 @@ export class PhotoSearchService {
   private settings: SystemFeatureService;
   private searchGeneration: number = 0;
   private queue: Promise<void> = Promise.resolve();
-  private readonly scope: string = 'ItemTracePhotos';
+  private readonly scope: string = 'ItemNestPhotos';
 
   constructor(context: Context, items: ItemRepositoryPort, assets: AssetRepositoryPort, searchItems: ItemSearchService,
     settings: SystemFeatureService) {
@@ -79,7 +79,7 @@ export class PhotoSearchService {
       if ((error as BusinessError).code === 1013100003 && this.supported()) {
         try {
           await textSearchImage.clearData();
-          const store = await preferences.getPreferences(this.context, 'itemtrace_photo_index');
+          const store = await preferences.getPreferences(this.context, 'itemnest_photo_index');
           await store.delete('photoIndex');
           await store.flush();
         } catch (_) {}
@@ -103,7 +103,7 @@ export class PhotoSearchService {
       if (!initialized) { return; }
       if (!(await this.settings.get()).photoSearchEnabled) {
         await textSearchImage.clearData();
-        const store = await preferences.getPreferences(this.context, 'itemtrace_photo_index');
+        const store = await preferences.getPreferences(this.context, 'itemnest_photo_index');
         await store.delete('photoIndex');
         await store.flush();
       } else { await this.synchronize(); }
@@ -127,7 +127,7 @@ export class PhotoSearchService {
         entries.push({ itemId: item.id, path: asset.getData()!.localPath });
       }
     }
-    const store = await preferences.getPreferences(this.context, 'itemtrace_photo_index');
+    const store = await preferences.getPreferences(this.context, 'itemnest_photo_index');
     const previous = JSON.parse(store.getSync('photoIndex', '[]') as string) as PhotoIndexEntry[];
     for (const old of previous) {
       if (!entries.some((entry: PhotoIndexEntry) => entry.path === old.path)) {

@@ -3,7 +3,7 @@ import { AppServices } from '../service/AppServices';
 import { ItemQuery } from '../model/ItemQuery';
 
 @InsightIntentEntity({
-  entityCategory: 'itemtrace_item',
+  entityCategory: 'itemnest_item',
   parameters: {
     '$id': '/schemas/ItemIntentEntity', type: 'object', description: '已记录的个人物品',
     properties: {
@@ -16,7 +16,7 @@ import { ItemQuery } from '../model/ItemQuery';
   supportedQueryProperties: ['entityId', 'name']
 })
 export class ItemIntentEntity extends insightIntent.AppIntentEntity<ItemIntentEntity> {
-  public entityId: string = 'itemtrace-item';
+  public entityId: string = 'itemnest-item';
   public name: string = '';
   public displayName: string = '';
   public location: string = '';

@@ -12,7 +12,7 @@ export class SystemFeatureService {
 
   private async storage(): Promise<preferences.Preferences> {
     if (this.store === undefined) {
-      this.store = await preferences.getPreferences(this.context, 'itemtrace_system_features');
+      this.store = await preferences.getPreferences(this.context, 'itemnest_system_features');
     }
     return this.store;
   }

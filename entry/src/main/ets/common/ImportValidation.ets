@@ -6,7 +6,7 @@ import { Item } from '../model/Item';
 import { LocationRecord } from '../model/Location';
 import { TraceEvent } from '../model/TraceEvent';
 
-export interface ItemTraceExportPayload {
+export interface ItemNestExportPayload {
   version: string;
   exportedAt: number;
   items: Item[];
@@ -45,23 +45,23 @@ export class ImportPreview {
 }
 
 export class ImportValidation {
-  validate(text: string): Result<ItemTraceExportPayload> {
+  validate(text: string): Result<ItemNestExportPayload> {
     try {
-      const payload = JSON.parse(text) as ItemTraceExportPayload;
-      if (payload.version !== 'itemtrace.phase3.v1') {
-        return failure<ItemTraceExportPayload>(new AppError(AppErrorCode.VALIDATION, '导入文件版本不受支持'));
+      const payload = JSON.parse(text) as ItemNestExportPayload;
+      if (payload.version !== 'itemnest.phase3.v1') {
+        return failure<ItemNestExportPayload>(new AppError(AppErrorCode.VALIDATION, '导入文件版本不受支持'));
       }
       if (!Array.isArray(payload.items) || !Array.isArray(payload.batches) ||
         !Array.isArray(payload.locations) || !Array.isArray(payload.categories) || !Array.isArray(payload.traceEvents)) {
-        return failure<ItemTraceExportPayload>(new AppError(AppErrorCode.VALIDATION, '导入文件结构不完整'));
+        return failure<ItemNestExportPayload>(new AppError(AppErrorCode.VALIDATION, '导入文件结构不完整'));
       }
       return success(payload);
     } catch (_) {
-      return failure<ItemTraceExportPayload>(new AppError(AppErrorCode.VALIDATION, '导入文件不是有效 JSON'));
+      return failure<ItemNestExportPayload>(new AppError(AppErrorCode.VALIDATION, '导入文件不是有效 JSON'));
     }
   }
 
-  preview(payload: ItemTraceExportPayload): ImportPreview {
+  preview(payload: ItemNestExportPayload): ImportPreview {
     return new ImportPreview(payload.items.length, payload.batches.length, payload.locations.length,
       payload.categories.length, payload.traceEvents.length, payload.exportedAt, 0, 0,
       payload.items.slice(0, 5).map((item: Item) => item.name));

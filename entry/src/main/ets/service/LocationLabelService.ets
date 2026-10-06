@@ -24,7 +24,7 @@ export class LocationLabelService {
   }
 
   uri(label: LocationLabel): string {
-    return 'itemtrace://location/' + label.token;
+    return 'itemnest://location/' + label.token;
   }
 
   async resolve(token: string): Promise<LocationRecord> {

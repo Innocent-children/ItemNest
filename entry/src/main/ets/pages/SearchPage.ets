@@ -32,21 +32,21 @@ export struct SearchPage {
   @State private filterNotice: string = '';
   private focusOnShown: boolean = false;
   @State private homeTransition: boolean = false;
-  @StorageLink('itemtrace.searchExpanded') private searchExpanded: boolean = true;
-  @StorageLink('itemtrace.sharedPageProgress') private sharedPageProgress: number = 1;
-  @StorageLink('itemtrace.sharedPageRoute') private sharedPageRoute: string = '';
+  @StorageLink('itemnest.searchExpanded') private searchExpanded: boolean = true;
+  @StorageLink('itemnest.sharedPageProgress') private sharedPageProgress: number = 1;
+  @StorageLink('itemnest.sharedPageRoute') private sharedPageRoute: string = '';
   private pageScroller: Scroller = new Scroller();
   private searchController: SearchController = new SearchController();
   @State private viewportWidth: number = 360;
   @Prop isMainTab: boolean = false;
   @State private showFilters: boolean = false;
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
-  @StorageLink('itemtrace.keyboardVisible') private keyboardVisible: boolean = false;
-  @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
-  @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
-  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
-  @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
-  @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.keyboardVisible') private keyboardVisible: boolean = false;
+  @StorageLink('itemnest.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
+  @StorageLink('itemnest.safeAreaTop') private safeAreaTop: number = 0;
+  @StorageLink('itemnest.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemnest.safeAreaLeft') private safeAreaLeft: number = 0;
+  @StorageLink('itemnest.safeAreaRight') private safeAreaRight: number = 0;
   @State private name: string = '';
   @State private selectedLocation: string = '';
   @State private selectedCategory: string = '';
@@ -122,7 +122,7 @@ export struct SearchPage {
       .onShown(() => {
         if (this.focusOnShown) {
           this.focusOnShown = false;
-          this.getUIContext().getFocusController().requestFocus('itemtrace-search-input');
+          this.getUIContext().getFocusController().requestFocus('itemnest-search-input');
         }
       })
       .onHidden(() => this.searchController.stopEditing())
@@ -157,8 +157,8 @@ export struct SearchPage {
       Row({ space: 10 }) {
         if (!this.homeTransition || this.searchExpanded) {
         SharedSearchField({ value: this.name, controller: this.searchController,
-          inputId: this.isMainTab ? 'itemtrace-tab-search-input' : 'itemtrace-search-input',
-          transitionId: this.homeTransition ? 'itemtrace-home-search' : '',
+          inputId: this.isMainTab ? 'itemnest-tab-search-input' : 'itemnest-search-input',
+          transitionId: this.homeTransition ? 'itemnest-home-search' : '',
           onChange: (value: string) => {
             this.name = value;
             this.requestCoordinator.invalidateSearchResults();

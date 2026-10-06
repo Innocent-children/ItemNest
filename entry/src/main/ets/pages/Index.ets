@@ -52,21 +52,21 @@ interface HomeSummarySectionParams {
 @Entry
 @Component
 struct Index {
-  @StorageLink('itemtrace.entryError') @Watch('showEntryError') private entryError: string = '';
-  @StorageLink('itemtrace.externalRevision') @Watch('onExternalRequested') private externalRevision: number = 0;
-  @StorageLink('itemtrace.dataRevision') @Watch('onRevisionChanged') private dataRevision: number = 0;
-  @StorageLink('itemtrace.preferenceRevision') @Watch('onRevisionChanged') private preferenceRevision: number = 0;
-  @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
-  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
-  @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
-  @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.entryError') @Watch('showEntryError') private entryError: string = '';
+  @StorageLink('itemnest.externalRevision') @Watch('onExternalRequested') private externalRevision: number = 0;
+  @StorageLink('itemnest.dataRevision') @Watch('onRevisionChanged') private dataRevision: number = 0;
+  @StorageLink('itemnest.preferenceRevision') @Watch('onRevisionChanged') private preferenceRevision: number = 0;
+  @StorageLink('itemnest.safeAreaTop') private safeAreaTop: number = 0;
+  @StorageLink('itemnest.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemnest.safeAreaLeft') private safeAreaLeft: number = 0;
+  @StorageLink('itemnest.safeAreaRight') private safeAreaRight: number = 0;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @State private viewportWidth: number = 360;
   @State private sidebarLocation: string = '';
   @State private mainTabIndex: number = 0;
   @State private selectedTabIndex: number = 0;
   @State private navigationRootVisible: boolean = true;
-  @StorageLink('itemtrace.keyboardVisible') private keyboardVisible: boolean = false;
+  @StorageLink('itemnest.keyboardVisible') private keyboardVisible: boolean = false;
   @State private dockRoute: string = RouteName.HOME;
   private mainTabRoutes: string[] = [RouteName.HOME, RouteName.ITEM_LIST, RouteName.SEARCH, RouteName.SETTINGS];
   @State private loading: boolean = true;
@@ -93,7 +93,7 @@ struct Index {
   private lastHandledDataRevision: number = -1;
   private lastHandledPreferenceRevision: number = -1;
   private pathStack: NavPathStack = new NavPathStack();
-  @StorageLink('itemtrace.searchSourceHidden') private searchSourceHidden: boolean = false;
+  @StorageLink('itemnest.searchSourceHidden') private searchSourceHidden: boolean = false;
   private homeScroller: Scroller = new Scroller();
   @State private homeScrolled: boolean = false;
   private tabsController: TabsController = new TabsController();
@@ -141,7 +141,7 @@ struct Index {
   private showEntryError(): void {
     if (this.entryError.length === 0) { return; }
     try { this.getUIContext().getPromptAction().showToast({ message: this.entryError }); } catch (_) {}
-    AppStorage.setOrCreate<string>('itemtrace.entryError', '');
+    AppStorage.setOrCreate<string>('itemnest.entryError', '');
   }
 
   private onExternalRequested(): void {
@@ -150,7 +150,7 @@ struct Index {
 
   private applyAnimationPreference(enabled: boolean): void {
     this.reduceAnimation = enabled;
-    AppStorage.setOrCreate<boolean>('itemtrace.reduceAnimation', enabled);
+    AppStorage.setOrCreate<boolean>('itemnest.reduceAnimation', enabled);
     this.pathStack.disableAnimation(enabled);
   }
 
@@ -207,21 +207,21 @@ struct Index {
   }
 
   private async openExternalIfRequested(): Promise<void> {
-    const raw = AppStorage.get<string>('itemtrace.externalRequest') ?? '';
+    const raw = AppStorage.get<string>('itemnest.externalRequest') ?? '';
     if (raw.length === 0 || this.externalOpening) { return; }
     this.externalOpening = true;
     try {
       const opened = await ExternalNavigation.open(JSON.parse(raw) as ExternalRequest);
-      if (opened && AppStorage.get<string>('itemtrace.externalRequest') === raw) {
-        AppStorage.setOrCreate<string>('itemtrace.externalRequest', '');
+      if (opened && AppStorage.get<string>('itemnest.externalRequest') === raw) {
+        AppStorage.setOrCreate<string>('itemnest.externalRequest', '');
       }
     } catch (error) {
-      if (AppStorage.get<string>('itemtrace.externalRequest') === raw) {
-        AppStorage.setOrCreate<string>('itemtrace.externalRequest', '');
+      if (AppStorage.get<string>('itemnest.externalRequest') === raw) {
+        AppStorage.setOrCreate<string>('itemnest.externalRequest', '');
       }
       this.getUIContext().getPromptAction().showToast({ message: (error as Error).message || '入口暂不可用' });
     } finally { this.externalOpening = false; }
-    const next = AppStorage.get<string>('itemtrace.externalRequest') ?? '';
+    const next = AppStorage.get<string>('itemnest.externalRequest') ?? '';
     if (next.length > 0 && next !== raw) { this.openExternalIfRequested(); }
   }
 
@@ -499,8 +499,8 @@ struct Index {
   private homeHeader() {
     Column() {
       if (!this.searchSourceHidden) {
-        SharedSearchField({ editable: false, inputId: 'itemtrace-home-search-input',
-          transitionId: 'itemtrace-home-search', onOpen: () => this.openSearch() })
+        SharedSearchField({ editable: false, inputId: 'itemnest-home-search-input',
+          transitionId: 'itemnest-home-search', onOpen: () => this.openSearch() })
       }
     }.width('100%').height(52).alignItems(HorizontalAlign.Start)
   }

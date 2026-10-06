@@ -5,7 +5,7 @@ import { AppIcon } from '../model/AppIcon';
  */
 @Component
 export struct StartupBrand {
-  @StorageLink('itemtrace.launchIcon') private icon: string = '';
+  @StorageLink('itemnest.launchIcon') private icon: string = '';
 
   build() {
     Stack() {

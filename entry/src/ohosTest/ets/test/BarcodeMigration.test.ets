@@ -6,7 +6,7 @@ import { DATABASE_VERSION } from '../../../main/ets/data/rdb/ItemSchema';
 import { migrateToLatest } from '../../../main/ets/data/rdb/RdbDatabase';
 import { ResultSetReader } from '../../../main/ets/data/rdb/ResultSetReader';
 
-const TEST_DATABASE_NAME = 'itemtrace-barcode-migration-test.db';
+const TEST_DATABASE_NAME = 'itemnest-barcode-migration-test.db';
 
 export default function barcodeMigrationTest() {
   describe('Barcode migration', () => {

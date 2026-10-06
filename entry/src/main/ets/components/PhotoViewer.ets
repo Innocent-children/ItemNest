@@ -10,7 +10,7 @@ export struct PhotoViewer {
   @Prop path: string = '';
   @Prop transitionId: string = '';
   @Link visible: boolean;
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @State private scaleValue: number = 1;
   @State private offsetX: number = 0;
   @State private offsetY: number = 0;

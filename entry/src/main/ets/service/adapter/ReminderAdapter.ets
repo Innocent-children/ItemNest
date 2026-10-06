@@ -40,8 +40,8 @@ export class SystemReminderAdapter implements ReminderAdapter {
           second: 0
         },
         title: '物品到期提醒',
-        wantAgent: { pkgName: 'com.imotong.itemtrace', abilityName: 'EntryAbility',
-          uri: 'itemtrace://item/' + encodeURIComponent(item.id) },
+        wantAgent: { pkgName: 'com.imotong.itemnest', abilityName: 'EntryAbility',
+          uri: 'itemnest://item/' + encodeURIComponent(item.id) },
         content: `“${item.name}”到期日为 ${item.expirationDate ?? '未设置'}，请及时检查。${item.activeLocationPaths?.length ? '位置：' + item.activeLocationPaths.join('、') : item.locationPath ? '位置：' + item.locationPath : ''}`,
         tapDismissed: true
       };

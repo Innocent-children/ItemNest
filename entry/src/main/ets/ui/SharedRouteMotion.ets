@@ -38,12 +38,12 @@ export class SharedRouteMotion {
   }
 
   private static resetVisuals(): void {
-    AppStorage.setOrCreate<string>('itemtrace.sharedItemSource', '');
-    AppStorage.setOrCreate<boolean>('itemtrace.sharedItemExpanded', true);
-    AppStorage.setOrCreate<boolean>('itemtrace.searchSourceHidden', false);
-    AppStorage.setOrCreate<boolean>('itemtrace.searchExpanded', true);
-    AppStorage.setOrCreate<number>('itemtrace.sharedPageProgress', 1);
-    AppStorage.setOrCreate<string>('itemtrace.sharedPageRoute', '');
+    AppStorage.setOrCreate<string>('itemnest.sharedItemSource', '');
+    AppStorage.setOrCreate<boolean>('itemnest.sharedItemExpanded', true);
+    AppStorage.setOrCreate<boolean>('itemnest.searchSourceHidden', false);
+    AppStorage.setOrCreate<boolean>('itemnest.searchExpanded', true);
+    AppStorage.setOrCreate<number>('itemnest.sharedPageProgress', 1);
+    AppStorage.setOrCreate<string>('itemnest.sharedPageRoute', '');
   }
 
   static preview(itemId: string): ItemSummary | undefined {
@@ -62,17 +62,17 @@ export class SharedRouteMotion {
     if (route === RouteName.ITEM_DETAIL && SharedRouteMotion.item?.id === itemId) {
       SharedRouteMotion.item = undefined;
       SharedRouteMotion.itemKey = '';
-      AppStorage.setOrCreate<string>('itemtrace.sharedItemSource', '');
-      AppStorage.setOrCreate<boolean>('itemtrace.sharedItemExpanded', true);
+      AppStorage.setOrCreate<string>('itemnest.sharedItemSource', '');
+      AppStorage.setOrCreate<boolean>('itemnest.sharedItemExpanded', true);
     }
     if (route === RouteName.SEARCH && SharedRouteMotion.search) {
       SharedRouteMotion.search = false;
-      AppStorage.setOrCreate<boolean>('itemtrace.searchSourceHidden', false);
-      AppStorage.setOrCreate<boolean>('itemtrace.searchExpanded', true);
+      AppStorage.setOrCreate<boolean>('itemnest.searchSourceHidden', false);
+      AppStorage.setOrCreate<boolean>('itemnest.searchExpanded', true);
     }
-    if (AppStorage.get<string>('itemtrace.sharedPageRoute') === route) {
-      AppStorage.setOrCreate<number>('itemtrace.sharedPageProgress', 1);
-      AppStorage.setOrCreate<string>('itemtrace.sharedPageRoute', '');
+    if (AppStorage.get<string>('itemnest.sharedPageRoute') === route) {
+      AppStorage.setOrCreate<number>('itemnest.sharedPageProgress', 1);
+      AppStorage.setOrCreate<string>('itemnest.sharedPageRoute', '');
     }
   }
 
@@ -93,9 +93,9 @@ export class SharedRouteMotion {
     SharedRouteMotion.itemKey = shared ? key : '';
     SharedRouteMotion.opening = shared;
     SharedRouteMotion.ready = false;
-    AppStorage.setOrCreate<boolean>('itemtrace.sharedItemExpanded', !shared);
-    AppStorage.setOrCreate<number>('itemtrace.sharedPageProgress', shared ? 0 : 1);
-    AppStorage.setOrCreate<string>('itemtrace.sharedPageRoute', RouteName.ITEM_DETAIL);
+    AppStorage.setOrCreate<boolean>('itemnest.sharedItemExpanded', !shared);
+    AppStorage.setOrCreate<number>('itemnest.sharedPageProgress', shared ? 0 : 1);
+    AppStorage.setOrCreate<string>('itemnest.sharedPageRoute', RouteName.ITEM_DETAIL);
     NavigationHelper.pushUrl({ url: RouteName.ITEM_DETAIL, params: { itemId: item.id } }).then((opened: boolean) => {
       if (!opened) { SharedRouteMotion.clear(); }
     });
@@ -107,9 +107,9 @@ export class SharedRouteMotion {
     SharedRouteMotion.search = !reduceAnimation;
     SharedRouteMotion.opening = !reduceAnimation;
     SharedRouteMotion.ready = false;
-    AppStorage.setOrCreate<boolean>('itemtrace.searchExpanded', reduceAnimation);
-    AppStorage.setOrCreate<number>('itemtrace.sharedPageProgress', reduceAnimation ? 1 : 0);
-    AppStorage.setOrCreate<string>('itemtrace.sharedPageRoute', RouteName.SEARCH);
+    AppStorage.setOrCreate<boolean>('itemnest.searchExpanded', reduceAnimation);
+    AppStorage.setOrCreate<number>('itemnest.sharedPageProgress', reduceAnimation ? 1 : 0);
+    AppStorage.setOrCreate<string>('itemnest.sharedPageRoute', RouteName.SEARCH);
     NavigationHelper.pushUrl({ url: RouteName.SEARCH, params: { source: 'home-search' } }).then((opened: boolean) => {
       if (!opened) { SharedRouteMotion.clear(); }
     });
@@ -118,7 +118,7 @@ export class SharedRouteMotion {
   static targetReady(itemId?: string): void {
     if (itemId !== undefined && SharedRouteMotion.item?.id !== itemId) { return; }
     if (itemId === undefined && !SharedRouteMotion.search) { return; }
-    const route = AppStorage.get<string>('itemtrace.sharedPageRoute');
+    const route = AppStorage.get<string>('itemnest.sharedPageRoute');
     if (route !== (itemId === undefined ? RouteName.SEARCH : RouteName.ITEM_DETAIL)) { return; }
     SharedRouteMotion.ready = true;
     SharedRouteMotion.run();
@@ -160,7 +160,7 @@ export class SharedRouteMotion {
     SharedRouteMotion.opening = false;
     SharedRouteMotion.searchMotion = searchPush || searchPop;
     const interactive = SharedRouteMotion.interactive && itemPop;
-    AppStorage.setOrCreate<string>('itemtrace.sharedPageRoute', SharedRouteMotion.searchMotion ? RouteName.SEARCH : RouteName.ITEM_DETAIL);
+    AppStorage.setOrCreate<string>('itemnest.sharedPageRoute', SharedRouteMotion.searchMotion ? RouteName.SEARCH : RouteName.ITEM_DETAIL);
     return {
       timeout: interactive ? undefined : 1600,
       isInteractive: interactive,
@@ -188,14 +188,14 @@ export class SharedRouteMotion {
         if (!success && !push) {
           const context = SharedRouteMotion.context;
           context?.animateTo({ duration: 0 }, () => {
-            AppStorage.setOrCreate<string>('itemtrace.sharedItemSource', SharedRouteMotion.itemKey);
-            AppStorage.setOrCreate<boolean>('itemtrace.sharedItemExpanded', true);
-            AppStorage.setOrCreate<number>('itemtrace.sharedPageProgress', 1);
+            AppStorage.setOrCreate<string>('itemnest.sharedItemSource', SharedRouteMotion.itemKey);
+            AppStorage.setOrCreate<boolean>('itemnest.sharedItemExpanded', true);
+            AppStorage.setOrCreate<number>('itemnest.sharedPageProgress', 1);
           });
         }
         if (success && push && searchPush) {
           try {
-            SharedRouteMotion.context?.getFocusController().requestFocus('itemtrace-search-input');
+            SharedRouteMotion.context?.getFocusController().requestFocus('itemnest-search-input');
           } catch (_) {
           }
         }
@@ -203,11 +203,11 @@ export class SharedRouteMotion {
           if (itemPop) {
             SharedRouteMotion.item = undefined;
             SharedRouteMotion.itemKey = '';
-            AppStorage.setOrCreate<string>('itemtrace.sharedItemSource', '');
+            AppStorage.setOrCreate<string>('itemnest.sharedItemSource', '');
           }
           if (searchPop) { SharedRouteMotion.search = false; }
-          AppStorage.setOrCreate<number>('itemtrace.sharedPageProgress', 1);
-          AppStorage.setOrCreate<string>('itemtrace.sharedPageRoute', '');
+          AppStorage.setOrCreate<number>('itemnest.sharedPageProgress', 1);
+          AppStorage.setOrCreate<string>('itemnest.sharedPageRoute', '');
         }
       }
     };
@@ -226,13 +226,13 @@ export class SharedRouteMotion {
     if (!SharedRouteMotion.interactive) { options.onFinish = () => proxy.finishTransition(); }
     context.animateTo(options, () => {
       if (SharedRouteMotion.searchMotion) {
-        AppStorage.setOrCreate<boolean>('itemtrace.searchSourceHidden', push);
-        AppStorage.setOrCreate<boolean>('itemtrace.searchExpanded', push);
+        AppStorage.setOrCreate<boolean>('itemnest.searchSourceHidden', push);
+        AppStorage.setOrCreate<boolean>('itemnest.searchExpanded', push);
       } else {
-        AppStorage.setOrCreate<string>('itemtrace.sharedItemSource', push ? SharedRouteMotion.itemKey : '');
-        AppStorage.setOrCreate<boolean>('itemtrace.sharedItemExpanded', push);
+        AppStorage.setOrCreate<string>('itemnest.sharedItemSource', push ? SharedRouteMotion.itemKey : '');
+        AppStorage.setOrCreate<boolean>('itemnest.sharedItemExpanded', push);
       }
-      AppStorage.setOrCreate<number>('itemtrace.sharedPageProgress', push ? 1 : 0);
+      AppStorage.setOrCreate<number>('itemnest.sharedPageProgress', push ? 1 : 0);
     });
   }
 

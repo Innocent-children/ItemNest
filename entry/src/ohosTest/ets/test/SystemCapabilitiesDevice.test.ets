@@ -28,7 +28,7 @@ export default function systemCapabilitiesDeviceTest() {
   describe('SystemCapabilitiesDevice', () => {
     it('label_survives_location_rename_and_can_be_revoked', 0, async () => {
       const context = (await abilityDelegatorRegistry.getAbilityDelegator().getCurrentTopAbility()).context;
-      const name = 'itemtrace-system-label-test.db';
+      const name = 'itemnest-system-label-test.db';
       const database = new RdbDatabase(context, name);
       try {
         const locations = new LocationService(new LocationRepository(database), new ItemRepository(new ItemDao(database)));
@@ -52,7 +52,7 @@ export default function systemCapabilitiesDeviceTest() {
     });
     it('database_upgrade_adds_labels_without_replacing_locations', 0, async () => {
       const context = (await abilityDelegatorRegistry.getAbilityDelegator().getCurrentTopAbility()).context;
-      const name = 'itemtrace-label-upgrade-test.db';
+      const name = 'itemnest-label-upgrade-test.db';
       const store = await relationalStore.getRdbStore(context, { name: name, securityLevel: relationalStore.SecurityLevel.S3 });
       try {
         await migrateToLatest(store);
@@ -70,7 +70,7 @@ export default function systemCapabilitiesDeviceTest() {
       }
     });
     it('ocr_extracts_labeled_expiry_on_device', 0, async () => {
-      const path = await writeFixture('itemtrace_ocr_fixture.png');
+      const path = await writeFixture('itemnest_ocr_fixture.png');
       try {
         const recognized = await new TextRecognitionAdapter().recognize(path);
         expect(recognized.ok).assertTrue();
@@ -82,8 +82,8 @@ export default function systemCapabilitiesDeviceTest() {
       } finally { await fileIo.unlink(path); }
     });
     it('photo_index_search_and_delete_on_device', 0, async () => {
-      const path = await writeFixture('itemtrace_photo_fixture.png');
-      const scope = 'ItemTraceDeviceTest';
+      const path = await writeFixture('itemnest_photo_fixture.png');
+      const scope = 'ItemNestDeviceTest';
       let initialized = false;
       try {
         initialized = await textSearchImage.init();
@@ -105,9 +105,9 @@ export default function systemCapabilitiesDeviceTest() {
     });
     it('nfc_ndef_label_contains_only_location_token', 0, () => {
       expect(nfcController.isNfcAvailable()).assertTrue();
-      const uri = 'itemtrace://location/12345678123412341234123456789012';
+      const uri = 'itemnest://location/12345678123412341234123456789012';
       const record = tag.ndef.makeUriRecord(uri);
-      const message = tag.ndef.createNdefMessage([record, tag.ndef.makeApplicationRecord('com.imotong.itemtrace')]);
+      const message = tag.ndef.createNdefMessage([record, tag.ndef.makeApplicationRecord('com.imotong.itemnest')]);
       expect(message.getNdefRecords().length).assertEqual(2);
       expect(ExternalRequestParser.parseUri(uri)?.locationId).assertEqual('12345678123412341234123456789012');
     });

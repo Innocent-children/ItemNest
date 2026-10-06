@@ -1,6 +1,6 @@
 {
   "modelVersion": "6.1.1",
-  "description": "Please describe the basic information.",
+  "description": "ItemNest 个人物品管理应用",
   "dependencies": {
   },
   "devDependencies": {

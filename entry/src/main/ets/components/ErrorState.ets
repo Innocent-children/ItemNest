@@ -1,7 +1,7 @@
 import { uiSpring } from '../ui/VisualStyle';
 @Component
 export struct ErrorState {
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @Prop message: string = '操作失败，请重试';
 
   build() {

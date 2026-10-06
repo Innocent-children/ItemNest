@@ -5,7 +5,7 @@ import { ItemQuery } from '../model/ItemQuery';
 @InsightIntentEntry({
   intentName: 'QueryStoredItems', domain: 'ToolsDomain', intentVersion: '1.0.0',
   displayName: '查询我的物品', displayDescription: '查询物品的存放位置、库存、临期和借出待还信息',
-  llmDescription: '查询 ItemTrace 已记录的物品。kind 为 items 查询名称位置库存，expiry 查询临期，loans 查询借出待还。只查询，不修改记录。',
+  llmDescription: '查询 我的家当 已记录的物品。kind 为 items 查询名称位置库存，expiry 查询临期，loans 查询借出待还。只查询，不修改记录。',
   keywords: ['物品在哪', '还有多少', '即将过期', '借出待还'], abilityName: 'EntryAbility',
   executeMode: [insightIntent.ExecuteMode.UI_ABILITY_BACKGROUND],
   parameters: { type: 'object', properties: {
@@ -21,7 +21,7 @@ export default class QueryItemsIntent extends InsightIntentEntryExecutor<string>
     try {
       const services = AppServices.get();
       if (!(await services.systemFeatures.get()).assistantEnabled) {
-        return { code: -1, result: '请先在 ItemTrace 的系统能力与隐私中开启小艺访问。' };
+        return { code: -1, result: '请先在 我的家当 的系统能力与隐私中开启小艺访问。' };
       }
       if (this.kind === 'expiry') {
         const result = await services.homeSummary.getSummary();
@@ -50,6 +50,6 @@ export default class QueryItemsIntent extends InsightIntentEntryExecutor<string>
       }
       return { code: 0, result: lines.length === 0 ? '没有找到已记录的物品。' :
         '找到 ' + result.getData().items.length + ' 件物品。' + lines.join('；') };
-    } catch (_) { return { code: -1, result: '暂时无法读取物品，请打开 ItemTrace 重试。' }; }
+    } catch (_) { return { code: -1, result: '暂时无法读取物品，请打开 我的家当 重试。' }; }
   }
 }

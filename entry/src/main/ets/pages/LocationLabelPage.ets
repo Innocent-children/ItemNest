@@ -11,9 +11,9 @@ import { common } from '@kit.AbilityKit';
 
 @Component
 export struct LocationLabelPage {
-  @StorageLink('itemtrace.uiForeground') @Watch('foregroundChanged') private foreground: boolean = true;
-  @StorageLink('itemtrace.safeAreaBottom') private bottom: number = 0;
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.uiForeground') @Watch('foregroundChanged') private foreground: boolean = true;
+  @StorageLink('itemnest.safeAreaBottom') private bottom: number = 0;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @State private locationId: string = '';
   @State private locations: LocationRecord[] = [];
   @State private labels: LocationLabel[] = [];
@@ -98,7 +98,7 @@ export struct LocationLabelPage {
     finally { this.busy = false; }
   }
   private startNfc(write: boolean): void {
-    this.listening = true; this.message = write ? '请将手机贴近可写入的 NFC 标签，将覆盖原有标签内容。' : '请将手机贴近 ItemTrace NFC 标签。';
+    this.listening = true; this.message = write ? '请将手机贴近可写入的 NFC 标签，将覆盖原有标签内容。' : '请将手机贴近 我的家当 NFC 标签。';
     this.nfc.start(write ? this.uri : undefined, (uri: string, error: string) => {
       if (error.length > 0) { this.message = error; this.nfc.stop(); this.listening = false; return; }
       this.listening = false;
@@ -114,7 +114,7 @@ export struct LocationLabelPage {
   }
   private async bindLabel(uri: string): Promise<void> {
     const request = ExternalRequestParser.parseUri(uri);
-    if (request?.action !== 'location' || request.locationId === undefined) { this.message = '这不是 ItemTrace 收纳标签'; return; }
+    if (request?.action !== 'location' || request.locationId === undefined) { this.message = '这不是 我的家当 收纳标签'; return; }
     this.busy = true;
     try {
       await AppServices.get().locationLabels.bind(request.locationId, this.locationId);

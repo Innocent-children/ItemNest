@@ -16,12 +16,12 @@ import { AppServices } from '../service/AppServices';
 export struct LendingPage {
   @State private viewportWidth: number = 360;
   @State private showOperationSheet: boolean = false;
-  @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
-  @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
-  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
-  @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
-  @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
+  @StorageLink('itemnest.safeAreaTop') private safeAreaTop: number = 0;
+  @StorageLink('itemnest.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemnest.safeAreaLeft') private safeAreaLeft: number = 0;
+  @StorageLink('itemnest.safeAreaRight') private safeAreaRight: number = 0;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @State private focusedField: string = '';
   @State private loading: boolean = true;
   @State private contentLoaded: boolean = false;

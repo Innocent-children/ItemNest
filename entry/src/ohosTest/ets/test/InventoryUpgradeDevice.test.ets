@@ -97,7 +97,7 @@ export default function inventoryUpgradeDeviceTest() {
 
     it('真实数据库备份恢复保留关联归还撤销备注消耗并先备份当前数据', 0, async () => {
       const ctx = await context();
-      const name = 'itemtrace-v12-backup-roundtrip-isolated-test.db';
+      const name = 'itemnest-v12-backup-roundtrip-isolated-test.db';
       await cleanDatabase(ctx, name);
       const db = new RdbDatabase(ctx, name);
       const items = new ItemRepository(new ItemDao(db));
@@ -151,7 +151,7 @@ export default function inventoryUpgradeDeviceTest() {
 
     it('v11保留原资料与超借记录并仅汇总有库存批次到期日', 0, async () => {
       const ctx = await context();
-      const name = 'itemtrace-v12-legacy-isolated-test.db';
+      const name = 'itemnest-v12-legacy-isolated-test.db';
       await cleanDatabase(ctx, name);
       const store = await relationalStore.getRdbStore(ctx, { name: name, securityLevel: relationalStore.SecurityLevel.S3 });
       try {
@@ -204,7 +204,7 @@ export default function inventoryUpgradeDeviceTest() {
 
     it('v11升级中途失败回滚新增列与版本并可重试且原记录不变', 0, async () => {
       const ctx = await context();
-      const name = 'itemtrace-v12-upgrade-rollback-isolated-test.db';
+      const name = 'itemnest-v12-upgrade-rollback-isolated-test.db';
       await cleanDatabase(ctx, name);
       const store = await relationalStore.getRdbStore(ctx, { name: name, securityLevel: relationalStore.SecurityLevel.S3 });
       try {
@@ -246,7 +246,7 @@ export default function inventoryUpgradeDeviceTest() {
 
     it('真实事务限制超借和消耗并保持归还关联及总量', 0, async () => {
       const ctx = await context();
-      const name = 'itemtrace-v12-service-isolated-test.db';
+      const name = 'itemnest-v12-service-isolated-test.db';
       await cleanDatabase(ctx, name);
       const db = new RdbDatabase(ctx, name);
       const items = new ItemRepository(new ItemDao(db));
@@ -282,7 +282,7 @@ export default function inventoryUpgradeDeviceTest() {
 
     it('并发借出和消耗不会共同占用同一份在手库存', 0, async () => {
       const ctx = await context();
-      const name = 'itemtrace-v12-concurrency-isolated-test.db';
+      const name = 'itemnest-v12-concurrency-isolated-test.db';
       await cleanDatabase(ctx, name);
       const db = new RdbDatabase(ctx, name);
       const items = new ItemRepository(new ItemDao(db));
@@ -300,7 +300,7 @@ export default function inventoryUpgradeDeviceTest() {
 
     it('批次位置进入父位置查询且统一纠正单位不改数量', 0, async () => {
       const ctx = await context();
-      const name = 'itemtrace-v12-location-isolated-test.db';
+      const name = 'itemnest-v12-location-isolated-test.db';
       await cleanDatabase(ctx, name);
       const db = new RdbDatabase(ctx, name);
       const items = new ItemRepository(new ItemDao(db));

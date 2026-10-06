@@ -27,13 +27,13 @@ import { activeCategoryNames, refreshedUnit } from '../service/ItemFlowPresentat
 @Component
 export struct ItemFormPage {
   private pageScroller: Scroller = new Scroller();
-  @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
-  @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
-  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
-  @StorageLink('itemtrace.keyboardVisible') private keyboardVisible: boolean = false;
-  @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
-  @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
+  @StorageLink('itemnest.safeAreaTop') private safeAreaTop: number = 0;
+  @StorageLink('itemnest.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemnest.keyboardVisible') private keyboardVisible: boolean = false;
+  @StorageLink('itemnest.safeAreaLeft') private safeAreaLeft: number = 0;
+  @StorageLink('itemnest.safeAreaRight') private safeAreaRight: number = 0;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @State private focusedField: string = '';
   @State private name: string = '';
   @State private singleBatchId: string = '';

@@ -1,10 +1,10 @@
 {
   "forms": [
     {
-      "name": "itemtrace_widget",
+      "name": "itemnest_widget",
       "displayName": "$string:widget_name",
       "description": "查看临期物品、剩余天数和存放位置",
-      "src": "./ets/forms/pages/ItemTraceFormCard.ets",
+      "src": "./ets/forms/pages/ItemNestFormCard.ets",
       "uiSyntax": "arkts",
       "window": {
         "designWidth": 720,
@@ -27,7 +27,7 @@
       "scheduledUpdateTime": "00:01"
     },
     {
-      "name": "itemtrace_loans",
+      "name": "itemnest_loans",
       "displayName": "$string:widget_loans",
       "description": "查看借出物品、借用人和待还数量",
       "src": "./ets/forms/pages/LoanFormCard.ets",
@@ -53,7 +53,7 @@
       "scheduledUpdateTime": "00:01"
     },
     {
-      "name": "itemtrace_quick",
+      "name": "itemnest_quick",
       "displayName": "$string:widget_quick",
       "description": "扫码、拍照或手动记录物品",
       "src": "./ets/forms/pages/QuickFormCard.ets",

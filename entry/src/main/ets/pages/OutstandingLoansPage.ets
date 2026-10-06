@@ -11,9 +11,9 @@ import { nativeTitleOptions, RoundedButtonStyle } from '../ui/VisualStyle';
 
 @Component
 export struct OutstandingLoansPage {
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
-  @StorageLink('itemtrace.dataRevision') @Watch('refresh') private dataRevision: number = 0;
-  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.dataRevision') @Watch('refresh') private dataRevision: number = 0;
+  @StorageLink('itemnest.safeAreaBottom') private safeAreaBottom: number = 0;
   @State private loading: boolean = true;
   @State private errorMessage: string = '';
   @State private loans: OutstandingItemLoan[] = [];

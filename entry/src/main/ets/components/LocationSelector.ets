@@ -3,7 +3,7 @@ import { LocationRecord } from '../model/Location';
 
 @Component
 export struct LocationSelector {
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @Link selectedPath: string;
   @Prop locations: LocationRecord[] = [];
 

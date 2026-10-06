@@ -21,7 +21,7 @@ export default function userFlowRepairDeviceTest() {
       const ctx = (await abilityDelegatorRegistry.getAbilityDelegator().getCurrentTopAbility()).context;
       const source = `${ctx.cacheDir}/ux-repair-image-source`;
       const file = await fileIo.open(source, fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.TRUNC);
-      await fileIo.write(file.fd, 'itemtrace-photo-uri');
+      await fileIo.write(file.fd, 'itemnest-photo-uri');
       await fileIo.close(file);
       const storage = new LocalAssetStorage(ctx);
       let destination = '';
@@ -29,7 +29,7 @@ export default function userFlowRepairDeviceTest() {
         const result = await storage.copyFromPickerUri(fileUri.getUriFromPath(source), 'ux-repair-image-copy');
         expect(result.ok).assertTrue();
         destination = result.getData();
-        expect(await fileIo.readText(destination)).assertEqual('itemtrace-photo-uri');
+        expect(await fileIo.readText(destination)).assertEqual('itemnest-photo-uri');
         const failed = await storage.copyFromPickerUri(fileUri.getUriFromPath(`${source}-missing`), 'ux-repair-missing');
         expect(failed.ok).assertFalse();
         expect((await storage.listOwnedPaths()).getData().some((path: string) => path.endsWith('/ux-repair-missing'))).assertFalse();
@@ -41,7 +41,7 @@ export default function userFlowRepairDeviceTest() {
 
     it('单批次修改原子保存，借出数量保护与指定位置消耗均生效', 0, async () => {
       const ctx = (await abilityDelegatorRegistry.getAbilityDelegator().getCurrentTopAbility()).context;
-      const name = 'itemtrace-ux-repair-isolated.db';
+      const name = 'itemnest-ux-repair-isolated.db';
       try { await relationalStore.deleteRdbStore(ctx, name); } catch (_) {}
       const db = new RdbDatabase(ctx, name);
       const items = new ItemRepository(new ItemDao(db));

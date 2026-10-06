@@ -10,7 +10,7 @@ export class NfcLabelAdapter {
   static stopActive(): void { NfcLabelAdapter.active?.stop(); }
 
   private readonly element: bundleManager.ElementName = {
-    bundleName: 'com.imotong.itemtrace', abilityName: 'EntryAbility', moduleName: 'entry'
+    bundleName: 'com.imotong.itemnest', abilityName: 'EntryAbility', moduleName: 'entry'
   };
   private callback?: (error: BusinessError, info: tag.TagInfo) => void;
   private busy: boolean = false;
@@ -54,7 +54,7 @@ export class NfcLabelAdapter {
         try {
           if (!ndef.isNdefWritable()) { throw new Error('readonly'); }
           await ndef.writeNdef(tag.ndef.createNdefMessage([
-            tag.ndef.makeUriRecord(uri), tag.ndef.makeApplicationRecord('com.imotong.itemtrace')
+            tag.ndef.makeUriRecord(uri), tag.ndef.makeApplicationRecord('com.imotong.itemnest')
           ]));
         } finally { ndef.resetConnection(); }
         this.stop();
@@ -79,7 +79,7 @@ export class NfcLabelAdapter {
           if (ExternalRequestParser.parseUri(uri)?.action === 'location') { return uri; }
         }
       }
-      throw new Error('not itemtrace label');
+      throw new Error('not itemnest label');
     } finally { ndef.resetConnection(); }
   }
 }

@@ -3,7 +3,7 @@ import { FormExtensionAbility, formBindingData, formInfo, formProvider } from '@
 import { AppEventBus } from '../common/AppEventBus';
 import { AppServices } from '../service/AppServices';
 
-export default class ItemTraceFormAbility extends FormExtensionAbility {
+export default class ItemNestFormAbility extends FormExtensionAbility {
   private formIds: Set<string> = new Set<string>();
   private dataListenerId: number = 0;
   private refreshRunning: boolean = false;
@@ -68,7 +68,7 @@ export default class ItemTraceFormAbility extends FormExtensionAbility {
       const runningForms = await formProvider.getPublishedRunningFormInfos();
       for (let index = 0; index < runningForms.length; index++) {
         const runningForm = runningForms[index];
-        if (runningForm.moduleName === 'entry' && runningForm.abilityName === 'ItemTraceFormAbility') {
+        if (runningForm.moduleName === 'entry' && runningForm.abilityName === 'ItemNestFormAbility') {
           this.formIds.add(runningForm.formId);
         }
       }

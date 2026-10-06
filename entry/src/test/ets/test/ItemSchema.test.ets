@@ -5,7 +5,7 @@ export default function itemSchemaTest() {
   describe('ItemSchema', () => {
     it('声明当前数据库标识和迁移版本', 0, () => {
       expect(DATABASE_VERSION).assertEqual(13);
-      expect(DATABASE_NAME).assertEqual('itemtrace.db');
+      expect(DATABASE_NAME).assertEqual('itemnest.db');
       expect(ITEM_TABLE).assertEqual('item');
     });
   });

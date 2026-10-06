@@ -9,7 +9,7 @@ import { AppEventBus } from '../common/AppEventBus';
 import { ThemeMode } from '../model/UserPreferences';
 
 const DOMAIN = 0x0000;
-const FORM_SOURCE = 'itemtrace-form';
+const FORM_SOURCE = 'itemnest-form';
 
 interface SafeAreaInsets {
   top: number;
@@ -56,7 +56,7 @@ export default class EntryAbility extends UIAbility {
   private async loadMainContent(windowStage: window.WindowStage): Promise<void> {
     await this.applyImmersiveWindow(windowStage);
     const iconState = await AppServices.get().appIcon.getState();
-    AppStorage.setOrCreate<string>('itemtrace.launchIcon', iconState.ok ? iconState.getData().current : '');
+    AppStorage.setOrCreate<string>('itemnest.launchIcon', iconState.ok ? iconState.getData().current : '');
     await AppServices.get().photoMaintenance.cleanupOrphans();
     windowStage.loadContent('pages/Index', (err) => {
       if (err.code) {
@@ -83,7 +83,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onForeground(): void {
-    AppStorage.setOrCreate<boolean>('itemtrace.uiForeground', true);
+    AppStorage.setOrCreate<boolean>('itemnest.uiForeground', true);
     this.refreshForegroundAppearance();
     this.currentDay = new Date().toDateString();
     if (this.dayTimer >= 0) { clearInterval(this.dayTimer); }
@@ -150,7 +150,7 @@ export default class EntryAbility extends UIAbility {
       this.updateSafeArea(mainWindow);
       this.avoidAreaChangeCallback = (options: window.AvoidAreaOptions): void => {
         if (options.type === window.AvoidAreaType.TYPE_KEYBOARD) {
-          AppStorage.setOrCreate<boolean>('itemtrace.keyboardVisible', options.area.bottomRect.height > 0);
+          AppStorage.setOrCreate<boolean>('itemnest.keyboardVisible', options.area.bottomRect.height > 0);
         }
         if (options.type === window.AvoidAreaType.TYPE_SYSTEM ||
           options.type === window.AvoidAreaType.TYPE_CUTOUT ||
@@ -188,12 +188,12 @@ export default class EntryAbility extends UIAbility {
       this.mergeAvoidArea(mainWindow, window.AvoidAreaType.TYPE_SYSTEM, insets);
       this.mergeAvoidArea(mainWindow, window.AvoidAreaType.TYPE_CUTOUT, insets);
       this.mergeAvoidArea(mainWindow, window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR, insets);
-      AppStorage.setOrCreate<number>('itemtrace.safeAreaTop', insets.top);
-      AppStorage.setOrCreate<number>('itemtrace.safeAreaRight', insets.right);
-      AppStorage.setOrCreate<number>('itemtrace.safeAreaBottom', insets.bottom);
-      AppStorage.setOrCreate<number>('itemtrace.safeAreaLeft', insets.left);
+      AppStorage.setOrCreate<number>('itemnest.safeAreaTop', insets.top);
+      AppStorage.setOrCreate<number>('itemnest.safeAreaRight', insets.right);
+      AppStorage.setOrCreate<number>('itemnest.safeAreaBottom', insets.bottom);
+      AppStorage.setOrCreate<number>('itemnest.safeAreaLeft', insets.left);
       const keyboardArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_KEYBOARD);
-      AppStorage.setOrCreate<boolean>('itemtrace.keyboardVisible', keyboardArea.bottomRect.height > 0);
+      AppStorage.setOrCreate<boolean>('itemnest.keyboardVisible', keyboardArea.bottomRect.height > 0);
     } catch (err) {
       hilog.error(DOMAIN, 'testTag', 'Failed to update safe area. Cause: %{public}s', JSON.stringify(err));
     }
@@ -241,22 +241,22 @@ export default class EntryAbility extends UIAbility {
   private async refreshRunningFormsOnce(): Promise<void> {
     try {
       const runningForms = await formProvider.getPublishedRunningFormInfos();
-      const itemTraceFormIds: string[] = [];
+      const itemNestFormIds: string[] = [];
       for (let index = 0; index < runningForms.length; index++) {
         const runningForm = runningForms[index];
-        if (runningForm.moduleName === 'entry' && runningForm.abilityName === 'ItemTraceFormAbility') {
-          itemTraceFormIds.push(runningForm.formId);
+        if (runningForm.moduleName === 'entry' && runningForm.abilityName === 'ItemNestFormAbility') {
+          itemNestFormIds.push(runningForm.formId);
         }
       }
-      if (itemTraceFormIds.length === 0) {
+      if (itemNestFormIds.length === 0) {
         return;
       }
       const snapshotResult = await AppServices.get().formSnapshot.getSnapshot();
       const snapshot = snapshotResult.ok ? snapshotResult.getData() : AppServices.get().formSnapshot.failedSnapshot();
       const bindingData = formBindingData.createFormBindingData(snapshot);
-      for (let index = 0; index < itemTraceFormIds.length; index++) {
+      for (let index = 0; index < itemNestFormIds.length; index++) {
         try {
-          await formProvider.updateForm(itemTraceFormIds[index], bindingData);
+          await formProvider.updateForm(itemNestFormIds[index], bindingData);
         } catch (_) {
           // 单个卡片失效不阻断其他卡片刷新。
         }
@@ -295,14 +295,14 @@ export default class EntryAbility extends UIAbility {
       }
       if (request !== undefined) { ExternalRequestParser.publish(request); }
     } catch (_) {
-      AppStorage.setOrCreate<string>('itemtrace.entryError', '无法读取分享内容或收纳标签，请重新操作。');
+      AppStorage.setOrCreate<string>('itemnest.entryError', '无法读取分享内容或收纳标签，请重新操作。');
     }
   }
 
   onBackground(): void {
     NfcLabelAdapter.stopActive();
     if (this.dayTimer >= 0) { clearInterval(this.dayTimer); this.dayTimer = -1; }
-    AppStorage.setOrCreate<boolean>('itemtrace.uiForeground', false);
+    AppStorage.setOrCreate<boolean>('itemnest.uiForeground', false);
     // Ability has back to background
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onBackground');
   }

@@ -3,7 +3,7 @@ import { MaterialButtonStyle, uiSpring } from '../ui/VisualStyle';
 
 @Component
 export struct PageHeader {
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @Prop largeTitle: boolean = false;
   @Prop title: string = '';
   @Prop subtitle: string = '';

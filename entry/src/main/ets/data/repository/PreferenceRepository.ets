@@ -4,7 +4,7 @@ import { AppErrorCode, toAppError } from '../../common/AppError';
 import { failure, Result, success } from '../../common/Result';
 import { DEFAULT_USER_PREFERENCES, ItemSortMode, ThemeMode, UserPreferences } from '../../model/UserPreferences';
 
-const PREFERENCES_NAME = 'itemtrace_user_preferences';
+const PREFERENCES_NAME = 'itemnest_user_preferences';
 const KEY_DEFAULT_REMINDER_DAYS = 'defaultReminderDays';
 const KEY_DEFAULT_SORT = 'defaultSort';
 const KEY_SHOW_RECENT = 'showRecentSection';

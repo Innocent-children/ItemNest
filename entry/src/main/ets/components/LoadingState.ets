@@ -1,7 +1,7 @@
 import { uiSpring } from '../ui/VisualStyle';
 @Component
 export struct LoadingState {
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @Prop text: string = '正在加载…';
 
   build() {

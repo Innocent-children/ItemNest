@@ -2,7 +2,7 @@ import { uiSpring } from '../ui/VisualStyle';
 
 @Component
 export struct LocationInput {
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @State private focusedField: string = '';
   @Link locationPath: string;
 

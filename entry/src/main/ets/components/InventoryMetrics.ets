@@ -6,7 +6,7 @@ interface InventoryMetricParams {
 
 @Component
 export struct InventoryMetrics {
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @Prop total: number = 0;
   @Prop available: number | undefined = undefined;
   @Prop borrowed: number | undefined = undefined;

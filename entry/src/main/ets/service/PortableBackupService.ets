@@ -5,7 +5,7 @@ import { util } from '@kit.ArkTS';
 import { relationalStore } from '@kit.ArkData';
 import { BackupPhotoCodec } from '../common/BackupPhotoCodec';
 import { AppError, AppErrorCode } from '../common/AppError';
-import { ImportPreview, ItemTraceExportPayload } from '../common/ImportValidation';
+import { ImportPreview, ItemNestExportPayload } from '../common/ImportValidation';
 import { BackupPhoto, MAX_BACKUP_BYTES, MAX_TOTAL_PHOTO_BYTES,
   PORTABLE_BACKUP_VERSION, PortableBackupPayload, PortableBackupValidation } from '../common/PortableBackupValidation';
 import { failure, Result, success } from '../common/Result';
@@ -52,7 +52,7 @@ export class PortableBackupService {
       return failure<string>(thresholdResult.getError());
     }
     try {
-      const data = JSON.parse(exported.getData()) as ItemTraceExportPayload;
+      const data = JSON.parse(exported.getData()) as ItemNestExportPayload;
       const items: Item[] = [];
       const photos: BackupPhoto[] = [];
       let photoBytes = 0;
@@ -158,7 +158,7 @@ export class PortableBackupService {
       return failure<ImportPreview>(thresholds.getError());
     }
     try {
-      const data = JSON.parse(exported.getData()) as ItemTraceExportPayload;
+      const data = JSON.parse(exported.getData()) as ItemNestExportPayload;
       const locationLabelCount = (await new LocationLabelRepository(this.database).list()).length;
       const photoCount = data.items.filter((item: Item) => item.photoState === PhotoState.LOCAL).length;
       return success(new ImportPreview(data.items.length, data.batches.length, data.locations.length,
@@ -205,7 +205,7 @@ export class PortableBackupService {
     if (!rawCurrent.ok) {
       return failure<string>(rawCurrent.getError());
     }
-    const oldItems = (JSON.parse(rawCurrent.getData()) as ItemTraceExportPayload).items;
+    const oldItems = (JSON.parse(rawCurrent.getData()) as ItemNestExportPayload).items;
     const oldPhotoPaths: string[] = [];
     for (const item of oldItems) {
       if (item.photoLocalId !== undefined) {

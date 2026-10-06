@@ -10,8 +10,8 @@ import { nativeTitleOptions } from '../ui/VisualStyle';
 
 @Component
 export struct SharePreviewPage {
-  @StorageLink('itemtrace.safeAreaBottom') private bottom: number = 0;
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.safeAreaBottom') private bottom: number = 0;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @State private withLocation: boolean = false;
   @State private withNotes: boolean = false;
   @State private withPerson: boolean = false;

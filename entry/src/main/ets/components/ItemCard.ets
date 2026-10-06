@@ -11,8 +11,8 @@ import { activeLocationText, expiryDescription } from '../service/ItemFlowPresen
 
 @Component
 export struct ItemCard {
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
-  @StorageLink('itemtrace.sharedItemSource') private sharedItemSource: string = '';
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.sharedItemSource') private sharedItemSource: string = '';
   @Prop heroKey: string = 'collection';
   @Prop detailSection: string = '';
   @Prop @Watch('onItemChanged') item: ItemSummary;

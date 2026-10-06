@@ -15,12 +15,12 @@ import { AppServices } from '../service/AppServices';
 @Component
 export struct BatchListPage {
   private pageScroller: Scroller = new Scroller();
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
-  @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
-  @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
-  @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
-  @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
-  @StorageLink('itemtrace.safeAreaRight') private safeAreaRight: number = 0;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
+  @StorageLink('itemnest.safeAreaTop') private safeAreaTop: number = 0;
+  @StorageLink('itemnest.safeAreaBottom') private safeAreaBottom: number = 0;
+  @StorageLink('itemnest.safeAreaLeft') private safeAreaLeft: number = 0;
+  @StorageLink('itemnest.safeAreaRight') private safeAreaRight: number = 0;
   @State private loading: boolean = true;
   @State private deleting: boolean = false;
   @State private errorMessage: string = '';

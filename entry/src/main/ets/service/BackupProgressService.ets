@@ -24,10 +24,10 @@ export class BackupProgressService {
     if (this.active) { throw new Error('已有备份或恢复正在执行'); }
     this.active = true; this.cancelled = false; this.cancellable = true; this.live = undefined;
     this.liveFailed = false; this.startedAt = Date.now(); this.lastPublished = 0;
-    AppStorage.setOrCreate<boolean>('itemtrace.backupActive', true);
-    AppStorage.setOrCreate<boolean>('itemtrace.backupCancellable', true);
-    AppStorage.setOrCreate<string>('itemtrace.backupProgress', title);
-    AppStorage.setOrCreate<number>('itemtrace.backupPercent', 0);
+    AppStorage.setOrCreate<boolean>('itemnest.backupActive', true);
+    AppStorage.setOrCreate<boolean>('itemnest.backupCancellable', true);
+    AppStorage.setOrCreate<string>('itemnest.backupProgress', title);
+    AppStorage.setOrCreate<number>('itemnest.backupPercent', 0);
     try { this.liveAllowed = (await this.settings.get()).liveViewEnabled; } catch (_) { this.liveAllowed = false; }
     try {
       this.suspendId = backgroundTaskManager.requestSuspendDelay('完成物品备份或恢复', () => {
@@ -39,7 +39,7 @@ export class BackupProgressService {
   cancel(): void {
     if (this.active && this.cancellable) {
       this.cancelled = true;
-      AppStorage.setOrCreate<string>('itemtrace.backupProgress', '正在取消并清理临时数据…');
+      AppStorage.setOrCreate<string>('itemnest.backupProgress', '正在取消并清理临时数据…');
     }
   }
 
@@ -49,22 +49,22 @@ export class BackupProgressService {
 
   seal(): void {
     this.check(); this.cancellable = false;
-    AppStorage.setOrCreate<boolean>('itemtrace.backupCancellable', false);
+    AppStorage.setOrCreate<boolean>('itemnest.backupCancellable', false);
   }
 
   async report(title: string, completed: number, total: number): Promise<void> {
     this.check();
     const percent = total > 0 ? Math.min(100, Math.floor(completed * 100 / total)) : 0;
     const text = title + (total > 0 ? ' · ' + completed + ' / ' + total : '');
-    AppStorage.setOrCreate<string>('itemtrace.backupProgress', text);
-    AppStorage.setOrCreate<number>('itemtrace.backupPercent', percent);
+    AppStorage.setOrCreate<string>('itemnest.backupProgress', text);
+    AppStorage.setOrCreate<number>('itemnest.backupPercent', percent);
     if (!this.liveAllowed || this.liveFailed || Date.now() - this.startedAt < 1500 || Date.now() - this.lastPublished < 1000) { return; }
     this.lastPublished = Date.now();
     try {
       if (this.live === undefined) {
         if (!await liveViewManager.isLiveViewEnabled()) { this.liveFailed = true; return; }
-        const target = await wantAgent.getWantAgent({ wants: [{ bundleName: 'com.imotong.itemtrace', abilityName: 'EntryAbility',
-          uri: 'itemtrace://function/backup' }], operationType: wantAgent.OperationType.START_ABILITY, requestCode: 71,
+        const target = await wantAgent.getWantAgent({ wants: [{ bundleName: 'com.imotong.itemnest', abilityName: 'EntryAbility',
+          uri: 'itemnest://function/backup' }], operationType: wantAgent.OperationType.START_ABILITY, requestCode: 71,
           wantAgentFlags: [wantAgent.WantAgentFlags.UPDATE_PRESENT_FLAG] });
         const view: liveViewManager.LiveView = { id: 7101, event: 'PROGRESS', sequence: 1,
           lifeCycleMode: liveViewManager.LifeCycleMode.AUTO_STOP_WHEN_APP_TERMINATE,
@@ -98,9 +98,9 @@ export class BackupProgressService {
     } finally {
       if (this.suspendId >= 0) { try { backgroundTaskManager.cancelSuspendDelay(this.suspendId); } catch (_) {} }
       this.suspendId = -1; this.live = undefined; this.active = false;
-      AppStorage.setOrCreate<boolean>('itemtrace.backupActive', false);
-      AppStorage.setOrCreate<boolean>('itemtrace.backupCancellable', false);
-      AppStorage.setOrCreate<string>('itemtrace.backupProgress', this.cancelled ? '操作已取消' : message);
+      AppStorage.setOrCreate<boolean>('itemnest.backupActive', false);
+      AppStorage.setOrCreate<boolean>('itemnest.backupCancellable', false);
+      AppStorage.setOrCreate<string>('itemnest.backupProgress', this.cancelled ? '操作已取消' : message);
     }
   }
 }

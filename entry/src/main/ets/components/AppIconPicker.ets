@@ -6,7 +6,7 @@ import { LoadingState } from './LoadingState';
 @Component
 export struct AppIconPicker {
   onSelected: (icon: AppIcon) => void = () => {};
-  @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
+  @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @State private selected: AppIcon | undefined = undefined;
   @State private current: AppIcon = AppIcon.GIRL;
   @State private loading: boolean = true;
