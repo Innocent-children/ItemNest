@@ -15,7 +15,7 @@ struct ItemTraceFormCard {
       params: new QuickAddFormLinkParams()
     }) {
       Column({ space: 8 }) {
-        Text('ITEMTRACE').letterSpacing(2)
+        Text($r('app.string.app_name')).letterSpacing(2)
           .fontSize(12)
           .fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.hero_text'))

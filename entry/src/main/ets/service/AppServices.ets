@@ -47,6 +47,8 @@ import { SearchSuggestionService } from './SearchSuggestionService';
 import { PortableBackupService } from './PortableBackupService';
 import { PortableFileStore } from './PortableFileStore';
 import { PhotoMaintenanceService } from './PhotoMaintenanceService';
+import { AppIconService } from './AppIconService';
+import { SystemAppIconAdapter } from './adapter/AppIconAdapter';
 
 export class AppServices {
   private static instance?: AppServices;
@@ -61,6 +63,7 @@ export class AppServices {
   readonly searchItems: ItemSearchService;
   readonly homeSummary: HomeSummaryService;
   readonly preferences: PreferenceService;
+  readonly appIcon: AppIconService;
   readonly reminders: ReminderService;
   readonly photos: PhotoService;
   readonly photoMaintenance: PhotoMaintenanceService;
@@ -97,7 +100,9 @@ export class AppServices {
     this.listItems = listItems;
     this.detailItem = new ItemDetailService(repository);
     this.updateItem = new ItemUpdateService(repository, validator, () => Date.now(), batchRepository);
-    const preferenceService = new PreferenceService(new PreferenceRepository(context));
+    const preferenceRepository = new PreferenceRepository(context);
+    const preferenceService = new PreferenceService(preferenceRepository);
+    this.appIcon = new AppIconService(new SystemAppIconAdapter(), preferenceRepository);
     const reminderRepository = new ReminderRepository(new ReminderDao(database));
     const reminderService = new ReminderService(reminderRepository, preferenceService, new SystemReminderAdapter(), repository);
     const assetRepository = new AssetRepository(new AssetDao(database));

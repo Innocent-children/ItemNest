@@ -26,6 +26,7 @@ import { LendingPage } from './LendingPage';
 import { LocationManagementPage } from './LocationManagementPage';
 import { SearchPage } from './SearchPage';
 import { SettingsPage } from './SettingsPage';
+import { AppIconPicker } from '../components/AppIconPicker';
 
 interface AttentionMetricParams {
   count: number;
@@ -44,6 +45,9 @@ interface HomeSummarySectionParams {
 @Entry
 @Component
 struct Index {
+  @State private iconGateReady: boolean = false;
+  @State private needsIconSelection: boolean = false;
+  @State private iconGateError: string = '';
   @StorageLink('itemtrace.quickAddRequest') @Watch('onQuickAddRequested') private quickAddRequest: string = '';
   @StorageLink('itemtrace.dataRevision') @Watch('onRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.preferenceRevision') @Watch('onRevisionChanged') private preferenceRevision: number = 0;
@@ -95,7 +99,7 @@ struct Index {
     this.subscribeDataRefresh();
     this.subscribeRouteResultRefresh();
     this.refreshSummaryForCurrentRevision(true);
-    this.openQuickAddIfRequested();
+    this.checkInitialIconSelection();
   }
 
   aboutToDisappear(): void {
@@ -185,7 +189,7 @@ struct Index {
   }
 
   private openQuickAddIfRequested(): void {
-    if (this.quickAddRequest.length === 0 || this.quickAddOpening) {
+    if (!this.iconGateReady || this.needsIconSelection || this.quickAddRequest.length === 0 || this.quickAddOpening) {
       return;
     }
     const request = this.quickAddRequest;
@@ -218,6 +222,9 @@ struct Index {
   }
 
   onBackPress(): boolean {
+    if (!this.iconGateReady || this.needsIconSelection) {
+      return true;
+    }
     if (this.pathStack.size() === 0 && this.selectedTabIndex !== 0) {
       this.selectMainTab(RouteName.HOME);
       return true;
@@ -227,32 +234,65 @@ struct Index {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      Navigation(this.pathStack) {
-        this.mainTabs()
+      if (!this.iconGateReady) {
+        Column({ space: 20 }) {
+          if (this.iconGateError.length > 0) {
+            ErrorState({ message: this.iconGateError })
+            Button('重新读取').onClick(() => this.checkInitialIconSelection())
+          } else {
+            LoadingState({ text: '正在准备我的家当…' })
+          }
+        }.width('100%').height('100%').justifyContent(FlexAlign.Center).padding(24)
+      } else if (this.needsIconSelection) {
+        AppIconPicker({ firstLaunch: true, onSelected: () => {
+          this.needsIconSelection = false;
+          this.openQuickAddIfRequested();
+        } }).padding({ bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
+      } else {
+        this.mainNavigation()
       }
-      .title({ builder: this.mainHeader, height: this.mainTabIndex === 0 ? 100 : 76 },
-        nativeTitleOptions(this.reduceAnimation))
-      .hideBackButton(true)
-      .mode(NavigationMode.Auto)
-      .navBarWidthRange([320, 420])
-      .minContentWidth(420)
-      .onNavBarStateChange((visible: boolean) => {
-        this.navigationRootVisible = visible;
-        if (visible) {
-          this.dockRoute = this.mainTabRoutes[this.mainTabIndex];
-          this.refreshSummaryForCurrentRevision(false);
-        }
-      })
-      .navDestination(this.navDestinationBuilder)
-      .customNavContentTransition((from, to, operation) =>
-        this.reduceAnimation ? undefined : SharedRouteMotion.transition(from, to, operation))
-      .width('100%').height('100%')
-      .backgroundColor($r('app.color.surface_app'))
     }
     .width('100%')
     .height('100%')
     .padding({ top: this.safeAreaTop })
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+    .backgroundColor($r('app.color.surface_app'))
+  }
+
+  private async checkInitialIconSelection(): Promise<void> {
+    this.iconGateError = '';
+    const result = await AppServices.get().appIcon.needsInitialSelection();
+    if (!result.ok) {
+      this.iconGateError = result.getError().message;
+      return;
+    }
+    this.needsIconSelection = result.getData();
+    this.iconGateReady = true;
+    this.openQuickAddIfRequested();
+  }
+
+  @Builder
+  private mainNavigation() {
+    Navigation(this.pathStack) {
+      this.mainTabs()
+    }
+    .title({ builder: this.mainHeader, height: this.mainTabIndex === 0 ? 100 : 76 },
+      nativeTitleOptions(this.reduceAnimation))
+    .hideBackButton(true)
+    .mode(NavigationMode.Auto)
+    .navBarWidthRange([320, 420])
+    .minContentWidth(420)
+    .onNavBarStateChange((visible: boolean) => {
+      this.navigationRootVisible = visible;
+      if (visible) {
+        this.dockRoute = this.mainTabRoutes[this.mainTabIndex];
+        this.refreshSummaryForCurrentRevision(false);
+      }
+    })
+    .navDestination(this.navDestinationBuilder)
+    .customNavContentTransition((from, to, operation) =>
+      this.reduceAnimation ? undefined : SharedRouteMotion.transition(from, to, operation))
+    .width('100%').height('100%')
     .backgroundColor($r('app.color.surface_app'))
   }
 
@@ -263,7 +303,7 @@ struct Index {
 
   @Builder
   private mainHeader() {
-    PageHeader({ title: this.mainTabIndex === 0 ? 'ItemTrace' : this.mainTabIndex === 1 ? '我的物品' :
+    PageHeader({ title: this.mainTabIndex === 0 ? '我的家当' : this.mainTabIndex === 1 ? '我的物品' :
       this.mainTabIndex === 2 ? '查找物品' : '我的空间',
       subtitle: this.mainTabIndex === 0 ? '你的物品，井井有条' : this.mainTabIndex === 1 ? '每一件，都好好收着。' :
         this.mainTabIndex === 2 ? '知道放在哪里，就少一点寻找。' : '让整理，更合你的习惯。',

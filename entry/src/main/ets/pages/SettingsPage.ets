@@ -11,9 +11,14 @@ import { ItemSortMode, ThemeMode, UserPreferences } from '../model/UserPreferenc
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
 import { ImportPreview } from '../common/ImportValidation';
+import { AppIcon } from '../model/AppIcon';
+import { AppIconPicker } from '../components/AppIconPicker';
 
 @Component
 export struct SettingsPage {
+  @State private showAppIconPicker: boolean = false;
+  @State private currentAppIcon: AppIcon = AppIcon.GIRL;
+  @State private appIconDescription: string = '正在读取当前图标…';
   private pageScroller: Scroller = new Scroller();
   @State private viewportWidth: number = 360;
   @State private showReminderSettings: boolean = false;
@@ -52,6 +57,7 @@ export struct SettingsPage {
   aboutToAppear(): void {
     this.load();
     this.loadNotificationStatus();
+    this.loadAppIcon();
   }
 
   build() {
@@ -86,6 +92,7 @@ export struct SettingsPage {
           Row() {
             Column({ space: $r('app.float.space_4') }) {
               this.themeCard()
+              this.appIconEntry()
               this.managementCard()
               this.reminderEntry()
               this.homeCard()
@@ -140,6 +147,53 @@ export struct SettingsPage {
       backgroundColor: $r('app.color.surface_app'), preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
       width: this.viewportWidth >= 700 ? 560 : undefined
     }, this.reduceAnimation))
+
+  }
+
+  private async loadAppIcon(): Promise<void> {
+    const result = await AppServices.get().appIcon.getState();
+    if (!result.ok) {
+      this.appIconDescription = '读取失败，点击重试';
+      return;
+    }
+    this.currentAppIcon = result.getData().current;
+    this.appIconDescription = result.getData().supported ?
+      (this.currentAppIcon === AppIcon.GIRL ? '女生形象' : '男生形象') : '升级至 HarmonyOS 7 后即可更换';
+  }
+
+  @Builder
+  private appIconEntry() {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 14 }) {
+        Image(this.currentAppIcon === AppIcon.GIRL ? $r('app.media.foreground') : $r('app.media.buddy_foreground'))
+          .width(48).height(48).backgroundColor('#FFF6E4').borderRadius(12).clip(true).accessibilityLevel('no')
+        Column({ space: 6 }) {
+          Text('应用图标').fontSize(16).fontWeight(FontWeight.Medium).fontColor($r('app.color.text_primary'))
+          Text(this.appIconDescription).fontSize(12).fontColor($r('app.color.text_secondary'))
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        Image($r('app.media.ui_chevron')).width(14).height(14)
+          .fillColor($r('app.color.text_secondary')).accessibilityLevel('no')
+      }.width('100%')
+    }.attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+      .width('100%').padding(22).borderRadius(20).backgroundColor($r('app.color.surface_card'))
+      .onClick(() => this.showAppIconPicker = true)
+    .bindSheet($$this.showAppIconPicker, this.appIconSheet(), nativeSheetOptions({
+      height: SheetSize.LARGE, dragBar: true, showClose: true,
+      title: { title: '应用图标', subtitle: '选一位喜欢的整理小伙伴' },
+      backgroundColor: $r('app.color.surface_app'), preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
+      width: this.viewportWidth >= 700 ? 560 : undefined,
+      onDisappear: () => this.loadAppIcon()
+    }, this.reduceAnimation))
+  }
+
+  @Builder
+  private appIconSheet() {
+    AppIconPicker({ onSelected: (icon: AppIcon) => {
+      this.currentAppIcon = icon;
+      this.appIconDescription = icon === AppIcon.GIRL ? '女生形象' : '男生形象';
+      this.showAppIconPicker = false;
+      this.getUIContext().getPromptAction().showToast({ message: '应用图标已更新' });
+    } })
   }
 
   @Builder

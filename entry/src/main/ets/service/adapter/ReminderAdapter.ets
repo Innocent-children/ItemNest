@@ -39,7 +39,7 @@ export class SystemReminderAdapter implements ReminderAdapter {
           minute: date.getMinutes(),
           second: 0
         },
-        title: 'ItemTrace 到期提醒',
+        title: '物品到期提醒',
         content: `“${item.name}”到期日为 ${item.expirationDate ?? '未设置'}，请及时检查。`,
         tapDismissed: true
       };

@@ -9,8 +9,8 @@
       "value": "记录物品位置、数量与到期日期"
     },
     {
-      "name": "EntryAbility_label",
-      "value": "ItemTrace"
+      "name": "widget_name",
+      "value": "我的家当 · 概览"
     }
   ]
 }

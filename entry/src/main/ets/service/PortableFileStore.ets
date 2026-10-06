@@ -16,7 +16,8 @@ export class PortableFileStore {
     try {
       const options = new picker.DocumentSelectOptions();
       options.maxSelectNumber = 1;
-      options.fileSuffixFilters = ['ItemTrace 备份|.json'];
+      const appName = context.resourceManager.getStringSync($r('app.string.app_name').id);
+      options.fileSuffixFilters = [`${appName} 备份|.json`];
       const uris = await new picker.DocumentViewPicker(context).select(options);
       if (uris.length === 0) {
         return success<string | undefined>(undefined);
@@ -31,8 +32,9 @@ export class PortableFileStore {
   async saveBackup(context: Context, text: string): Promise<Result<boolean>> {
     try {
       const options = new picker.DocumentSaveOptions();
-      options.newFileNames = [`ItemTrace-${Date.now()}.json`];
-      options.fileSuffixChoices = ['ItemTrace 备份|.json'];
+      const appName = context.resourceManager.getStringSync($r('app.string.app_name').id);
+      options.newFileNames = [`${appName}-${Date.now()}.json`];
+      options.fileSuffixChoices = [`${appName} 备份|.json`];
       const uris = await new picker.DocumentViewPicker(context).save(options);
       if (uris.length === 0) {
         return success<boolean>(false);

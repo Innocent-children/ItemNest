@@ -2,7 +2,7 @@
   "forms": [
     {
       "name": "itemtrace_widget",
-      "displayName": "ItemTrace 概览",
+      "displayName": "$string:widget_name",
       "description": "查看即将到期和今日提醒数量",
       "src": "./ets/forms/pages/ItemTraceFormCard.ets",
       "uiSyntax": "arkts",
