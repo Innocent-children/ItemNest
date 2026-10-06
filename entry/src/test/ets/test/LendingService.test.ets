@@ -51,6 +51,22 @@ function historic(id: string, type: TraceEventType, quantity: number, createdAt:
 
 export default function lendingServiceTest() {
   describe('LendingService', () => {
+    it('待还汇总合并不同物品，归还与撤销后立即减少', 0, async () => {
+      const harness = createHarness(5);
+      harness.items.items.push({ id: 'item-2', name: '书', quantity: 2, unit: ItemUnit.PIECE,
+        photoState: PhotoState.NONE, createdAt: 1, updatedAt: 1 });
+      const first = (await harness.service.borrow('item-1', 3, '小张')).getData();
+      const second = (await harness.service.borrow('item-2', 1, '小李')).getData();
+      await harness.service.returnItem('item-1', 1, undefined, undefined, first.id);
+      const loans = (await harness.service.getOutstandingLoans()).getData();
+      expect(loans.length).assertEqual(2);
+      expect(loans[0].loan.remainingQuantity).assertEqual(2);
+      expect(loans[1].itemName).assertEqual('书');
+      await harness.service.voidEvent('item-2', second.id);
+      await harness.service.returnItem('item-1', 2, undefined, undefined, first.id);
+      expect((await harness.service.getOutstandingLoans()).getData().length).assertEqual(0);
+    });
+
     it('并发归还同一借出量时只记录一次', 0, async () => {
       const harness = createHarness(1);
       const borrow = await harness.service.borrow('item-1', 1, '小张');

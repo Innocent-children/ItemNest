@@ -1,6 +1,6 @@
 import { AppError, AppErrorCode } from '../common/AppError';
 import { failure, Result, success } from '../common/Result';
-import { allocateLegacyReturns, createTraceEventId, LendingState, OutstandingLoan, ReturnAllocation, roundLendingQuantity, TraceEvent, TraceEventType } from '../model/TraceEvent';
+import { allocateLegacyReturns, createTraceEventId, LendingState, OutstandingLoan, OutstandingItemLoan, ReturnAllocation, roundLendingQuantity, TraceEvent, TraceEventType } from '../model/TraceEvent';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
 import { LendingSnapshot, TraceEventRepositoryPort } from '../data/repository/TraceEventRepository';
 
@@ -136,6 +136,32 @@ export class LendingService {
   async getEvents(itemId: string): Promise<Result<TraceEvent[]>> {
     const result = await this.events.listByItemId(itemId);
     return result.ok ? success(allocateLegacyReturns(result.getData())) : result;
+  }
+
+  async getOutstandingLoans(): Promise<Result<OutstandingItemLoan[]>> {
+    const items = await this.items.listAll();
+    if (!items.ok) { return failure<OutstandingItemLoan[]>(items.getError()); }
+    const events = await this.events.listAll();
+    if (!events.ok) { return failure<OutstandingItemLoan[]>(events.getError()); }
+    const grouped = new Map<string, TraceEvent[]>();
+    for (const event of events.getData()) {
+      const list = grouped.get(event.itemId) ?? [];
+      list.push(event);
+      grouped.set(event.itemId, list);
+    }
+    const result: OutstandingItemLoan[] = [];
+    for (const item of items.getData()) {
+      const itemEvents = grouped.get(item.id);
+      if (itemEvents === undefined) { continue; }
+      const state = this.calculateState(item.id, {
+        itemName: item.name, totalQuantity: item.quantity, unit: item.unit, events: itemEvents
+      });
+      for (const loan of state.outstandingLoans) {
+        result.push({ itemId: item.id, itemName: item.name, unit: item.unit, loan: loan });
+      }
+    }
+    result.sort((left: OutstandingItemLoan, right: OutstandingItemLoan) => left.loan.borrowEvent.createdAt - right.loan.borrowEvent.createdAt);
+    return success(result);
   }
 
   async getState(itemId: string, batchId?: string): Promise<Result<LendingState>> {

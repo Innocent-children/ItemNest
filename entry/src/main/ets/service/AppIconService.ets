@@ -1,24 +1,12 @@
 import { AppError, AppErrorCode } from '../common/AppError';
 import { failure, Result, success } from '../common/Result';
-import { AppIconPreferencePort } from '../data/repository/PreferenceRepository';
 import { AppIcon, AppIconState } from '../model/AppIcon';
 import { AppIconAdapter } from './adapter/AppIconAdapter';
 
 export class AppIconService {
   private readonly adapter: AppIconAdapter;
-  private readonly preferences: AppIconPreferencePort;
-
-  constructor(adapter: AppIconAdapter, preferences: AppIconPreferencePort) {
+  constructor(adapter: AppIconAdapter) {
     this.adapter = adapter;
-    this.preferences = preferences;
-  }
-
-  async needsInitialSelection(): Promise<Result<boolean>> {
-    if (!this.adapter.isSupported()) {
-      return success(false);
-    }
-    const completed = await this.preferences.isIconSelectionCompleted();
-    return completed.ok ? success(!completed.getData()) : failure<boolean>(completed.getError());
   }
 
   async getState(): Promise<Result<AppIconState>> {
@@ -33,7 +21,7 @@ export class AppIconService {
   }
 
   /**
-   * 先确认系统实际启用的图标，再记录首次选择完成；失败时保留选择入口供用户重试。
+   * 以系统实际使用的图标确认切换结果。
    */
   async select(icon: AppIcon): Promise<Result<AppIcon>> {
     if (!this.adapter.isSupported()) {
@@ -49,7 +37,6 @@ export class AppIconService {
     } catch (_) {
       return failure<AppIcon>(new AppError(AppErrorCode.SYSTEM_UNAVAILABLE, '切换桌面图标失败，请重试'));
     }
-    const saved = await this.preferences.completeIconSelection();
-    return saved.ok ? success(icon) : failure<AppIcon>(saved.getError());
+    return success(icon);
   }
 }

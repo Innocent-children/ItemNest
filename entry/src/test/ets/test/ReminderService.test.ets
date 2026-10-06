@@ -64,6 +64,12 @@ class FakeReminderRepository implements ReminderRepositoryPort {
     return success<void>(undefined);
   }
 
+  async listScheduledBetween(startAt: number, endAt: number): Promise<Result<ReminderRecord[]>> {
+    return success(this.records.filter((record: ReminderRecord) =>
+      (record.status === ReminderRecordStatus.SCHEDULED || record.status === ReminderRecordStatus.DUE) &&
+      record.scheduledAt !== undefined && record.scheduledAt >= startAt && record.scheduledAt < endAt));
+  }
+
   async countScheduledBetween(startAt: number, endAt: number): Promise<Result<number>> {
     return success(this.records.filter((record: ReminderRecord) => (record.status === ReminderRecordStatus.SCHEDULED || record.status === ReminderRecordStatus.DUE) &&
       record.scheduledAt !== undefined && record.scheduledAt >= startAt && record.scheduledAt <= endAt).length);
@@ -126,6 +132,39 @@ function enabledPreferences(): UserPreferences {
 
 export default function reminderServiceTest() {
   describe('ReminderService', () => {
+    it('关闭通知单独计数并取消原计划，不再报告无需提醒', 0, async () => {
+      const preferences = new FakePreferenceRepository();
+      const records = new FakeReminderRepository();
+      const adapter = new FakeReminderAdapter();
+      const items = new FakeItemRepository();
+      items.items.push(buildItem('disabled'));
+      records.records.push({ itemId: 'disabled', systemReminderId: 12, status: ReminderRecordStatus.SCHEDULED, updatedAt: 1 });
+      const service = new ReminderService(records, new PreferenceService(preferences), adapter, items);
+      const summary = (await service.reconcileAll()).getData();
+      expect(summary.disabled).assertEqual(1);
+      expect(summary.notRequired).assertEqual(0);
+      expect(records.records[0].status).assertEqual(ReminderRecordStatus.DISABLED);
+      expect(adapter.cancelCalls[0]).assertEqual(12);
+      expect(service.describeSummary(summary).includes('不会发送通知')).assertTrue();
+    });
+
+    it('今日提醒只包含当日已安排或已到时间的记录', 0, async () => {
+      const preferences = new FakePreferenceRepository();
+      const records = new FakeReminderRepository();
+      const items = new FakeItemRepository();
+      const today = new Date(2030, 0, 3);
+      const nextDay = new Date(2030, 0, 4).getTime();
+      for (const id of ['today', 'tomorrow', 'disabled']) { items.items.push(buildItem(id)); }
+      records.records = [
+        { itemId: 'today', scheduledAt: today.getTime(), status: ReminderRecordStatus.DUE, updatedAt: 1 },
+        { itemId: 'tomorrow', scheduledAt: nextDay, status: ReminderRecordStatus.SCHEDULED, updatedAt: 1 },
+        { itemId: 'disabled', scheduledAt: today.getTime(), status: ReminderRecordStatus.DISABLED, updatedAt: 1 }
+      ];
+      const result = await new ReminderService(records, new PreferenceService(preferences), new FakeReminderAdapter(), items).getTodayItems(today);
+      expect(result.getData().length).assertEqual(1);
+      expect(result.getData()[0].id).assertEqual('today');
+    });
+
     it('偏好读取失败时不会先取消现有系统提醒', 0, async () => {
       const preferences = new FakePreferenceRepository();
       preferences.failGet = true;
@@ -405,14 +444,15 @@ export default function reminderServiceTest() {
       const service = new ReminderService(records, new PreferenceService(preferences), adapter, items, () => 1000);
       const first = await service.reconcileAll();
       expect(first.getData().failed).assertEqual(1);
-      expect(first.getData().notRequired).assertEqual(1);
+      expect(first.getData().notRequired).assertEqual(0);
+      expect(first.getData().disabled).assertEqual(1);
       expect(records.records.find((record: ReminderRecord) => record.itemId === 'one')?.systemReminderId).assertEqual(1);
       adapter.failCancelIds = [];
       const retry = await service.reconcileAll();
       expect(retry.getData().failed).assertEqual(0);
       expect(adapter.scheduleCalls).assertEqual(0);
       expect(adapter.cancelCalls.length).assertEqual(3);
-      expect(service.describeRecord(records.records[0]).includes('未启用')).assertTrue();
+      expect(service.describeRecord(records.records[0]).includes('已关闭')).assertTrue();
     });
 
     it('并发最新同步在排队后读取更新后的批次日期', 0, async () => {

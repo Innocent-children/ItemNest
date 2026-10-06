@@ -17,6 +17,7 @@ type NavigationRouteResultListener = (result: Object | undefined) => void;
 export class NavigationHelper {
   private static pathStack: NavPathStack | undefined = undefined;
   private static backHandlers: NavigationBackHandler[] = [];
+  private static backHandlerDepths: Map<NavigationBackHandler, number> = new Map<NavigationBackHandler, number>();
   private static lastPopResult: Object | undefined = undefined;
   private static nextRouteResultListenerId: number = 1;
   private static routeResultListeners: Map<number, NavigationRouteResultListener> =
@@ -71,10 +72,16 @@ export class NavigationHelper {
   static registerBackHandler(handler: NavigationBackHandler): void {
     NavigationHelper.removeBackHandler(handler);
     NavigationHelper.backHandlers.push(handler);
+    NavigationHelper.backHandlerDepths.set(handler, NavigationHelper.pathStack?.size() ?? 0);
   }
 
   static unregisterBackHandler(handler: NavigationBackHandler): void {
     NavigationHelper.removeBackHandler(handler);
+  }
+
+  static isCurrentBackHandler(handler: NavigationBackHandler): boolean {
+    return NavigationHelper.backHandlers[NavigationHelper.backHandlers.length - 1] === handler &&
+      NavigationHelper.backHandlerDepths.get(handler) === (NavigationHelper.pathStack?.size() ?? 0);
   }
 
   static handleBackPressed(): boolean {
@@ -82,6 +89,10 @@ export class NavigationHelper {
       return false;
     }
     const handler = NavigationHelper.backHandlers[NavigationHelper.backHandlers.length - 1];
+    // 子页面返回时保留来源表单；只有当前页面处理自己的未保存内容。
+    if (!NavigationHelper.isCurrentBackHandler(handler)) {
+      return false;
+    }
     try {
       return handler();
     } catch (_) {
@@ -90,6 +101,7 @@ export class NavigationHelper {
   }
 
   private static removeBackHandler(handler: NavigationBackHandler): void {
+    NavigationHelper.backHandlerDepths.delete(handler);
     for (let index = NavigationHelper.backHandlers.length - 1; index >= 0; index--) {
       if (NavigationHelper.backHandlers[index] === handler) {
         NavigationHelper.backHandlers.splice(index, 1);

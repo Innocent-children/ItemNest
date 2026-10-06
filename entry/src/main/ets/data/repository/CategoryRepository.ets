@@ -13,6 +13,32 @@ export class CategoryRepository {
     this.database = database;
   }
 
+  async renameAtomic(categoryId: string, decide: (categories: CategoryRecord[]) => Result<CategoryRecord>): Promise<Result<void>> {
+    try {
+      return await this.database.transaction(async (store: relationalStore.Transaction): Promise<Result<void>> => {
+        const rows = await store.querySql('SELECT * FROM managed_category');
+        const categories: CategoryRecord[] = [];
+        try {
+          while (ResultSetReader.goToNextRow(rows)) { categories.push(this.mapCategory(rows)); }
+        } finally { ResultSetReader.close(rows); }
+        const result = decide(categories);
+        if (!result.ok) { return failure<void>(result.getError()); }
+        const category = result.getData();
+        const original = categories.find((value: CategoryRecord) => value.id === categoryId);
+        if (original === undefined || category.id !== categoryId) {
+          throw new AppError(AppErrorCode.NOT_FOUND, '分类不存在，请返回后重试');
+        }
+        await store.update(this.toValues(category), new relationalStore.RdbPredicates(CATEGORY_TABLE).equalTo('id', categoryId));
+        await store.execute('UPDATE item SET category = ?, updated_at = ? WHERE category = ?',
+          [category.name, category.updatedAt, original.name]);
+        await store.execute('UPDATE search_history SET category = ? WHERE category = ?', [category.name, original.name]);
+        return success<void>(undefined);
+      });
+    } catch (error) {
+      return failure<void>(toAppError(error, AppErrorCode.DATABASE_WRITE, '分类改名失败，原有分类已保留，请重试'));
+    }
+  }
+
   async create(category: CategoryRecord): Promise<Result<CategoryRecord>> {
     try {
       await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {

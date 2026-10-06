@@ -23,10 +23,10 @@ import { ItemDetailPage } from './ItemDetailPage';
 import { ItemFormPage } from './ItemFormPage';
 import { ItemListPage } from './ItemListPage';
 import { LendingPage } from './LendingPage';
+import { OutstandingLoansPage } from './OutstandingLoansPage';
 import { LocationManagementPage } from './LocationManagementPage';
 import { SearchPage } from './SearchPage';
 import { SettingsPage } from './SettingsPage';
-import { AppIconPicker } from '../components/AppIconPicker';
 
 interface AttentionMetricParams {
   count: number;
@@ -38,17 +38,13 @@ interface AttentionMetricParams {
 interface HomeSummarySectionParams {
   title: string;
   items: ItemSummary[];
-  emptyText: string;
   attention?: 'expiry' | 'restock';
 }
 
 @Entry
 @Component
 struct Index {
-  @State private iconGateReady: boolean = false;
-  @State private needsIconSelection: boolean = false;
-  @State private iconGateError: string = '';
-  @StorageLink('itemtrace.quickAddRequest') @Watch('onQuickAddRequested') private quickAddRequest: string = '';
+  @StorageLink('itemtrace.widgetRequest') @Watch('onWidgetRequested') private widgetRequest: string = '';
   @StorageLink('itemtrace.dataRevision') @Watch('onRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.preferenceRevision') @Watch('onRevisionChanged') private preferenceRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
@@ -63,6 +59,10 @@ struct Index {
   @State private dockRoute: string = RouteName.HOME;
   private mainTabRoutes: string[] = [RouteName.HOME, RouteName.ITEM_LIST, RouteName.SEARCH, RouteName.SETTINGS];
   @State private loading: boolean = true;
+  @State private totalItemCount: number = 0;
+  @State private unconfiguredStockCount: number = 0;
+  @State private outstandingLoanCount: number = 0;
+  @State private lendingLoadFailed: boolean = false;
   @State private errorMessage: string = '';
   @State private recentItems: ItemSummary[] = [];
   @State private expiryAttentionItems: ItemSummary[] = [];
@@ -75,7 +75,7 @@ struct Index {
   @State private showStockSection: boolean = true;
   private dataRefreshListenerId: number = 0;
   private routeResultListenerId: number = 0;
-  private quickAddOpening: boolean = false;
+  private widgetOpening: boolean = false;
   private summaryLoadId: number = 0;
   private lastRouteRefreshAt: number = 0;
   private lastHandledDataRevision: number = -1;
@@ -99,7 +99,6 @@ struct Index {
     this.subscribeDataRefresh();
     this.subscribeRouteResultRefresh();
     this.refreshSummaryForCurrentRevision(true);
-    this.checkInitialIconSelection();
   }
 
   aboutToDisappear(): void {
@@ -123,11 +122,11 @@ struct Index {
     if (!this.refreshForRevisionChange(false) && !this.handleRouteRefreshParams()) {
       this.refreshSummaryForCurrentRevision(false);
     }
-    this.openQuickAddIfRequested();
+    this.openWidgetIfRequested();
   }
 
-  private onQuickAddRequested(): void {
-    this.openQuickAddIfRequested();
+  private onWidgetRequested(): void {
+    this.openWidgetIfRequested();
   }
 
   private applyAnimationPreference(enabled: boolean): void {
@@ -188,24 +187,25 @@ struct Index {
     this.loadSummary(showLoading);
   }
 
-  private openQuickAddIfRequested(): void {
-    if (!this.iconGateReady || this.needsIconSelection || this.quickAddRequest.length === 0 || this.quickAddOpening) {
+  private openWidgetIfRequested(): void {
+    if (this.widgetRequest.length === 0 || this.widgetOpening) {
       return;
     }
-    const request = this.quickAddRequest;
-    this.quickAddOpening = true;
-    NavigationHelper.pushUrl({
-      url: RouteName.ITEM_FORM,
-      params: { mode: 'create', returnTo: RouteName.HOME }
-    }).then((opened: boolean) => {
-      this.quickAddOpening = false;
+    const request = this.widgetRequest;
+    this.widgetOpening = true;
+    const action = request.split(':')[0];
+    NavigationHelper.pushUrl(action === 'add' ? { url: RouteName.ITEM_FORM,
+      params: { mode: 'create', returnTo: RouteName.HOME } } : action === 'reminders' ? {
+        url: RouteName.ITEM_LIST, params: { attention: 'reminders' }
+      } : { url: RouteName.ITEM_LIST, params: { attention: 'expiry' } }).then((opened: boolean) => {
+      this.widgetOpening = false;
       if (!opened) {
         return;
       }
-      if (this.quickAddRequest === request) {
-        AppStorage.setOrCreate<string>('itemtrace.quickAddRequest', '');
+      if (this.widgetRequest === request) {
+        AppStorage.setOrCreate<string>('itemtrace.widgetRequest', '');
       } else {
-        this.openQuickAddIfRequested();
+        this.openWidgetIfRequested();
       }
     });
   }
@@ -222,9 +222,6 @@ struct Index {
   }
 
   onBackPress(): boolean {
-    if (!this.iconGateReady || this.needsIconSelection) {
-      return true;
-    }
     if (this.pathStack.size() === 0 && this.selectedTabIndex !== 0) {
       this.selectMainTab(RouteName.HOME);
       return true;
@@ -234,23 +231,7 @@ struct Index {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      if (!this.iconGateReady) {
-        Column({ space: 20 }) {
-          if (this.iconGateError.length > 0) {
-            ErrorState({ message: this.iconGateError })
-            Button('重新读取').onClick(() => this.checkInitialIconSelection())
-          } else {
-            LoadingState({ text: '正在准备我的家当…' })
-          }
-        }.width('100%').height('100%').justifyContent(FlexAlign.Center).padding(24)
-      } else if (this.needsIconSelection) {
-        AppIconPicker({ firstLaunch: true, onSelected: () => {
-          this.needsIconSelection = false;
-          this.openQuickAddIfRequested();
-        } }).padding({ bottom: this.safeAreaBottom, left: this.safeAreaLeft, right: this.safeAreaRight })
-      } else {
-        this.mainNavigation()
-      }
+      this.mainNavigation()
     }
     .width('100%')
     .height('100%')
@@ -259,24 +240,12 @@ struct Index {
     .backgroundColor($r('app.color.surface_app'))
   }
 
-  private async checkInitialIconSelection(): Promise<void> {
-    this.iconGateError = '';
-    const result = await AppServices.get().appIcon.needsInitialSelection();
-    if (!result.ok) {
-      this.iconGateError = result.getError().message;
-      return;
-    }
-    this.needsIconSelection = result.getData();
-    this.iconGateReady = true;
-    this.openQuickAddIfRequested();
-  }
-
   @Builder
   private mainNavigation() {
     Navigation(this.pathStack) {
       this.mainTabs()
     }
-    .title({ builder: this.mainHeader, height: this.mainTabIndex === 0 ? 100 : 76 },
+    .title({ builder: this.mainHeader, height: 76 },
       nativeTitleOptions(this.reduceAnimation))
     .hideBackButton(true)
     .mode(NavigationMode.Auto)
@@ -289,6 +258,7 @@ struct Index {
         this.refreshSummaryForCurrentRevision(false);
       }
     })
+    .onAppear(() => this.openWidgetIfRequested())
     .navDestination(this.navDestinationBuilder)
     .customNavContentTransition((from, to, operation) =>
       this.reduceAnimation ? undefined : SharedRouteMotion.transition(from, to, operation))
@@ -316,8 +286,8 @@ struct Index {
     const result = await this.getUIContext().getPromptAction().showActionMenu({
       title: '记录新物品', buttons: [
         { text: '手动记录', color: $r('app.color.brand_primary') },
-        { text: '扫码录入', color: $r('app.color.brand_primary') },
-        { text: '拍照记录', color: $r('app.color.brand_primary') }
+        { text: '扫描条码后填写', color: $r('app.color.brand_primary') },
+        { text: '拍照并填写物品', color: $r('app.color.brand_primary') }
       ]
     }).catch(() => undefined);
     if (result !== undefined) {
@@ -388,20 +358,42 @@ struct Index {
           Row() {
             Column({ space: $r('app.float.space_5') }) {
               this.homeHeader()
-              if (this.recentItems.length > 0 || this.locationPaths.length > 0 || this.dueSoonCount + this.restockCount > 0) {
+              if (this.totalItemCount === 0) {
+                EmptyState({ title: '先记住一件常用物品', description: '填好名称和位置，下次输入名称就能找到。',
+                  actionText: '记录第一件物品', actionRoute: RouteName.ITEM_FORM,
+                  actionMode: 'create', actionReturnTo: RouteName.HOME })
+              } else {
                 this.hero()
-              }
-              if (this.locationPaths.length > 0) {
-                this.locationShortcutSection()
-              }
-              if (this.showExpirySection) {
-                this.summarySection({ title: '到期待处理', items: this.expiryAttentionItems, emptyText: '暂无到期待处理物品', attention: 'expiry' })
-              }
-              if (this.showStockSection) {
-                this.summarySection({ title: '需要补货', items: this.restockItems, emptyText: '库存充足，暂时不用补货', attention: 'restock' })
-              }
-              if (shouldShowRecentSection(this.showRecentSection)) {
-                this.summarySection({ title: '最近添加', items: this.recentItems, emptyText: '暂无物品' })
+                if (this.showExpirySection && this.expiryAttentionItems.length > 0) {
+                  this.summarySection({ title: '到期待处理', items: this.expiryAttentionItems, attention: 'expiry' })
+                }
+                if (this.showStockSection && this.restockItems.length > 0) {
+                  this.summarySection({ title: '需要补货', items: this.restockItems, attention: 'restock' })
+                }
+                if (this.showStockSection && this.unconfiguredStockCount > 0) {
+                  Row({ space: 8 }) {
+                    Text(`${this.unconfiguredStockCount} 件物品未设置最低数量，目前仅在用完后提示补货。`)
+                      .layoutWeight(1).fontSize(12).fontColor($r('app.color.text_secondary'))
+                    Button('去设置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                      .fontSize(13).fontColor($r('app.color.brand_primary')).backgroundColor(Color.Transparent)
+                      .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST, params: { section: 'stock' } }))
+                  }.width('100%')
+                }
+                Button({ type: ButtonType.Normal }) {
+                  Row() {
+                    Image($r('app.media.ui_lend')).width(22).height(22).fillColor($r('app.color.brand_primary'))
+                    Text('借出未还').fontSize(16).fontColor($r('app.color.text_primary')).layoutWeight(1).margin({ left: 12 })
+                    Text(this.lendingLoadFailed ? '点击重新查看' : `${this.outstandingLoanCount} 笔`)
+                      .fontSize(13).fontColor($r('app.color.text_secondary'))
+                    Image($r('app.media.ui_chevron')).width(14).height(14).fillColor($r('app.color.text_secondary')).margin({ left: 10 })
+                  }.width('100%')
+                }.attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).width('100%').padding(18)
+                  .backgroundColor($r('app.color.surface_card')).borderRadius(18)
+                  .onClick(() => NavigationHelper.pushUrl({ url: RouteName.OUTSTANDING_LOANS }))
+                if (this.locationPaths.length > 0) { this.locationShortcutSection() }
+                if (shouldShowRecentSection(this.showRecentSection) && this.recentItems.length > 0) {
+                  this.summarySection({ title: '最近添加', items: this.recentItems })
+                }
               }
             }
             .width('100%')
@@ -445,6 +437,8 @@ struct Index {
         BatchFormPage()
       } else if (name === RouteName.LENDING) {
         LendingPage()
+      } else if (name === RouteName.OUTSTANDING_LOANS) {
+        OutstandingLoansPage()
       } else if (name === RouteName.LOCATION_MANAGEMENT) {
         LocationManagementPage()
       } else if (name === RouteName.CATEGORY_MANAGEMENT) {
@@ -466,33 +460,19 @@ struct Index {
 
   @Builder
   private hero() {
-    Column({ space: 22 }) {
-      Row({ space: 10 }) {
-        Image($r('app.media.ui_check')).width(20).height(20)
-          .fillColor($r('app.color.hero_action')).accessibilityLevel('no')
-        Column({ space: 5 }) {
-          Text(this.dueSoonCount + this.restockCount === 0 ? '生活，有条不紊。' : '有些物品，需要留意。')
-            .fontSize(19).fontWeight(FontWeight.Medium).fontColor($r('app.color.hero_text'))
-          Text(this.dueSoonCount + this.restockCount === 0 ? '到期与补货，我们帮你记着。' : '到期与库存信息，已为你整理好。')
-            .fontSize(12).fontColor($r('app.color.hero_secondary'))
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-      }.width('100%')
-      Row() {
-        this.attentionMetric({ count: this.dueSoonCount, label: '到期待处理', icon: $r('app.media.ui_clock'), attention: 'expiry' })
-        Divider().vertical(true).height(42).color($r('app.color.hero_line')).margin({ left: 12, right: 20 })
-        this.attentionMetric({ count: this.restockCount, label: '需要补货', icon: $r('app.media.ui_box'), attention: 'restock' })
-      }.width('100%')
-    }
-    .width('100%').alignItems(HorizontalAlign.Start).padding(24)
-    .borderRadius(22).backgroundColor($r('app.color.hero_start'))
+    Row() {
+      this.attentionMetric({ count: this.dueSoonCount, label: '到期待处理', icon: $r('app.media.ui_clock'), attention: 'expiry' })
+      Divider().vertical(true).height(42).color($r('app.color.hero_line')).margin({ left: 12, right: 20 })
+      this.attentionMetric({ count: this.restockCount, label: '需要补货', icon: $r('app.media.ui_box'), attention: 'restock' })
+    }.width('100%').padding(18).borderRadius(20).backgroundColor($r('app.color.hero_start'))
   }
 
   @Builder
   private attentionMetric($$: AttentionMetricParams) {
     Button({ type: ButtonType.Normal }) {
-      Column({ space: 8 }) {
+      Column({ space: 4 }) {
         Row({ space: 5 }) {
-          Text($$.count.toString()).contentTransition(numericMotion(this.reduceAnimation, $$.count)).fontSize(34).fontWeight(FontWeight.Medium)
+          Text($$.count.toString()).contentTransition(numericMotion(this.reduceAnimation, $$.count)).fontSize(26).fontWeight(FontWeight.Medium)
             .fontColor($r('app.color.hero_text'))
           Text('项').fontSize(12).fontColor($r('app.color.hero_secondary')).margin({ top: 12 })
         }
@@ -557,29 +537,19 @@ struct Index {
         Text(`${$$.items.length} 项`)
           .fontSize($r('app.float.font_caption'))
           .fontColor($r('app.color.text_secondary'))
-        if ($$.attention !== undefined && $$.items.length > 3) {
+        if ($$.attention === undefined) {
+          Button('全部物品').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .fontSize(12).fontColor($r('app.color.brand_primary')).backgroundColor(Color.Transparent)
+            .onClick(() => this.selectMainTab(RouteName.ITEM_LIST))
+        } else if ($$.items.length > 3) {
           Button('查看全部').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
             .fontSize(12).fontColor($r('app.color.brand_primary')).backgroundColor(Color.Transparent)
             .onClick(() => this.openAttentionList($$.attention ?? 'expiry'))
         }
       }
-      if ($$.items.length === 0) {
-        if ($$.title === '最近添加') {
-          EmptyState({ title: '给物品一个位置', description: '从一件常用物品开始，记录它放在哪里。',
-            actionText: '记录第一件物品', actionRoute: RouteName.ITEM_FORM,
-            actionMode: 'create', actionReturnTo: RouteName.HOME })
-        } else {
-          Row({ space: 10 }) {
-            Image($r('app.media.ui_check')).width(18).height(18)
-              .fillColor($r('app.color.status_success')).accessibilityLevel('no')
-            Text($$.emptyText).fontSize(13).fontColor($r('app.color.text_secondary'))
-          }.width('100%').padding(18).borderRadius(16).backgroundColor($r('app.color.surface_card'))
-        }
-      } else {
-        ForEach($$.attention === undefined ? $$.items : $$.items.slice(0, 3), (item: ItemSummary) => {
-          ItemCard({ item: $$.items.find((current: ItemSummary) => current.id === item.id) ?? item, heroKey: $$.title })
-        }, (item: ItemSummary) => item.id)
-      }
+      ForEach($$.items.slice(0, 3), (item: ItemSummary) => {
+        ItemCard({ item: $$.items.find((current: ItemSummary) => current.id === item.id) ?? item, heroKey: $$.title })
+      }, (item: ItemSummary) => item.id)
     }
     .width('100%')
   }
@@ -618,7 +588,11 @@ struct Index {
       const summary = result.getData();
       await AppServices.get().photos.loadThumbnails(summary.recentItems.concat(summary.expiryAttentionItems, summary.restockItems));
       if (loadId !== this.summaryLoadId) { return; }
-      this.recentItems = summary.recentItems;
+      this.totalItemCount = summary.totalItemCount;
+      this.unconfiguredStockCount = summary.unconfiguredStockCount;
+      this.recentItems = summary.recentItems.filter((item: ItemSummary) =>
+        !(this.showExpirySection && summary.expiryAttentionItems.some((attention: ItemSummary) => attention.id === item.id)) &&
+        !(this.showStockSection && summary.restockItems.some((attention: ItemSummary) => attention.id === item.id)));
       this.expiryAttentionItems = summary.expiryAttentionItems;
       this.restockItems = summary.restockItems;
       if (this.reduceAnimation) {
@@ -631,6 +605,10 @@ struct Index {
         });
       }
       await this.loadLocationShortcuts(loadId);
+      const loans = await AppServices.get().lending.getOutstandingLoans();
+      if (loadId !== this.summaryLoadId) { return; }
+      this.lendingLoadFailed = !loans.ok;
+      if (loans.ok) { this.outstandingLoanCount = loans.getData().length; }
     } catch (_) {
       if (loadId === this.summaryLoadId && (showLoading || this.recentItems.length + this.expiryAttentionItems.length + this.restockItems.length === 0)) {
         this.errorMessage = '数据库初始化失败，请重试';

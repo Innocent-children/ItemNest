@@ -22,6 +22,7 @@ export interface ReminderReconcileSummary {
   scheduled: number;
   due: number;
   notRequired: number;
+  disabled: number;
   failed: number;
   failures: string[];
 }
@@ -48,6 +49,17 @@ export class ReminderService {
     return this.runExclusive<ReminderRecord>(item.id, async (): Promise<Result<ReminderRecord>> => {
       return this.reconcileUnlocked(item);
     });
+  }
+
+  async getTodayItems(now: Date = new Date()): Promise<Result<Item[]>> {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
+    const records = await this.repository.listScheduledBetween(start, end);
+    if (!records.ok) { return failure<Item[]>(records.getError()); }
+    const items = await this.items.listAll();
+    if (!items.ok) { return failure<Item[]>(items.getError()); }
+    const ids = new Set<string>(records.getData().map((record: ReminderRecord) => record.itemId));
+    return success(items.getData().filter((item: Item) => ids.has(item.id)));
   }
 
   // Read after acquiring the item queue: a delayed page cannot replace a newer batch plan.
@@ -77,7 +89,7 @@ export class ReminderService {
     }
     const userPreferences = preferenceResult.getData();
     const plan: ReminderPlan = userPreferences.reminderEnabled ? this.calculatePlan(item, userPreferences.defaultReminderDays) :
-      { reason: '系统提醒未启用，可在设置中开启并同步已有物品。' };
+      { reason: '到期通知已关闭，当前不会发送通知。' };
     const signature = `${item.name}\n${item.expirationDate ?? ''}`;
     const samePlan = plan.key !== undefined && (currentRecord?.planKey === plan.key ||
       (currentRecord?.planKey === undefined && currentRecord?.scheduledAt === plan.originalAt));
@@ -110,7 +122,8 @@ export class ReminderService {
       return failure<ReminderRecord>(cancellationResult.getError());
     }
     if (plan.scheduledAt === undefined) {
-      return this.saveRecord(this.createRecord(item.id, undefined, undefined, ReminderRecordStatus.NOT_REQUIRED,
+      return this.saveRecord(this.createRecord(item.id, undefined, undefined,
+        userPreferences.reminderEnabled ? ReminderRecordStatus.NOT_REQUIRED : ReminderRecordStatus.DISABLED,
         plan.reason, plan.key, signature));
     }
     // A name edit must update the notification, without postponing an existing near-time plan.
@@ -161,7 +174,7 @@ export class ReminderService {
       }
       const allItems = itemsResult.getData();
       const summary: ReminderReconcileSummary = {
-        total: allItems.length, scheduled: 0, due: 0, notRequired: 0, failed: 0, failures: []
+        total: allItems.length, scheduled: 0, due: 0, notRequired: 0, disabled: 0, failed: 0, failures: []
       };
       for (let index = 0; index < allItems.length; index++) {
         const item = allItems[index];
@@ -173,6 +186,8 @@ export class ReminderService {
           summary.scheduled++;
         } else if (result.getData().status === ReminderRecordStatus.DUE) {
           summary.due++;
+        } else if (result.getData().status === ReminderRecordStatus.DISABLED) {
+          summary.disabled++;
         } else {
           summary.notRequired++;
         }
@@ -184,12 +199,18 @@ export class ReminderService {
   }
 
   describeSummary(summary: ReminderReconcileSummary): string {
+    if (summary.disabled === summary.total && summary.failed === 0 && summary.total > 0) {
+      return '到期通知已关闭，当前不会发送通知。开启并保存后，会自动安排符合条件的物品。';
+    }
     const text = `已检查 ${summary.total} 个物品：${summary.scheduled} 个已安排、${summary.due} 个已到提醒时间、` +
-      `${summary.notRequired} 个无需提醒、${summary.failed} 个失败。`;
+      `${summary.notRequired} 个无需提醒、${summary.disabled} 个通知已关闭、${summary.failed} 个失败。`;
     return summary.failed === 0 ? text : `${text}\n${summary.failures.join('\n')}\n可重新同步提醒；不会重复创建已安排的提醒。`;
   }
 
   describeRecord(record?: ReminderRecord): string {
+    if (record?.status === ReminderRecordStatus.DISABLED) {
+      return '到期通知已关闭，当前不会发送通知。';
+    }
     if (record === undefined) {
       return '尚未同步系统提醒，点击“同步提醒”检查当前设置和到期日。';
     }

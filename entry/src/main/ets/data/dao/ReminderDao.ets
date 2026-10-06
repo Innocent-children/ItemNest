@@ -56,6 +56,10 @@ export class ReminderDao {
   }
 
   async countScheduledBetween(startAt: number, endAt: number): Promise<number> {
+    return (await this.listScheduledBetween(startAt, endAt)).length;
+  }
+
+  async listScheduledBetween(startAt: number, endAt: number): Promise<ReminderRecord[]> {
     try {
       const predicates = new relationalStore.RdbPredicates(REMINDER_TABLE);
       predicates.in('status', [ReminderRecordStatus.SCHEDULED, ReminderRecordStatus.DUE]);
@@ -63,15 +67,15 @@ export class ReminderDao {
       predicates.lessThan('scheduled_at', endAt);
       const store = await this.database.requireStore();
       const resultSet = await store.query(predicates);
-      let count = 0;
+      const records: ReminderRecord[] = [];
       try {
         while (ResultSetReader.goToNextRow(resultSet)) {
-          count++;
+          records.push(this.mapRecord(resultSet));
         }
       } finally {
         ResultSetReader.close(resultSet);
       }
-      return count;
+      return records;
     } catch (error) {
       if (error instanceof AppError) {
         throw error;

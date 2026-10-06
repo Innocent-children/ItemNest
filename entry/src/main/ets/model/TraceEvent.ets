@@ -33,6 +33,13 @@ export interface OutstandingLoan {
   remainingQuantity: number;
 }
 
+export interface OutstandingItemLoan {
+  itemId: string;
+  itemName: string;
+  unit: ItemUnit;
+  loan: OutstandingLoan;
+}
+
 export interface LendingState {
   itemId: string;
   batchId?: string;

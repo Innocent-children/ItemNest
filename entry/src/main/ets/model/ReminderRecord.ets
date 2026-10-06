@@ -3,6 +3,7 @@ export enum ReminderRecordStatus {
   DUE = 'DUE',
   FAILED = 'FAILED',
   CANCELLED = 'CANCELLED',
+  DISABLED = 'DISABLED',
   NOT_REQUIRED = 'NOT_REQUIRED'
 }
 

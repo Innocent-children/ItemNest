@@ -4,6 +4,7 @@ import { notificationManager } from '@kit.NotificationKit';
 import { common, ConfigurationConstant } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
 import { resourceManager } from '@kit.LocalizationKit';
+import { NavigationRouteParams } from '../navigation/RouteContract';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
@@ -25,6 +26,8 @@ export struct SettingsPage {
   @State private savedPreferenceSignature: string = '';
   @State private preferencesReady: boolean = false;
   @Prop isMainTab: boolean = false;
+  @State private remindersOnly: boolean = false;
+  private closing: boolean = false;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemtrace.safeAreaBottom') private safeAreaBottom: number = 0;
   @StorageLink('itemtrace.safeAreaLeft') private safeAreaLeft: number = 0;
@@ -42,7 +45,10 @@ export struct SettingsPage {
   @State private persistedReminderEnabled: boolean = false;
   @State private reminderSyncing: boolean = false;
   @State private reminderMessage: string = '';
+  @State private reminderIssue: boolean = false;
   @State private restorePreviewReady: boolean = false;
+  @State private notificationAllowed: boolean = false;
+  @StorageLink('itemtrace.preferenceRevision') @Watch('onPreferencesChanged') private preferenceRevision: number = 0;
   @State private notificationStatus: string = '';
   @State private notificationBusy: boolean = false;
   @State private loading: boolean = false;
@@ -54,7 +60,14 @@ export struct SettingsPage {
   @State private backupMessage: string = '';
   private selectedBackupText: string = '';
 
+  private onPreferencesChanged(): void {
+    if (!this.saving && !this.hasPreferenceChanges()) { this.load(); }
+  }
+
   aboutToAppear(): void {
+    if (!this.isMainTab && (NavigationHelper.getParams() as NavigationRouteParams | undefined)?.section === 'reminders') {
+      this.remindersOnly = true;
+    }
     this.load();
     this.loadNotificationStatus();
     this.loadAppIcon();
@@ -65,20 +78,37 @@ export struct SettingsPage {
       this.pageContent()
     } else {
       NavDestination() {
-        this.pageContent()
+        if (this.remindersOnly) { this.reminderSettingsSheet() }
+        else { this.pageContent() }
       }
       .title({ builder: this.pageHeader, height: 76 }, nativeTitleOptions(this.reduceAnimation))
       .hideBackButton(true)
       .bindToScrollable([this.pageScroller])
       .backgroundColor($r('app.color.surface_app'))
-      .onBackPressed(() => NavigationHelper.handleBackPressed())
+      .onBackPressed(() => { this.requestClose(); return true; })
+      .onShown(() => this.loadNotificationStatus())
     }
   }
 
   @Builder
   private pageHeader() {
-    PageHeader({ title: '我的空间', subtitle: '让整理，更合你的习惯。',
+    PageHeader({ title: this.remindersOnly ? '到期通知' : '我的空间',
+        subtitle: this.remindersOnly ? '保存后自动安排已有物品的通知。' : '让整理，更合你的习惯。',
+        onBack: () => this.requestClose(),
         eyebrow: this.isMainTab ? 'MAKE IT YOURS' : '', showBack: !this.isMainTab })
+  }
+
+  private async requestClose(): Promise<void> {
+    if (this.saving || this.reminderSyncing || this.closing) { return; }
+    if (!this.hasPreferenceChanges()) { NavigationHelper.back(); return; }
+    this.closing = true;
+    try {
+      const result = await this.getUIContext().getPromptAction().showDialog({
+        title: '放弃未保存的设置？', message: '这些更改还没有生效，返回后会保留原来的设置。',
+        buttons: [{ text: '继续设置', color: '#24513F' }, { text: '放弃更改', color: '#B42318' }]
+      });
+      if (result.index === 1) { NavigationHelper.back(); }
+    } catch (_) {} finally { this.closing = false; }
   }
 
   @Builder
@@ -91,10 +121,10 @@ export struct SettingsPage {
         Scroll(this.pageScroller) {
           Row() {
             Column({ space: $r('app.float.space_4') }) {
+              this.reminderEntry()
+              this.managementCard()
               this.themeCard()
               this.appIconEntry()
-              this.managementCard()
-              this.reminderEntry()
               this.homeCard()
               this.sortCard()
               this.backupCard()
@@ -142,7 +172,7 @@ export struct SettingsPage {
     .backgroundColor($r('app.color.surface_app'))
     .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
     .bindSheet($$this.showReminderSettings, this.reminderSettingsSheet(), nativeSheetOptions({
-      height: SheetSize.LARGE, dragBar: true, showClose: true,
+      height: SheetSize.LARGE, dragBar: true, showClose: true, keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
       title: { title: '到期提醒', subtitle: '提前一步，减少遗忘' },
       backgroundColor: $r('app.color.surface_app'), preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
       width: this.viewportWidth >= 700 ? 560 : undefined
@@ -204,7 +234,7 @@ export struct SettingsPage {
           .fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
         Column({ space: 6 }) {
           Text('到期提醒').fontSize(16).fontWeight(FontWeight.Medium).fontColor($r('app.color.text_primary'))
-          Text(this.reminderEnabled ? `提前 ${this.defaultReminderDays} 天提醒` : '尚未开启系统提醒')
+          Text(this.reminderIssue ? '有通知未处理，点击检查' : !this.persistedReminderEnabled ? '已关闭，不会新建通知' : !this.notificationAllowed ? '系统通知权限关闭，点击处理' : `已开启 · 默认提前 ${this.defaultReminderDays} 天`)
             .fontSize(12).fontColor($r('app.color.text_secondary'))
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         Image($r('app.media.ui_chevron')).width(14).height(14)
@@ -221,14 +251,18 @@ export struct SettingsPage {
     Column() {
       Scroll() {
         Column({ space: 16 }) {
-          this.reminderCard()
+          if (this.loading) { LoadingState({ text: '正在读取通知设置…' }) }
+          else if (this.preferencesReady) { this.reminderCard() }
+          else {
+            Button('重新读取设置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).onClick(() => this.load())
+          }
           if (this.errorMessage.length > 0) {
             Text(this.errorMessage).fontSize(13).fontColor($r('app.color.status_danger'))
           }
         }.width('100%').padding(24)
       }.align(Alignment.TopStart).width('100%').layoutWeight(1)
       Row() {
-        Button(this.saving ? '正在保存…' : this.hasPreferenceChanges() ? '保存偏好与提醒' : '已保存')
+        Button(this.saving ? '正在保存…' : this.hasPreferenceChanges() ? '保存并应用通知设置' : '已保存')
         .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
         .width('100%').height(48).fontColor($r('app.color.brand_on_primary'))
         .backgroundColor($r('app.color.brand_primary'))
@@ -265,7 +299,7 @@ export struct SettingsPage {
   @Builder
   private reminderCard() {
     Column({ space: $r('app.float.space_3') }) {
-      this.cardTitle('提醒偏好', '保存后同步已有物品，已过期或无库存的物品不再创建提醒。')
+      this.cardTitle('到期通知', this.reminderEnabled ? '保存后自动安排通知，已过期或已用完的物品不会再发送到期通知。' : '当前已关闭，填写到期日期不会自动开启通知。')
       Text('默认提前提醒天数')
         .fontSize($r('app.float.font_body'))
         .fontColor($r('app.color.text_primary'))
@@ -287,7 +321,7 @@ export struct SettingsPage {
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
       Row() {
-        Text('允许创建系统提醒')
+        Text('开启到期通知')
           .layoutWeight(1)
           .fontSize($r('app.float.font_body'))
           .fontColor($r('app.color.text_primary'))
@@ -299,21 +333,21 @@ export struct SettingsPage {
       Text(this.notificationStatus)
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
-      Button(this.notificationBusy ? '正在打开…' : '管理系统通知授权')
+      Button(this.notificationBusy ? '正在打开…' : this.notificationAllowed ? '系统通知设置' : '去授权通知')
         .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
         .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
         .fontColor($r('app.color.brand_primary'))
         .backgroundColor($r('app.color.surface_accent'))
         .enabled(!this.notificationBusy && !this.saving && !this.reminderSyncing)
         .onClick(() => this.manageNotificationPermission())
-      Button(this.reminderSyncing ? '正在同步提醒…' : '重新同步已有物品的提醒')
+      Button(this.reminderSyncing ? '正在检查…' : '重新检查已有物品的通知')
         .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
         .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
         .fontColor($r('app.color.brand_primary'))
         .backgroundColor($r('app.color.surface_accent'))
-        .enabled(!this.reminderSyncing && !this.saving && !this.notificationBusy)
+        .enabled(!this.reminderSyncing && !this.saving && !this.notificationBusy && !this.hasPreferenceChanges())
         .onClick(() => this.synchronizeReminders())
-      Text('重新同步使用已保存的设置；修改上方选项后请先保存设置。')
+      Text(this.hasPreferenceChanges() ? '这些更改尚未生效，请点击下方保存。' : !this.persistedReminderEnabled ? '到期通知已关闭；开启并保存后才会安排通知。' : '保存后自动检查通知，异常时可以重新检查。')
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
       if (this.reminderMessage.length > 0) {
@@ -332,9 +366,9 @@ export struct SettingsPage {
 
   private async loadNotificationStatus(): Promise<void> {
     try {
-      this.notificationStatus = await notificationManager.isNotificationEnabled()
-        ? '系统通知已授权，保存设置或重新同步即可处理已有物品。'
-        : '系统通知尚未授权；到期提醒需要系统通知授权。';
+      this.notificationAllowed = await notificationManager.isNotificationEnabled();
+      this.notificationStatus = this.notificationAllowed ? '系统通知权限已允许。是否发送通知由上方开关决定。' :
+        '系统通知权限关闭。请先授权，再开启并保存到期通知。';
     } catch (_) {
       this.notificationStatus = '暂时无法读取系统通知授权状态。';
     }
@@ -679,9 +713,8 @@ export struct SettingsPage {
       const result = await AppServices.get().preferences.get();
       if (result.ok) {
         this.applyPreferences(result.getData());
-        if (!result.getData().reminderEnabled) {
-          await this.synchronizeReminders();
-        }
+        this.reminderMessage = '';
+        if (!result.getData().reminderEnabled) { await this.synchronizeReminders(); }
       } else {
         this.errorMessage = result.getError().message;
       }
@@ -752,15 +785,19 @@ export struct SettingsPage {
     try {
       const result = await AppServices.get().reminders.reconcileAll();
       if (!result.ok) {
+        this.reminderIssue = true;
         this.reminderMessage = `提醒同步失败：${result.getError().message}。可重新同步；已保存的设置和物品不会丢失。`;
         return false;
       }
+      AppEventBus.notifyDataChanged();
+      this.reminderIssue = result.getData().failed > 0;
       this.reminderMessage = AppServices.get().reminders.describeSummary(result.getData());
       if (result.getData().failed === 0 && this.errorMessage.startsWith('设置已保存；部分提醒')) {
         this.errorMessage = '';
       }
       return result.getData().failed === 0;
     } catch (_) {
+      this.reminderIssue = true;
       this.reminderMessage = '提醒同步中断，可重新同步；已保存的设置和物品不会丢失。';
       return false;
     } finally {

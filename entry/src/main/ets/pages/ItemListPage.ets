@@ -5,7 +5,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { ItemCard } from '../components/ItemCard';
 import { LoadingState } from '../components/LoadingState';
-import { ItemSummary } from '../model/Item';
+import { Item, ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { ItemSortMode } from '../model/UserPreferences';
 import { getUnhandledRouteRefreshAt } from '../navigation/RefreshContract';
@@ -18,7 +18,9 @@ import { AppServices } from '../service/AppServices';
 @Component
 export struct ItemListPage {
   private pageScroller: Scroller = new Scroller();
-  @State private attention: 'expiry' | 'restock' | undefined = undefined;
+  @State private attention: 'expiry' | 'restock' | 'reminders' | undefined = undefined;
+  @State private settingStock: boolean = false;
+  @State private filterNotice: string = '';
   @Prop isMainTab: boolean = false;
   @State private contentWidth: number = 0;
   @State private selectedSort: ItemSortMode | undefined = undefined;
@@ -106,8 +108,8 @@ export struct ItemListPage {
 
   @Builder
   private pageHeader() {
-    PageHeader({ title: this.attention === 'expiry' ? '到期待处理' : this.attention === 'restock' ? '需要补货' : this.query.isEmpty() ? '我的物品' : '筛选结果',
-        subtitle: '每一件，都好好收着。', eyebrow: this.isMainTab ? 'YOUR COLLECTION' : '',
+    PageHeader({ title: this.settingStock ? '设置补货提醒' : this.attention === 'reminders' ? '今日提醒' : this.attention === 'expiry' ? '到期待处理' : this.attention === 'restock' ? '需要补货' : this.query.isEmpty() ? '我的物品' : '筛选结果',
+        subtitle: this.settingStock ? '选择物品，设置少于多少时需要补货。' : this.attention === 'reminders' ? '今天安排通知的物品，点击查看详情。' : '每一件，都好好收着。', eyebrow: this.isMainTab ? 'YOUR COLLECTION' : '',
         showBack: !this.isMainTab, actionText: this.attention === undefined ? '查找与筛选' : '查找其他物品', actionIcon: $r('app.media.dock_search'),
         onAction: () => NavigationHelper.pushUrl({ url: RouteName.SEARCH, params: { query: this.query } }) })
   }
@@ -115,6 +117,9 @@ export struct ItemListPage {
   @Builder
   private pageContent() {
     Column() {
+      if (this.filterNotice.length > 0) {
+        Text(this.filterNotice).fontSize(12).fontColor($r('app.color.text_secondary')).padding({ left: 24, right: 24, bottom: 8 })
+      }
 
       Row() {
         Text(this.loading ? '正在整理物品' : `共 ${this.items.length} 件物品`)
@@ -161,8 +166,16 @@ export struct ItemListPage {
             } else if (this.items.length === 0) {
               Column({ space: $r('app.float.space_3') }) {
                 if (this.attention !== undefined) {
-                  EmptyState({ title: this.attention === 'expiry' ? '暂无到期待处理物品' : '库存充足',
-                    description: '信息已更新，安心使用就好。' })
+                  EmptyState({ title: this.attention === 'expiry' ? '暂无到期待处理物品' : this.attention === 'reminders' ? '今天没有安排通知的物品' : '暂无需要补货的物品',
+                    description: this.attention === 'restock' ? '这里只显示已用完或低于已设置最低数量的物品。' : this.attention === 'reminders' ? '到期通知需要在「我的」中开启并授权。' : '填写到期日期后，需要检查的物品会显示在这里。' })
+                  if (this.attention === 'reminders' || this.attention === 'restock') {
+                    Button(this.attention === 'reminders' ? '设置到期通知' : '设置补货数量')
+                      .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                      .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+                      .onClick(() => NavigationHelper.pushUrl(this.attention === 'reminders' ? {
+                        url: RouteName.SETTINGS, params: { section: 'reminders' }
+                      } : { url: RouteName.ITEM_LIST, params: { section: 'stock' } }))
+                  }
                 } else if (this.query.isEmpty()) {
                   EmptyState({
                     title: '暂无物品',
@@ -199,7 +212,7 @@ export struct ItemListPage {
         List({ space: 10, scroller: this.pageScroller }) {
           ForEach(this.items, (item: ItemSummary) => {
             ListItem() {
-              ItemCard({ item: this.currentItem(item.id, item), heroKey: this.isMainTab ? 'collection' : 'filtered' })
+              ItemCard({ item: this.currentItem(item.id, item), heroKey: this.isMainTab ? 'collection' : 'filtered', detailSection: this.settingStock ? 'stock' : '' })
             }
           }, (item: ItemSummary) => item.id)
           ListItem() {
@@ -225,6 +238,7 @@ export struct ItemListPage {
     try {
       const params = NavigationHelper.getParams() as ItemListRouteParams | undefined;
       this.attention = params?.attention;
+      this.settingStock = params?.section === 'stock';
       if (params === undefined || params.query === undefined) {
         this.query = new ItemQuery();
         return;
@@ -244,7 +258,30 @@ export struct ItemListPage {
       this.errorMessage = '';
     }
     try {
-      if (this.attention !== undefined) {
+      if (!showLoading && (query.locationPath !== undefined || query.category !== undefined)) {
+        const options = await AppServices.get().searchItems.getFilterOptions();
+        if (!this.loadRequestCoordinator.isCurrent(requestId)) { return; }
+        if (options.ok) {
+          let changed = false;
+          if (query.locationPath !== undefined && options.getData().locationPaths.indexOf(query.locationPath) < 0) {
+            query.locationPath = undefined; changed = true;
+          }
+          if (query.category !== undefined && options.getData().categories.indexOf(query.category) < 0) {
+            query.category = undefined; changed = true;
+          }
+          if (changed) { this.query = query; this.filterNotice = '位置或分类已变动，已移除不可用的筛选条件。'; }
+        }
+      }
+      if (this.attention === 'reminders') {
+        const result = await AppServices.get().reminders.getTodayItems();
+        if (!this.loadRequestCoordinator.isCurrent(requestId)) { return; }
+        if (!result.ok) { this.errorMessage = result.getError().message; return; }
+        const items = result.getData().map((item: Item) => AppServices.get().listItems.toSummary(item));
+        await AppServices.get().photos.loadThumbnails(items);
+        if (!this.loadRequestCoordinator.isCurrent(requestId)) { return; }
+        this.items = items;
+        this.errorMessage = '';
+      } else if (this.attention !== undefined) {
         const result = await AppServices.get().homeSummary.getSummary();
         if (!this.loadRequestCoordinator.isCurrent(requestId)) { return; }
         if (!result.ok) {

@@ -7,7 +7,7 @@ import { AppEventBus } from '../common/AppEventBus';
 import { ThemeMode } from '../model/UserPreferences';
 
 const DOMAIN = 0x0000;
-const QUICK_ADD_FORM_SOURCE = 'itemtrace-form-quick-add';
+const FORM_SOURCE = 'itemtrace-form';
 
 interface SafeAreaInsets {
   top: number;
@@ -258,8 +258,9 @@ export default class EntryAbility extends UIAbility {
 
   private handleFormLinkWant(want: Want): void {
     const source = want.parameters?.['source'];
-    if (source === QUICK_ADD_FORM_SOURCE) {
-      AppStorage.setOrCreate<string>('itemtrace.quickAddRequest', `${QUICK_ADD_FORM_SOURCE}:${Date.now()}`);
+    const action = want.parameters?.['action'];
+    if (source === FORM_SOURCE && (action === 'add' || action === 'expiry' || action === 'reminders')) {
+      AppStorage.setOrCreate<string>('itemtrace.widgetRequest', `${action}:${Date.now()}`);
     }
   }
 

@@ -12,53 +12,18 @@ const KEY_SHOW_EXPIRY = 'showExpirySection';
 const KEY_SHOW_STOCK = 'showStockSection';
 const KEY_THEME_MODE = 'themeMode';
 const KEY_REMINDER_ENABLED = 'reminderEnabled';
-const KEY_ICON_SELECTION_COMPLETED = 'iconSelectionCompleted';
-
-export interface AppIconPreferencePort {
-  isIconSelectionCompleted(): Promise<Result<boolean>>;
-  completeIconSelection(): Promise<Result<void>>;
-}
 
 export interface PreferenceRepositoryPort {
   get(): Promise<Result<UserPreferences>>;
   save(userPreferences: UserPreferences): Promise<Result<UserPreferences>>;
 }
 
-export class PreferenceRepository implements PreferenceRepositoryPort, AppIconPreferencePort {
+export class PreferenceRepository implements PreferenceRepositoryPort {
   private readonly context: Context;
   private store?: preferences.Preferences;
 
   constructor(context: Context) {
     this.context = context;
-  }
-
-  async isIconSelectionCompleted(): Promise<Result<boolean>> {
-    try {
-      const store = await this.requireStore();
-      return success(store.getSync(KEY_ICON_SELECTION_COMPLETED, false) === true);
-    } catch (error) {
-      return failure<boolean>(toAppError(error, AppErrorCode.PREFERENCE_READ, '读取图标选择记录失败，请重试'));
-    }
-  }
-
-  async completeIconSelection(): Promise<Result<void>> {
-    try {
-      const store = await this.requireStore();
-      if (store.getSync(KEY_ICON_SELECTION_COMPLETED, false) === true) {
-        return success<void>(undefined);
-      }
-      await store.put(KEY_ICON_SELECTION_COMPLETED, true);
-      try {
-        await store.flush();
-      } catch (error) {
-        // flush 失败时恢复内存值，避免下次读取误认为已经持久保存。
-        await store.put(KEY_ICON_SELECTION_COMPLETED, false);
-        throw error as Error;
-      }
-      return success<void>(undefined);
-    } catch (error) {
-      return failure<void>(toAppError(error, AppErrorCode.PREFERENCE_WRITE, '图标已切换，但选择记录保存失败，请重试'));
-    }
   }
 
   async get(): Promise<Result<UserPreferences>> {

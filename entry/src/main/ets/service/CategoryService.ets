@@ -1,5 +1,5 @@
 import { AppError, AppErrorCode } from '../common/AppError';
-import { failure, Result } from '../common/Result';
+import { failure, Result, success } from '../common/Result';
 import { CategoryDraft, CategoryRecord, createCategoryId } from '../model/Category';
 import { CategoryRepository } from '../data/repository/CategoryRepository';
 
@@ -14,6 +14,24 @@ export class CategoryService {
 
   async list(): Promise<Result<CategoryRecord[]>> {
     return this.categories.listAll();
+  }
+
+  async rename(categoryId: string, input: string): Promise<Result<void>> {
+    const name = input.trim();
+    if (name.length === 0 || name.length > 40) {
+      return failure<void>(new AppError(AppErrorCode.VALIDATION, '分类名称需为 1 至 40 个字符'));
+    }
+    return this.categories.renameAtomic(categoryId, (categories: CategoryRecord[]): Result<CategoryRecord> => {
+      const original = categories.find((category: CategoryRecord) => category.id === categoryId);
+      if (original === undefined) {
+        return failure<CategoryRecord>(new AppError(AppErrorCode.NOT_FOUND, '分类不存在，请返回后重试'));
+      }
+      if (categories.some((category: CategoryRecord) => category.id !== categoryId && category.name === name)) {
+        return failure<CategoryRecord>(new AppError(AppErrorCode.VALIDATION, '已有同名分类，请换一个名称'));
+      }
+      return success<CategoryRecord>({ id: original.id, name: name, active: original.active,
+        systemPreset: original.systemPreset, createdAt: original.createdAt, updatedAt: this.clock() });
+    });
   }
 
   async create(draft: CategoryDraft): Promise<Result<CategoryRecord>> {

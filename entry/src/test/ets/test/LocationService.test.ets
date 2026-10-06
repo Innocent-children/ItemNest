@@ -1,15 +1,28 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { Result, success } from '../../../main/ets/common/Result';
+import { failure, Result, success } from '../../../main/ets/common/Result';
 import { BatchRepositoryPort } from '../../../main/ets/data/repository/BatchRepository';
 import { LocationRepositoryPort } from '../../../main/ets/data/repository/LocationRepository';
 import { Batch } from '../../../main/ets/model/Batch';
 import { ItemUnit, PhotoState } from '../../../main/ets/model/Item';
-import { LocationRecord } from '../../../main/ets/model/Location';
+import { LocationRecord, LocationRenamePlan } from '../../../main/ets/model/Location';
 import { LocationService } from '../../../main/ets/service/LocationService';
 import { FakeItemRepository } from './FakeItemRepository';
 
 class FakeLocationRepository implements LocationRepositoryPort {
   locations: LocationRecord[] = [];
+
+  paths: string[] = [];
+
+  async renameAtomic(decide: (locations: LocationRecord[], paths: string[]) => Result<LocationRenamePlan>): Promise<Result<void>> {
+    const result = decide(this.locations, this.paths);
+    if (!result.ok) { return failure<void>(result.getError()); }
+    const plan = result.getData();
+    this.locations = this.locations.map((location: LocationRecord) =>
+      plan.locations.find((updated: LocationRecord) => updated.id === location.id) ?? location);
+    this.paths = this.paths.map((path: string) => path === plan.oldPath || path.startsWith(plan.oldPath + ' / ') ?
+      plan.newPath + path.substring(plan.oldPath.length) : path);
+    return success<void>(undefined);
+  }
 
   async create(location: LocationRecord): Promise<Result<LocationRecord>> {
     this.locations.push(location);
@@ -78,6 +91,29 @@ function location(id: string, path: string, active: boolean, parentId?: string):
 
 export default function locationServiceTest() {
   describe('LocationService', () => {
+    it('改名保留位置身份并同步子路径，相似前缀不受影响', 0, async () => {
+      const locations = new FakeLocationRepository();
+      locations.locations = [location('root', '家', true), location('child', '家 / 厨房', false, 'root'), location('other', '家人', true)];
+      locations.paths = ['家', '家 / 厨房 / 冰箱', '家人 / 柜子'];
+      const service = new LocationService(locations, new FakeItemRepository(), () => 20);
+      expect((await service.rename('root', '住处')).ok).assertTrue();
+      expect(locations.locations[1].path).assertEqual('住处 / 厨房');
+      expect(locations.locations[1].parentId).assertEqual('root');
+      expect(locations.locations[1].active).assertFalse();
+      expect(locations.paths[1]).assertEqual('住处 / 厨房 / 冰箱');
+      expect(locations.paths[2]).assertEqual('家人 / 柜子');
+    });
+
+    it('重复或过长的改名不会改变现有路径', 0, async () => {
+      const locations = new FakeLocationRepository();
+      locations.locations = [location('one', '家', true), location('two', '办公室', true)];
+      const service = new LocationService(locations, new FakeItemRepository(), () => 20);
+      expect((await service.rename('one', '办公室')).ok).assertFalse();
+      locations.paths = ['家 / ' + '柜'.repeat(196)];
+      expect((await service.rename('one', '新的住处')).ok).assertFalse();
+      expect(locations.locations[0].path).assertEqual('家');
+    });
+
     it('停用位置前检查启用子节点及物品和批次的子路径引用', 0, async () => {
       const locations = new FakeLocationRepository();
       const parent = location('parent', '家', true);

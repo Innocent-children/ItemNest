@@ -1,3 +1,5 @@
+import { notificationManager } from '@kit.NotificationKit';
+import { ReminderRecordStatus } from '../model/ReminderRecord';
 import { Batch } from '../model/Batch';
 import { localImageSource } from '../ui/ImageSource';
 import { SharedRouteMotion } from '../ui/SharedRouteMotion';
@@ -69,6 +71,10 @@ export struct ItemDetailPage {
   @State private item: Item | undefined = undefined;
   @State private expiryStatus: ExpiryStatus = ExpiryStatus.NO_EXPIRY_DATE;
   @State private reminderMessage: string = '';
+  @State private reminderEnabled: boolean = false;
+  @State private reminderAction: string = 'settings';
+  @State private reminderActionText: string = '设置到期通知';
+  @StorageLink('itemtrace.preferenceRevision') @Watch('onPreferencesChanged') private preferenceRevision: number = 0;
   @State private reminderRetrying: boolean = false;
   @State private defaultReminderDays: number = 7;
   @State private photoPath: string = '';
@@ -93,6 +99,8 @@ export struct ItemDetailPage {
   @State private showDeleteConfirm: boolean = false;
   @State @Watch('handleDeleteRequest') private deleteRequested: boolean = false;
   private itemId: string = '';
+  private initialSection: string = '';
+  @State private reminderSettingsReady: boolean = false;
   private lastRouteRefreshAt: number = 0;
   private lastHandledDataRevision: number = -1;
   private loadRequestCoordinator: LatestRequestCoordinator = new LatestRequestCoordinator();
@@ -112,9 +120,14 @@ export struct ItemDetailPage {
       return;
     }
     this.itemId = itemIdResult.getData();
+    this.initialSection = params.section ?? '';
     this.heroPreview = SharedRouteMotion.preview(this.itemId);
     this.sharedPhotoId = SharedRouteMotion.itemTransitionId(this.itemId);
     this.loadDetailForCurrentRevision(true);
+  }
+
+  private onPreferencesChanged(): void {
+    if (this.itemId.length > 0) { this.loadDetailForCurrentRevision(false); }
   }
 
   onPageShow(): void {
@@ -235,7 +248,8 @@ export struct ItemDetailPage {
     .height('100%').backgroundColor($r('app.color.surface_app'))
     .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
     .bindSheet($$this.showActionSheet, this.actionSheet(), nativeSheetOptions({
-      height: SheetSize.FIT_CONTENT, dragBar: true, showClose: true,
+      height: SheetSize.MEDIUM, detents: [SheetSize.MEDIUM, SheetSize.LARGE], dragBar: true, showClose: true,
+      keyboardAvoidMode: SheetKeyboardAvoidMode.TRANSLATE_AND_RESIZE,
       title: { title: this.actionSheetMode === 'consume' ? '记录这次用量' : '补货提醒' },
       backgroundColor: $r('app.color.surface_app'), preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
       width: this.viewportWidth >= 700 ? 560 : undefined,
@@ -275,7 +289,7 @@ export struct ItemDetailPage {
         Text($$.category).fontSize(12).fontColor($r('app.color.text_secondary'))
         Text($$.name).fontSize(27).fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.text_primary')).width('100%')
-        ExpiryStatusTag({ status: this.expiryStatus })
+        ExpiryStatusTag({ status: this.expiryStatus, expirationDate: this.item?.expirationDate ?? '' })
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
     }.width('100%')
       .gesture(PanGesture({ direction: PanDirection.Right, distance: 16 })
@@ -361,18 +375,33 @@ export struct ItemDetailPage {
 
   @Builder
   private actionSheet() {
-    Scroll() {
-      Column({ space: 16 }) {
-        if (this.actionError.length > 0) { this.actionErrorPanel() }
-        if (this.item !== undefined) {
-          if (this.actionSheetMode === 'consume') {
-            this.consumptionSection({ item: this.item })
-          } else {
-            this.lowStockSection({ item: this.item })
+    Column() {
+      Scroll() {
+        Column({ space: 16 }) {
+          if (this.actionError.length > 0) { this.actionErrorPanel() }
+          if (this.item !== undefined) {
+            if (this.actionSheetMode === 'consume') { this.consumptionSection({ item: this.item }) }
+            else { this.lowStockSection({ item: this.item }) }
           }
+        }.width('100%').padding({ left: 24, right: 24, bottom: 16 })
+      }.width('100%').layoutWeight(1).align(Alignment.TopStart)
+      Column() {
+        if (this.item !== undefined) {
+          Button(this.actionSheetMode === 'consume' ? (this.consuming ? '正在记录…' : '确认用量') :
+            (this.thresholdSaving ? '正在保存…' : '保存补货设置'))
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .width('100%').height(48).fontColor($r('app.color.brand_on_primary'))
+            .backgroundColor($r('app.color.brand_primary'))
+            .enabled(!this.consuming && !this.deleting && !this.thresholdSaving &&
+              (this.actionSheetMode !== 'consume' || (this.managementReady && this.availableQuantity > 0)))
+            .onClick(() => {
+              if (this.actionSheetMode === 'consume') { this.consume(); }
+              else if (this.item !== undefined) { this.saveLowStockThreshold(this.item); }
+            })
         }
-      }.width('100%').padding({ left: 24, right: 24, bottom: 24 })
-    }.width('100%')
+      }.width('100%').padding({ left: 24, right: 24, top: 12, bottom: 24 })
+        .backgroundColor($r('app.color.surface_card'))
+    }.width('100%').height('100%')
   }
 
   @Builder
@@ -399,11 +428,11 @@ export struct ItemDetailPage {
   @Builder
   private lowStockSection($$: ItemDetailParams) {
     Column({ space: $r('app.float.space_3') }) {
-      Text('低库存状态')
+      Text('什么时候需要补货？')
         .fontSize($r('app.float.font_section'))
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
-      Text('拥有的总量（包含借出）低于阈值时，在应用内标记为需要补货。')
+      Text('少于下方数量时，在首页加入补货清单。这里只在应用内提示，不发送系统通知。')
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
       if (this.thresholdLoadError.length > 0) {
@@ -411,7 +440,7 @@ export struct ItemDetailPage {
           .fontSize($r('app.float.font_body'))
           .fontColor($r('app.color.status_danger'))
           .width('100%')
-        Button('重试读取阈值')
+        Button('重新读取补货设置')
           .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
           .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .width('100%')
@@ -420,7 +449,7 @@ export struct ItemDetailPage {
           .borderRadius($r('app.float.radius_control'))
           .onClick(() => this.loadDetailForCurrentRevision(false))
       } else {
-        Text('提醒阈值')
+        Text(`少于多少（${$$.item.unit}）`)
           .fontSize($r('app.float.font_body'))
           .fontColor($r('app.color.text_primary'))
         TextInput({ text: this.thresholdText, placeholder: '例如：2' })
@@ -438,7 +467,7 @@ export struct ItemDetailPage {
           .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
           .onChange((value: string) => this.thresholdText = value)
         Row() {
-          Text('启用低库存标记')
+          Text('加入首页补货清单')
             .fontSize($r('app.float.font_body'))
             .fontColor($r('app.color.text_primary'))
             .layoutWeight(1)
@@ -451,15 +480,7 @@ export struct ItemDetailPage {
           .fontSize($r('app.float.font_caption'))
           .fontColor(this.isBelowLowStockThreshold($$.item) ? $r('app.color.status_danger') : $r('app.color.text_secondary'))
           .width('100%')
-        Button(this.thresholdSaving ? '正在保存…' : '保存低库存设置')
-          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-          .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-          .width('100%')
-          .fontColor($r('app.color.brand_on_primary'))
-          .backgroundColor($r('app.color.brand_primary'))
-          .borderRadius($r('app.float.radius_control'))
-          .enabled(!this.thresholdSaving)
-          .onClick(() => this.saveLowStockThreshold($$.item))
+
       }
     }
     .width('100%')
@@ -478,6 +499,11 @@ export struct ItemDetailPage {
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
       this.detailRow({ label: '存放位置', value: this.activeLocationText($$.item) })
+      if (($$.item.activeLocationPaths?.length ?? 0) === 0 && $$.item.quantity > 0) {
+        Button('补充存放位置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+          .onClick(() => this.openEdit())
+      }
       if (this.batchCount > 1) {
         this.detailRow({ label: '默认位置', value: $$.item.locationPath ?? '未设置' })
         Text('分放在不同地方的物品，可在库存明细中分别调整。')
@@ -509,14 +535,18 @@ export struct ItemDetailPage {
           .width('100%')
       }
       if (this.reminderMessage.length > 0) {
-        Button(this.reminderRetrying ? '正在同步…' : '重新同步系统提醒')
+        Button(this.reminderRetrying ? '正在检查…' : this.reminderActionText)
           .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
           .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent'))
           .borderRadius($r('app.float.radius_control'))
           .enabled(!this.reminderRetrying)
-          .onClick(() => this.retryReminder())
+          .onClick(() => {
+            if (this.reminderAction === 'retry') { this.retryReminder(); }
+            else if (this.reminderAction === 'date') { this.openEdit(); }
+            else { NavigationHelper.pushUrl({ url: RouteName.SETTINGS, params: { section: 'reminders' } }); }
+          })
       }
     }
     .width('100%')
@@ -619,8 +649,11 @@ export struct ItemDetailPage {
       const item = result.getData();
       this.item = item;
       const preferences = await AppServices.get().preferences.get();
+      if (!this.loadRequestCoordinator.isCurrent(requestId)) { return; }
+      this.reminderSettingsReady = preferences.ok;
       if (preferences.ok && this.loadRequestCoordinator.isCurrent(requestId)) {
         this.defaultReminderDays = preferences.getData().defaultReminderDays;
+        this.reminderEnabled = preferences.getData().reminderEnabled;
       }
       this.recordViewedItemOnce(item);
       this.expiryStatus = AppServices.get().listItems.toSummary(item).expiryStatus;
@@ -634,6 +667,9 @@ export struct ItemDetailPage {
       }
       await this.loadManagementState(item, requestId);
       await this.loadLowStockThreshold(item, requestId);
+      if (this.loadRequestCoordinator.isCurrent(requestId) && this.initialSection === 'stock') {
+        this.initialSection = ''; this.actionSheetMode = 'stock'; this.showActionSheet = true;
+      }
     } catch (_) {
       if (this.loadRequestCoordinator.isCurrent(requestId) && (showLoading || this.item === undefined)) {
         this.errorMessage = '读取物品失败，请重试';
@@ -678,18 +714,49 @@ export struct ItemDetailPage {
   }
 
   private async loadReminderState(item: Item, requestId?: number): Promise<void> {
+    this.reminderAction = 'settings';
+    this.reminderActionText = '管理到期通知';
+    if (!this.reminderSettingsReady) { this.reminderMessage = '暂时无法读取通知设置，请打开设置后重试。'; return; }
+    if (!this.reminderEnabled) {
+      const disabledRecord = await AppServices.get().reminders.getRecord(item.id);
+      if (!this.canApplyLoadResult(requestId)) { return; }
+      if (!disabledRecord.ok || disabledRecord.getData()?.systemReminderId !== undefined) {
+        this.reminderMessage = '到期通知已关闭，但旧通知尚未确认取消，请重试检查。';
+        this.reminderAction = 'retry'; this.reminderActionText = '重试取消旧通知';
+      } else {
+        this.reminderMessage = '到期通知已关闭，当前不会发送通知。';
+        this.reminderActionText = '开启到期通知';
+      }
+      return;
+    }
+    try {
+      const allowed = await notificationManager.isNotificationEnabled();
+      if (!this.canApplyLoadResult(requestId)) { return; }
+      if (!allowed) {
+        this.reminderMessage = '系统通知权限已关闭，授权后才能收到通知。';
+        this.reminderActionText = '去授权通知';
+        return;
+      }
+    } catch (_) {
+      if (!this.canApplyLoadResult(requestId)) { return; }
+      this.reminderMessage = '暂时无法确认通知权限，请检查提醒设置。';
+      return;
+    }
+    if (item.expirationDate === undefined) {
+      this.reminderMessage = '还没填写到期日期，当前不会安排到期通知。';
+      this.reminderAction = 'date'; this.reminderActionText = '填写到期日期';
+      return;
+    }
     const result = await AppServices.get().reminders.getRecord(item.id);
-    if (!this.canApplyLoadResult(requestId)) {
-      return;
+    if (!this.canApplyLoadResult(requestId)) { return; }
+    const record = result.ok ? result.getData() : undefined;
+    this.reminderMessage = result.ok ? AppServices.get().reminders.describeRecord(record) : '提醒状态暂时无法读取，请重试。';
+    if (!result.ok || record === undefined || record.status === ReminderRecordStatus.FAILED ||
+      record.status === ReminderRecordStatus.DISABLED || record.status === ReminderRecordStatus.CANCELLED) {
+      this.reminderAction = 'retry'; this.reminderActionText = '重新检查通知';
     }
-    if (!result.ok) {
-      this.reminderMessage = '提醒状态暂时无法读取';
-      return;
-    }
-    const record = result.getData();
-    this.reminderMessage = record === undefined ? '尚未创建系统提醒，可在下方同步；系统提醒需在设置中启用。' :
-      AppServices.get().reminders.describeRecord(record);
   }
+
 
   private async retryReminder(): Promise<void> {
     if (this.item === undefined || this.reminderRetrying) {
@@ -700,6 +767,7 @@ export struct ItemDetailPage {
     this.actionError = '';
     try {
       const result = await AppServices.get().reminders.reconcileLatest(item.id);
+      AppEventBus.notifyDataChanged();
       await this.loadReminderState(item);
       if (!result.ok) {
         this.actionError = result.getError().message;
@@ -726,15 +794,15 @@ export struct ItemDetailPage {
   @Builder
   private consumptionSection($$: ItemDetailParams) {
     Column({ space: $r('app.float.space_3') }) {
-      Text('数量与使用')
+      Text($$.item.name)
         .fontSize($r('app.float.font_section'))
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
       if (this.managementReady) {
-        Text(`总量 ${$$.item.quantity}${$$.item.unit} · 在手 ${this.availableQuantity}${$$.item.unit} · 借出 ${this.borrowedQuantity}${$$.item.unit}`)
+        Text(`现在可用 ${this.availableQuantity}${$$.item.unit}`)
           .fontSize($r('app.float.font_body'))
           .fontColor($r('app.color.text_primary'))
-        Text('总量包含借出；归还只增加在手量，不重复增加总量。')
+        Text(this.consumptionPreview())
           .fontSize($r('app.float.font_caption'))
           .fontColor($r('app.color.text_secondary'))
       }
@@ -778,15 +846,7 @@ export struct ItemDetailPage {
       Text(this.consumeBatchId.length > 0 ? '仅扣减所选位置的库存，借出部分不能消耗。' : '优先使用最早到期的物品；借出部分不能消耗。')
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
-      Button(this.consuming ? '正在记录…' : '记录消耗')
-        .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-        .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-        .width('100%')
-        .fontColor($r('app.color.brand_on_primary'))
-        .backgroundColor($r('app.color.brand_primary'))
-        .borderRadius($r('app.float.radius_control'))
-        .enabled(this.managementReady && this.availableQuantity > 0 && !this.consuming && !this.deleting)
-        .onClick(() => this.consume())
+
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
@@ -794,6 +854,14 @@ export struct ItemDetailPage {
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
 
+  }
+
+  private consumptionPreview(): string {
+    const quantity = Number(this.consumeQuantityText);
+    if (this.consumeQuantityText.trim().length === 0 || !Number.isFinite(quantity) || quantity <= 0 || quantity > this.availableQuantity) {
+      return '请输入这次用掉的数量。';
+    }
+    return `记录后可用 ${Number((this.availableQuantity - quantity).toFixed(2))}${this.item?.unit ?? ''}`;
   }
 
   private activeLocationText(item: Item): string {
@@ -985,11 +1053,11 @@ export struct ItemDetailPage {
       }
       const threshold = result.getData();
       this.stockThreshold = threshold;
-      this.thresholdText = threshold === undefined ? '0' : `${threshold.threshold}`;
+      this.thresholdText = threshold === undefined ? '2' : `${threshold.threshold}`;
       this.thresholdEnabled = threshold?.enabled ?? false;
     } catch (_) {
       if (this.loadRequestCoordinator.isCurrent(requestId)) {
-        this.thresholdLoadError = '读取低库存阈值失败，请重试';
+        this.thresholdLoadError = '读取补货设置失败，请重试';
       }
     }
   }
@@ -1000,7 +1068,7 @@ export struct ItemDetailPage {
     }
     const value = this.thresholdText.trim();
     if (value.length === 0) {
-      this.actionError = '请输入低库存阈值';
+      this.actionError = '请输入需要补货的最低数量';
       return;
     }
     this.thresholdSaving = true;
@@ -1017,9 +1085,10 @@ export struct ItemDetailPage {
       this.thresholdEnabled = threshold.enabled;
       this.thresholdLoadError = '';
       AppEventBus.notifyDataChanged();
-      this.showToast('低库存设置已保存');
+      this.showActionSheet = false;
+      this.showToast('补货设置已保存');
     } catch (_) {
-      this.actionError = '保存低库存设置失败，请重试';
+      this.actionError = '保存补货设置失败，请重试';
     } finally {
       this.thresholdSaving = false;
     }
@@ -1027,15 +1096,15 @@ export struct ItemDetailPage {
 
   private lowStockStatusText(item: Item): string {
     if (this.stockThreshold === undefined) {
-      return '尚未保存低库存阈值。';
+      return '还未设置。未开启时，首页仅在物品用完后提示补货。';
     }
     if (!this.stockThreshold.enabled) {
-      return `已保存阈值 ${this.stockThreshold.threshold}${item.unit}，提醒当前停用。`;
+      return `补货数量已保存为 ${this.stockThreshold.threshold}${item.unit}，目前未启用。`;
     }
     if (this.isBelowLowStockThreshold(item)) {
-      return `当前总量 ${item.quantity}${item.unit}（包含借出），低于阈值 ${this.stockThreshold.threshold}${item.unit}。`;
+      return `当前总量 ${item.quantity}${item.unit}（包含借出），少于设置的 ${this.stockThreshold.threshold}${item.unit}。`;
     }
-    return `当前总量 ${item.quantity}${item.unit}（包含借出），未低于阈值 ${this.stockThreshold.threshold}${item.unit}。`;
+    return `当前总量 ${item.quantity}${item.unit}（包含借出），不少于设置的 ${this.stockThreshold.threshold}${item.unit}。`;
   }
 
   private isBelowLowStockThreshold(item: Item): boolean {

@@ -4,6 +4,7 @@ import { ReminderRecord } from '../../model/ReminderRecord';
 import { ReminderDao } from '../dao/ReminderDao';
 
 export interface ReminderRepositoryPort {
+  listScheduledBetween(startAt: number, endAt: number): Promise<Result<ReminderRecord[]>>;
   getByItemId(itemId: string): Promise<Result<ReminderRecord | undefined>>;
   save(record: ReminderRecord): Promise<Result<ReminderRecord>>;
   deleteByItemId(itemId: string): Promise<Result<void>>;
@@ -15,6 +16,11 @@ export class ReminderRepository implements ReminderRepositoryPort {
 
   constructor(dao: ReminderDao) {
     this.dao = dao;
+  }
+
+  async listScheduledBetween(startAt: number, endAt: number): Promise<Result<ReminderRecord[]>> {
+    try { return success(await this.dao.listScheduledBetween(startAt, endAt)); }
+    catch (error) { return failure<ReminderRecord[]>(toAppError(error, AppErrorCode.DATABASE_READ, '读取今日提醒失败，请重试')); }
   }
 
   async getByItemId(itemId: string): Promise<Result<ReminderRecord | undefined>> {

@@ -8,6 +8,7 @@ export enum RouteName {
   BATCH_LIST = 'pages/BatchListPage',
   BATCH_FORM = 'pages/BatchFormPage',
   LENDING = 'pages/LendingPage',
+  OUTSTANDING_LOANS = 'pages/OutstandingLoansPage',
   LOCATION_MANAGEMENT = 'pages/LocationManagementPage',
   CATEGORY_MANAGEMENT = 'pages/CategoryManagementPage'
 }

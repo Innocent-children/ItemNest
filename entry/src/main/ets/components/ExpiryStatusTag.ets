@@ -1,11 +1,13 @@
-import { expiryStatusLabel, ExpiryStatus } from '../model/ExpiryStatus';
+import { ExpiryStatus } from '../model/ExpiryStatus';
+import { expiryDescription } from '../service/ItemFlowPresentation';
 
 @Component
 export struct ExpiryStatusTag {
   @Prop status: ExpiryStatus = ExpiryStatus.NO_EXPIRY_DATE;
+  @Prop expirationDate: string = '';
 
   build() {
-    Text(expiryStatusLabel(this.status))
+    Text(expiryDescription(this.status, this.expirationDate))
       .fontSize($r('app.float.font_caption'))
       .fontWeight(FontWeight.Medium)
       .fontColor(this.textColor())

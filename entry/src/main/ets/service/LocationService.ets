@@ -1,6 +1,6 @@
 import { AppError, AppErrorCode } from '../common/AppError';
 import { failure, Result, success } from '../common/Result';
-import { createLocationId, LocationDraft, LocationRecord } from '../model/Location';
+import { createLocationId, LocationDraft, LocationRecord, LocationRenamePlan } from '../model/Location';
 import { LOCATION_PATH_MAX_LENGTH } from '../model/LocationPath';
 import { BatchRepositoryPort } from '../data/repository/BatchRepository';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
@@ -22,6 +22,39 @@ export class LocationService {
 
   async list(): Promise<Result<LocationRecord[]>> {
     return this.locations.listAll();
+  }
+
+  async rename(locationId: string, input: string): Promise<Result<void>> {
+    const name = input.trim();
+    if (name.length === 0 || name.length > 80 || name.includes('/')) {
+      return failure<void>(new AppError(AppErrorCode.VALIDATION, '位置名称需为 1 至 80 个字符，不能包含 /'));
+    }
+    return this.locations.renameAtomic((locations: LocationRecord[], paths: string[]): Result<LocationRenamePlan> => {
+      const original = locations.find((location: LocationRecord) => location.id === locationId);
+      if (original === undefined) {
+        return failure<LocationRenamePlan>(new AppError(AppErrorCode.NOT_FOUND, '位置不存在，请返回后重试'));
+      }
+      const parent = locations.find((location: LocationRecord) => location.id === original.parentId);
+      const nextPath = parent === undefined ? name : `${parent.path} / ${name}`;
+      const affected = locations.filter((location: LocationRecord) => this.isSameOrDescendant(location.path, original.path));
+      const unchanged = locations.filter((location: LocationRecord) => !this.isSameOrDescendant(location.path, original.path));
+      const movedPaths = affected.map((location: LocationRecord) => nextPath + location.path.substring(original.path.length));
+      const referencePaths = paths.filter((path: string) => this.isSameOrDescendant(path, original.path))
+        .map((path: string) => nextPath + path.substring(original.path.length));
+      if (movedPaths.concat(referencePaths).some((path: string) => path.length > LOCATION_PATH_MAX_LENGTH)) {
+        return failure<LocationRenamePlan>(new AppError(AppErrorCode.VALIDATION, '改名后有位置超过 200 个字符，请缩短名称'));
+      }
+      if (unchanged.some((location: LocationRecord) => movedPaths.indexOf(location.path) >= 0)) {
+        return failure<LocationRenamePlan>(new AppError(AppErrorCode.VALIDATION, '同一层级已有这个位置，请换一个名称'));
+      }
+      const now = this.clock();
+      return success<LocationRenamePlan>({ oldPath: original.path, newPath: nextPath, updatedAt: now,
+        locations: affected.map((location: LocationRecord): LocationRecord => ({
+          id: location.id, name: location.id === locationId ? name : location.name, parentId: location.parentId,
+          path: nextPath + location.path.substring(original.path.length), active: location.active,
+          createdAt: location.createdAt, updatedAt: now
+        })) });
+    });
   }
 
   async create(draft: LocationDraft): Promise<Result<LocationRecord>> {

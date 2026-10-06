@@ -1,4 +1,6 @@
 import { NavigationHelper } from '../navigation/NavigationHelper';
+import { ManagementRouteParams } from '../navigation/RouteContract';
+import { RouteName } from '../navigation/RouteName';
 import { PageHeader } from '../components/PageHeader';
 import { RoundedButtonStyle, uiSpring, nativeTitleOptions, nativeSheetOptions } from '../ui/VisualStyle';
 import { ErrorState } from '../components/ErrorState';
@@ -11,6 +13,8 @@ import { AppServices } from '../service/AppServices';
 export struct CategoryManagementPage {
   private pageScroller: Scroller = new Scroller();
   @State private showCreateSheet: boolean = false;
+  @State private editingId: string = '';
+  @State private selectionMode: boolean = false;
   @State private viewportWidth: number = 360;
   @StorageLink('itemtrace.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemtrace.safeAreaTop') private safeAreaTop: number = 0;
@@ -29,6 +33,7 @@ export struct CategoryManagementPage {
   private lastHandledDataRevision: number = -1;
 
   aboutToAppear(): void {
+    this.selectionMode = (NavigationHelper.getParams() as ManagementRouteParams | undefined)?.selectionMode === true;
     this.loadCategoriesForCurrentRevision(true);
   }
 
@@ -62,14 +67,14 @@ export struct CategoryManagementPage {
     .hideBackButton(true)
     .bindToScrollable([this.pageScroller])
     .backgroundColor($r('app.color.surface_app'))
-    .onBackPressed(() => NavigationHelper.handleBackPressed())
+    .onBackPressed(() => false)
   }
 
   @Builder
   private pageHeader() {
-    PageHeader({ title: '物品分类', subtitle: '按你的习惯，把物品整理好。', showBack: true,
+    PageHeader({ title: this.selectionMode ? '选择分类' : '物品分类', subtitle: '按你的习惯，把物品整理好。', showBack: true,
         actionText: '新增分类', actionIcon: $r('app.media.dock_add'), actionEnabled: !this.operating && !this.loading,
-        onAction: () => { this.actionError = ''; this.showCreateSheet = true; } })
+        onAction: () => { this.actionError = ''; this.editingId = ''; this.name = ''; this.showCreateSheet = true; } })
   }
 
   @Builder
@@ -86,8 +91,9 @@ export struct CategoryManagementPage {
             } else if (this.loadError.length > 0) {
               ErrorState({ message: this.loadError })
             }
+            Text('停用后不再出现在新增物品的选项中，已有物品保留原分类。改名会同步更新已有物品。').fontSize(12).fontColor($r('app.color.text_secondary')).width('100%')
             Text('全部分类').fontSize(18).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary')).width('100%').margin({ top: 12 })
-            ForEach(this.categories, (category: CategoryRecord) => {
+            ForEach(this.categories.filter((category: CategoryRecord) => !this.selectionMode || category.active), (category: CategoryRecord) => {
               Row() {
                 Image($r('app.media.ui_category')).width(24).height(24)
                   .fillColor($r('app.color.brand_primary')).margin({ right: 14 }).accessibilityLevel('no')
@@ -101,19 +107,31 @@ export struct CategoryManagementPage {
                     .fontColor($r('app.color.text_secondary'))
                 }
                 .layoutWeight(1).alignItems(HorizontalAlign.Start)
-                Button(category.active ? '停用' : '启用')
-                  .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-                  .fontColor($r('app.color.brand_primary'))
-                  .backgroundColor($r('app.color.surface_accent'))
-                  .borderRadius($r('app.float.radius_control'))
-                  .enabled(!this.operating)
-                  .scale({
-                    x: this.pressedAction === `toggle:${category.id}` && !this.reduceAnimation ? 0.96 : 1,
-                    y: this.pressedAction === `toggle:${category.id}` && !this.reduceAnimation ? 0.96 : 1
+                if (this.selectionMode && category.active) {
+                  Button('选择').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                    .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+                    .enabled(!this.operating).onClick(() => this.selectEntry(category.name))
+                }
+                Button('改名').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                  .fontColor($r('app.color.brand_primary')).backgroundColor(Color.Transparent)
+                  .enabled(!this.operating).onClick(() => {
+                    this.editingId = category.id; this.name = category.name; this.actionError = ''; this.showCreateSheet = true;
                   })
-                  .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-                  .onTouch((event: TouchEvent) => this.updatePressedAction(event, `toggle:${category.id}`))
-                  .onClick(() => this.toggleCategory(category))
+                if (!this.selectionMode) {
+                  Button(category.active ? '停用' : '启用')
+                    .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                    .fontColor($r('app.color.brand_primary'))
+                    .backgroundColor($r('app.color.surface_accent'))
+                    .borderRadius($r('app.float.radius_control'))
+                    .enabled(!this.operating)
+                    .scale({
+                      x: this.pressedAction === `toggle:${category.id}` && !this.reduceAnimation ? 0.96 : 1,
+                      y: this.pressedAction === `toggle:${category.id}` && !this.reduceAnimation ? 0.96 : 1
+                    })
+                    .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
+                    .onTouch((event: TouchEvent) => this.updatePressedAction(event, `toggle:${category.id}`))
+                    .onClick(() => this.toggleCategory(category))
+                }
               }
               .width('100%')
               .padding($r('app.float.space_3'))
@@ -134,7 +152,7 @@ export struct CategoryManagementPage {
     .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
     .bindSheet($$this.showCreateSheet, this.createSheet(), nativeSheetOptions({
       height: SheetSize.FIT_CONTENT, dragBar: true, showClose: true,
-      title: { title: '新增分类' }, backgroundColor: $r('app.color.surface_app'),
+      title: { title: this.editingId.length > 0 ? '修改分类名称' : '新增分类' }, backgroundColor: $r('app.color.surface_app'),
       preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
       width: this.viewportWidth >= 700 ? 560 : undefined,
       onWillDismiss: (action: DismissSheetAction) => { if (!this.operating) { action.dismiss(); } }
@@ -164,7 +182,7 @@ export struct CategoryManagementPage {
         }.width('100%').padding(24).alignItems(HorizontalAlign.Start)
       }.width('100%')
       Row() {
-        Button('新增分类')
+        Button(this.operating ? '正在保存…' : this.editingId.length > 0 ? '保存名称' : '新增分类')
           .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
           .width('100%')
           .fontColor($r('app.color.brand_on_primary'))
@@ -174,9 +192,33 @@ export struct CategoryManagementPage {
           .scale({ x: this.pressedAction === 'create' && !this.reduceAnimation ? 0.96 : 1, y: this.pressedAction === 'create' && !this.reduceAnimation ? 0.96 : 1 })
           .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
           .onTouch((event: TouchEvent) => this.updatePressedAction(event, 'create'))
-          .onClick(() => this.createCategory())
+          .onClick(() => this.saveEntry())
       }.width('100%').padding({ left: 24, right: 24, bottom: 24 })
     }.width('100%')
+  }
+
+  private selectEntry(value: string): void {
+    NavigationHelper.back({ url: RouteName.ITEM_FORM, params: { selectedCategory: value } });
+  }
+
+  private async saveEntry(): Promise<void> {
+    if (this.editingId.length === 0) { await this.createCategory(); return; }
+    if (this.operating) { return; }
+    this.operating = true;
+    this.actionError = '';
+    try {
+      const result = await AppServices.get().categories.rename(this.editingId, this.name);
+      if (!result.ok) { this.actionError = result.getError().message; return; }
+      this.showCreateSheet = false;
+      this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
+      await this.loadCategories(false);
+      if (this.selectionMode) {
+        const selected = this.categories.find((value: CategoryRecord) => value.id === this.editingId);
+        if (selected !== undefined) { this.selectEntry(selected.name); }
+      }
+      this.showToast('分类名称已更新，已有物品已同步');
+    } catch (_) { this.actionError = '改名失败，请重试'; }
+    finally { this.operating = false; }
   }
 
   private async loadCategories(showLoading: boolean = true): Promise<void> {
@@ -213,6 +255,11 @@ export struct CategoryManagementPage {
         return;
       }
       this.showCreateSheet = false;
+      if (this.selectionMode) {
+        AppEventBus.notifyDataChanged();
+        this.selectEntry(result.getData().name);
+        return;
+      }
       this.name = '';
       this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadCategories(false);

@@ -102,7 +102,7 @@ export class AppServices {
     this.updateItem = new ItemUpdateService(repository, validator, () => Date.now(), batchRepository);
     const preferenceRepository = new PreferenceRepository(context);
     const preferenceService = new PreferenceService(preferenceRepository);
-    this.appIcon = new AppIconService(new SystemAppIconAdapter(), preferenceRepository);
+    this.appIcon = new AppIconService(new SystemAppIconAdapter());
     const reminderRepository = new ReminderRepository(new ReminderDao(database));
     const reminderService = new ReminderService(reminderRepository, preferenceService, new SystemReminderAdapter(), repository);
     const assetRepository = new AssetRepository(new AssetDao(database));

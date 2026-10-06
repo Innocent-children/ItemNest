@@ -8,13 +8,18 @@ import { StockThreshold } from '../model/StockThreshold';
 import { ExpiryService } from './ExpiryService';
 
 export class HomeSummary {
+  readonly totalItemCount: number;
+  readonly unconfiguredStockCount: number;
   readonly recentItems: ItemSummary[];
   readonly restockItems: ItemSummary[];
   readonly dueSoonCount: number;
   readonly restockCount: number;
   readonly expiryAttentionItems: ItemSummary[];
 
-  constructor(recentItems: ItemSummary[], expiryAttentionItems: ItemSummary[], restockItems: ItemSummary[]) {
+  constructor(recentItems: ItemSummary[], expiryAttentionItems: ItemSummary[], restockItems: ItemSummary[], totalItemCount: number,
+    unconfiguredStockCount: number) {
+    this.totalItemCount = totalItemCount;
+    this.unconfiguredStockCount = unconfiguredStockCount;
     this.recentItems = recentItems;
     this.expiryAttentionItems = expiryAttentionItems;
     this.restockItems = restockItems;
@@ -63,7 +68,8 @@ export class HomeSummaryService {
     }
     expiryAttentionItems.sort((left: ItemSummary, right: ItemSummary) =>
       (left.expirationDate ?? '').localeCompare(right.expirationDate ?? ''));
-    return success(new HomeSummary(recentItems, expiryAttentionItems, restockItems));
+    return success(new HomeSummary(recentItems, expiryAttentionItems, restockItems, items.length,
+      items.filter((item: Item) => !thresholds.some((threshold: StockThreshold) => threshold.itemId === item.id)).length));
   }
 
   private toSummaries(items: Item[], now: Date): ItemSummary[] {

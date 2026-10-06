@@ -24,6 +24,8 @@ interface SearchConditionParams {
 
 @Component
 export struct SearchPage {
+  @State private scanning: boolean = false;
+  @State private filterNotice: string = '';
   private focusOnShown: boolean = false;
   @State private homeTransition: boolean = false;
   @StorageLink('itemtrace.searchExpanded') private searchExpanded: boolean = true;
@@ -160,16 +162,21 @@ export struct SearchPage {
             this.scheduleSearch();
           }, onSubmit: () => this.search(true) }).layoutWeight(1)
         }
-        if (this.isMainTab) {
-        Button('筛选').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-          .height(48).fontSize(13).backgroundColor($r('app.color.surface_accent'))
-          .fontColor($r('app.color.brand_primary')).onClick(() => this.openFilters())
-        }
       }.width('100%').height(68).constraintSize({ maxWidth: 960 })
-        .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: 16 })
+        .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: 12 })
         .onAreaChange(() => { if (this.homeTransition) { SharedRouteMotion.targetReady(); } })
+      Row({ space: 12 }) {
+        Button(this.scanning ? '正在扫码…' : '扫码查找').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .fontSize(13).fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+          .enabled(!this.scanning).onClick(() => this.scanToSearch())
+        Button('位置与分类').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .fontSize(13).fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+          .onClick(() => this.openFilters())
+      }.width('100%').constraintSize({ maxWidth: 960 })
+        .padding({ left: 24, right: 24, bottom: 12 })
       Scroll(this.pageScroller) {
         Column({ space: 16 }) {
+          if (this.filterNotice.length > 0) { Text(this.filterNotice).fontSize(12).fontColor($r('app.color.text_secondary')) }
           if (this.selectedLocation.length > 0 || this.selectedCategory.length > 0) {
             Flex({ wrap: FlexWrap.Wrap }) {
               if (this.selectedLocation.length > 0) {
@@ -266,6 +273,10 @@ export struct SearchPage {
               .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
               .onClick(() => this.loadFilterOptions(true))
           } else {
+            if (this.locationPaths.length === 0 && this.categories.length === 0) {
+              Text('还没有物品填写位置或分类。为物品补充信息后，就能在这里筛选。')
+                .fontSize(13).fontColor($r('app.color.text_secondary'))
+            }
             Text('存放位置').fontSize(18).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
             Flex({ wrap: FlexWrap.Wrap }) {
               this.filterChoice('全部位置', '', 'location')
@@ -414,6 +425,19 @@ export struct SearchPage {
       this.filterErrorMessage = '';
       this.locationPaths = result.getData().locationPaths;
       this.categories = result.getData().categories;
+      if (!showLoading) {
+        let changed = false;
+        if (this.selectedLocation.length > 0 && this.locationPaths.indexOf(this.selectedLocation) < 0) {
+          this.selectedLocation = ''; changed = true;
+        }
+        if (this.selectedCategory.length > 0 && this.categories.indexOf(this.selectedCategory) < 0) {
+          this.selectedCategory = ''; changed = true;
+        }
+        if (changed) {
+          this.filterNotice = '位置或分类已变动，已移除不可用的筛选条件。';
+          this.search(false, false, true);
+        }
+      }
     } catch (_) {
       if (this.requestCoordinator.isCurrentFilterOptions(requestId) &&
         (showLoading || this.locationPaths.length + this.categories.length === 0)) {
@@ -516,6 +540,7 @@ export struct SearchPage {
   }
 
   private clearQuery(): void {
+    this.filterNotice = "";
     this.inputSearchVersion++;
     this.requestCoordinator.invalidateQueryRequests();
     this.name = '';
@@ -550,6 +575,26 @@ export struct SearchPage {
       this.selectedLocation.length === 0 ? undefined : this.selectedLocation,
       this.selectedCategory.length === 0 ? undefined : this.selectedCategory
     );
+  }
+
+  private async scanToSearch(): Promise<void> {
+    const context = this.getUIContext().getHostContext();
+    if (context === undefined || this.scanning) { return; }
+    this.searchController.stopEditing();
+    this.scanning = true;
+    try {
+      const result = await AppServices.get().scan.scan(context);
+      if (!result.ok) { this.searchErrorMessage = result.getError().message; return; }
+      const barcode = result.getData();
+      if (barcode === undefined) { return; }
+      if (barcode.length > 256) { this.searchErrorMessage = '条码内容过长，请输入物品名称查找。'; return; }
+      this.inputSearchVersion++;
+      this.name = barcode;
+      this.selectedLocation = '';
+      this.selectedCategory = '';
+      await this.search(true);
+    } catch (_) { this.searchErrorMessage = '扫码暂不可用，请输入物品名称或条码。'; }
+    finally { this.scanning = false; }
   }
 
   private async loadSuggestions(): Promise<void> {

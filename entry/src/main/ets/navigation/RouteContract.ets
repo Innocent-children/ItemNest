@@ -3,6 +3,7 @@ import { failure, Result, success } from '../common/Result';
 import { ItemQuery } from '../model/ItemQuery';
 
 export interface ItemRouteParams {
+  section?: string;
   itemId?: string;
 }
 
@@ -23,12 +24,25 @@ export interface BatchRouteParams extends ItemRouteParams {
 }
 
 export interface ItemListRouteParams {
-  attention?: 'expiry' | 'restock';
+  section?: string;
+  attention?: 'expiry' | 'restock' | 'reminders';
   query?: ItemQuery;
 }
 
-export interface NavigationRouteParams {
-  attention?: 'expiry' | 'restock';
+export interface ManagementRouteParams {
+  selectionMode?: boolean;
+  selectedLocation?: string;
+  selectedCategory?: string;
+}
+
+export interface LendingRouteParams extends ItemRouteParams {
+  borrowEventId?: string;
+}
+
+export interface NavigationRouteParams extends ManagementRouteParams {
+  section?: string;
+  borrowEventId?: string;
+  attention?: 'expiry' | 'restock' | 'reminders';
   itemId?: string;
   batchId?: string;
   mode?: string;

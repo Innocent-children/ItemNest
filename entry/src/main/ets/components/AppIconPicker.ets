@@ -5,7 +5,6 @@ import { LoadingState } from './LoadingState';
 
 @Component
 export struct AppIconPicker {
-  @Prop firstLaunch: boolean = false;
   onSelected: (icon: AppIcon) => void = () => {};
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @State private selected: AppIcon | undefined = undefined;
@@ -33,7 +32,7 @@ export struct AppIconPicker {
     const state = result.getData();
     this.supported = state.supported;
     this.current = state.current;
-    this.selected = this.firstLaunch ? undefined : state.current;
+    this.selected = state.current;
     this.ready = true;
   }
 
@@ -60,18 +59,8 @@ export struct AppIconPicker {
   build() {
     Scroll() {
       Column({ space: 24 }) {
-        if (this.firstLaunch) {
-          Column({ space: 12 }) {
-            Text('欢迎来到我的家当').fontSize(14).fontColor($r('app.color.brand_primary'))
-            Text('选一位整理小伙伴').fontSize(28).fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.text_primary')).textAlign(TextAlign.Center)
-            Text('让喜欢的图标，陪你收好生活。\n以后也可以在「我的空间」中更换。')
-              .fontSize(14).lineHeight(22).fontColor($r('app.color.text_secondary')).textAlign(TextAlign.Center)
-          }.width('100%').margin({ bottom: 12 })
-        } else {
-          Text('选择喜欢的小伙伴，换一个桌面上的好心情。')
-            .fontSize(14).fontColor($r('app.color.text_secondary')).textAlign(TextAlign.Center)
-        }
+        Text('选择喜欢的图标，随时可以更换。')
+          .fontSize(14).fontColor($r('app.color.text_secondary')).textAlign(TextAlign.Center)
         if (this.loading) {
           LoadingState({ text: '正在读取应用图标…' })
         } else if (this.ready) {
@@ -91,7 +80,7 @@ export struct AppIconPicker {
         if (!this.loading && !this.ready) {
           Button('重新读取').onClick(() => this.load())
         } else if (this.ready && this.supported) {
-          Button(this.saving ? '正在应用…' : this.firstLaunch ? '用这个图标，开始整理' : '使用这个图标')
+          Button(this.saving ? '正在应用…' : '使用这个图标')
             .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
             .width('100%').height(52).fontSize(16).fontWeight(FontWeight.Medium)
             .fontColor($r('app.color.brand_on_primary')).backgroundColor($r('app.color.brand_primary'))
@@ -100,7 +89,7 @@ export struct AppIconPicker {
         }
       }.width('100%').constraintSize({ maxWidth: 520 }).padding(24)
     }.width('100%').height('100%')
-      .align(this.firstLaunch ? Alignment.Center : Alignment.TopStart)
+      .align(Alignment.TopStart)
   }
 
   @Builder
@@ -110,7 +99,7 @@ export struct AppIconPicker {
         Image(foreground).width('100%').aspectRatio(1).objectFit(ImageFit.Contain)
           .backgroundColor('#FFF6E4').borderRadius(26).clip(true).accessibilityLevel('no')
         Text(title).fontSize(15).fontWeight(FontWeight.Medium).fontColor($r('app.color.text_primary'))
-        Text(this.selected === icon ? '已选择' : !this.firstLaunch && this.current === icon ? '当前使用' : '点击选择')
+        Text(this.selected === icon ? '已选择' : this.current === icon ? '当前使用' : '点击选择')
           .fontSize(12).fontColor(this.selected === icon ? $r('app.color.brand_primary') : $r('app.color.text_secondary'))
       }.width('100%').padding(12)
     }.attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1)

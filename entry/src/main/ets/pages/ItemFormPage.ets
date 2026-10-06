@@ -1,4 +1,6 @@
 import { OptionalDateField } from '../components/OptionalDateField';
+import { notificationManager } from '@kit.NotificationKit';
+import { ManagementRouteParams } from '../navigation/RouteContract';
 import { PageHeader } from '../components/PageHeader';
 import { RoundedButtonStyle, uiSpring, nativeTitleOptions } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
@@ -76,6 +78,8 @@ export struct ItemFormPage {
   aboutToAppear(): void {
     NavigationHelper.registerBackHandler(this.backHandler);
     this.readRoute();
+    this.selectionListenerId = NavigationHelper.subscribeRouteResult((result: Object | undefined) => this.receiveSelection(result));
+    this.refreshNotificationHint();
     this.loadManagedLocations();
     this.loadCategoryOptions();
     if (!this.editMode) {
@@ -86,6 +90,7 @@ export struct ItemFormPage {
 
   aboutToDisappear(): void {
     NavigationHelper.unregisterBackHandler(this.backHandler);
+    NavigationHelper.unsubscribeRouteResult(this.selectionListenerId);
   }
 
   onPageShow(): void {
@@ -95,6 +100,7 @@ export struct ItemFormPage {
 
   private onDataRevisionChanged(): void {
     this.loadCategoryOptions();
+    this.loadManagedLocations();
     if (this.editMode && this.existingLoaded && this.itemId.length > 0 && !this.saving) {
       this.refreshManagedBatchFields();
     }
@@ -110,10 +116,37 @@ export struct ItemFormPage {
     .backgroundColor($r('app.color.surface_app'))
     .onBackPressed(() => NavigationHelper.handleBackPressed())
     .systemTransition(NavigationSystemTransitionType.SLIDE_BOTTOM)
-    .onShown(() => this.openQuickEntry())
+    .onShown(() => { this.openQuickEntry(); this.refreshNotificationHint(); })
   }
 
   private quickEntryHandled: boolean = false;
+  private selectionListenerId: number = 0;
+  private defaultReminderDays: number = 7;
+  @State private notificationHint: string = '正在检查到期通知…';
+  @State private notificationAction: string = '设置到期通知';
+
+  private async refreshNotificationHint(): Promise<void> {
+    const preferences = await AppServices.get().preferences.get();
+    if (!preferences.ok) { this.notificationHint = '暂时无法读取到期通知设置，请在提醒设置中重试。'; return; }
+    this.defaultReminderDays = preferences.getData().defaultReminderDays;
+    try {
+      const authorized = await notificationManager.isNotificationEnabled();
+      this.notificationHint = !preferences.getData().reminderEnabled ? '到期通知已关闭，保存日期不会开启通知。可在设置中查看通知处理结果。' :
+        !authorized ? '系统通知权限已关闭，需授权后才能收到到期通知。' : '到期通知已开启；保存后，为尚未过期且有库存的物品安排通知。';
+      this.notificationAction = !preferences.getData().reminderEnabled ? '开启到期通知' : !authorized ? '去授权通知' : '管理到期通知';
+    } catch (_) { this.notificationHint = '暂时无法确认通知权限，请检查提醒设置。'; }
+  }
+
+  private receiveSelection(result: Object | undefined): void {
+    if (!NavigationHelper.isCurrentBackHandler(this.backHandler)) { return; }
+    const params = result as ManagementRouteParams | undefined;
+    if (params?.selectedLocation !== undefined) { this.locationPath = params.selectedLocation; }
+    if (params?.selectedCategory !== undefined) { this.categoryValue = params.selectedCategory; }
+    this.loadManagedLocations();
+    this.loadCategoryOptions();
+    this.refreshNotificationHint();
+  }
+
 
   private openQuickEntry(): void {
     if (this.quickEntryHandled || this.editMode) { return; }
@@ -131,7 +164,7 @@ export struct ItemFormPage {
   @Builder
   private pageHeader() {
     PageHeader({ title: this.editMode ? '编辑物品' : '记录新物品', showBack: true,
-          subtitle: this.editMode ? '为物品更新一份档案。' : '记下名称和位置，下次一找就到。',
+          subtitle: this.editMode ? '更新名称和存放信息。' : '填写名称和位置；扫码与拍照用于补充资料。',
           actionText: '扫码', actionIcon: $r('app.media.ui_scan'), actionEnabled: !this.saving && !this.scanning,
           onBack: () => this.requestClose(), onAction: () => { this.showNotesSection = true; this.scanBarcode(); } })
   }
@@ -304,6 +337,10 @@ export struct ItemFormPage {
       this.fieldTitle(this.editMode && this.singleBatchId.length === 0 ? '默认存放位置' : '放在哪里？',
         this.editMode && this.singleBatchId.length === 0 ? '未填写批次位置时使用这里；各批次位置可在库存明细修改。' : '记下位置，下次一找就到。')
       LocationInput({ locationPath: $locationPath })
+      Button('选择或新增位置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+        .enabled(!this.saving).onClick(() => NavigationHelper.pushUrl({ url: RouteName.LOCATION_MANAGEMENT,
+          params: { selectionMode: true } }))
       if (this.managedLocations.length > 0) {
         Text('常用位置')
           .fontSize($r('app.float.font_body'))
@@ -322,6 +359,10 @@ export struct ItemFormPage {
   @Builder
   private categorySection() {
     Column({ space: $r('app.float.space_3') }) {
+      Button('选择或新增分类').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+        .enabled(!this.saving).onClick(() => NavigationHelper.pushUrl({ url: RouteName.CATEGORY_MANAGEMENT,
+          params: { selectionMode: true } }))
       Text('分类（可选）')
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
@@ -338,7 +379,7 @@ export struct ItemFormPage {
           .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
           .onClick(() => this.loadCategoryOptions())
       } else if (this.categoryOptions.length === 0) {
-        Text(this.categoryLoading ? '正在读取分类…' : '暂无启用的分类，可在设置中管理。')
+        Text(this.categoryLoading ? '正在读取分类…' : '还没有可用分类，点击上方按钮新增。')
           .fontSize($r('app.float.font_caption'))
           .fontColor($r('app.color.text_secondary'))
       }
@@ -445,6 +486,10 @@ export struct ItemFormPage {
   @Builder
   private expirySection() {
     Column({ space: $r('app.float.space_3') }) {
+      Text(this.notificationHint).fontSize(13).fontColor($r('app.color.text_secondary')).width('100%')
+      Button(this.notificationAction).attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+        .enabled(!this.saving).onClick(() => NavigationHelper.pushUrl({ url: RouteName.SETTINGS, params: { section: 'reminders' } }))
       Text('到期日期（可选）')
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
@@ -454,7 +499,7 @@ export struct ItemFormPage {
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
-      TextInput({ text: this.reminderDaysText, placeholder: '未填写时按 7 天计算状态' })
+      TextInput({ text: this.reminderDaysText, placeholder: '未填写时使用默认天数' })
         .borderWidth(1)
         .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'reminderDaysText'))
         .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
@@ -826,7 +871,7 @@ export struct ItemFormPage {
   private createDraft(): ItemDraft {
     const quantityText = this.editMode && this.singleBatchId.length === 0 ? this.loadedQuantityText : this.quantityText;
     const quantity = quantityText.trim().length === 0 ? undefined : Number(quantityText);
-    const reminderDays = this.reminderDaysText.trim().length === 0 ? undefined : Number(this.reminderDaysText);
+    const reminderDays = this.reminderDaysText.trim().length === 0 ? this.defaultReminderDays : Number(this.reminderDaysText);
     return {
       name: this.name,
       quantity: quantity,
@@ -1015,6 +1060,7 @@ export struct ItemFormPage {
           this.showToast('条码内容超过 256 个字符，请手动整理后输入');
         } else {
           this.scanText = scanned;
+          this.showToast('条码已填写，请继续填写名称和存放位置');
         }
       }
     } catch (_) {

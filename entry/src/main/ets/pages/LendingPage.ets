@@ -1,6 +1,7 @@
 import { InventoryMetrics } from '../components/InventoryMetrics';
 import { PageHeader } from '../components/PageHeader';
 import { RoundedButtonStyle, uiSpring, nativeTitleOptions, nativeSheetOptions } from '../ui/VisualStyle';
+import { LendingRouteParams } from '../navigation/RouteContract';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
@@ -42,6 +43,7 @@ export struct LendingPage {
   @State private selectedBorrowId: string = '';
   @State private editEventId: string = '';
   private itemId: string = '';
+  private initialBorrowEventId: string = '';
   private lastHandledDataRevision: number = -1;
   private loadRequests: LatestRequestCoordinator = new LatestRequestCoordinator();
   private scroller: Scroller = new Scroller();
@@ -55,6 +57,7 @@ export struct LendingPage {
       return;
     }
     this.itemId = itemIdResult.getData();
+    this.initialBorrowEventId = (params as LendingRouteParams | undefined)?.borrowEventId ?? '';
     this.loadStateForCurrentRevision(true);
   }
 
@@ -391,6 +394,12 @@ export struct LendingPage {
         this.events = events.getData();
         this.contentLoaded = true;
         this.loadError = '';
+        if (this.initialBorrowEventId.length > 0) {
+          const loan = this.outstandingLoans.find((value: OutstandingLoan) => value.borrowEvent.id === this.initialBorrowEventId);
+          this.initialBorrowEventId = '';
+          if (loan !== undefined) { this.startReturn(loan); this.showOperationSheet = true; }
+          else { this.actionError = '这笔借出已归还或撤销，列表已更新。'; }
+        }
       }
     } catch (_) {
       if (this.loadRequests.isCurrent(requestId)) {

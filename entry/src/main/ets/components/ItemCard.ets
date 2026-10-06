@@ -1,17 +1,20 @@
+import { NavigationHelper } from '../navigation/NavigationHelper';
+import { RouteName } from '../navigation/RouteName';
 import { localImageSource } from '../ui/ImageSource';
 import { hdsEffect } from '@kit.UIDesignKit';
 import { SharedRouteMotion } from '../ui/SharedRouteMotion';
 import { uiSpring, uiReveal, numericMotion } from '../ui/VisualStyle';
 import { ItemSummary } from '../model/Item';
 import { ExpiryStatusTag } from './ExpiryStatusTag';
-import { expiryStatusLabel, ExpiryStatus } from '../model/ExpiryStatus';
-import { activeLocationText } from '../service/ItemFlowPresentation';
+import { ExpiryStatus } from '../model/ExpiryStatus';
+import { activeLocationText, expiryDescription } from '../service/ItemFlowPresentation';
 
 @Component
 export struct ItemCard {
   @StorageLink('itemtrace.reduceAnimation') private reduceAnimation: boolean = false;
   @StorageLink('itemtrace.sharedItemSource') private sharedItemSource: string = '';
   @Prop heroKey: string = 'collection';
+  @Prop detailSection: string = '';
   @Prop @Watch('onItemChanged') item: ItemSummary;
   @State private photoFailed: boolean = false;
   @State private pressed: boolean = false;
@@ -56,7 +59,7 @@ export struct ItemCard {
               .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
           }.width('100%')
           if (this.item.expiryStatus === ExpiryStatus.EXPIRED || this.item.expiryStatus === ExpiryStatus.DUE_SOON) {
-            ExpiryStatusTag({ status: this.item.expiryStatus })
+            ExpiryStatusTag({ status: this.item.expiryStatus, expirationDate: this.item.expirationDate ?? '' })
           } else if (this.item.category !== undefined) {
             Text(this.item.category).fontSize(11).fontColor($r('app.color.text_tertiary'))
               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -74,7 +77,7 @@ export struct ItemCard {
     .stateEffect(false)
     .visualEffect(new hdsEffect.HdsEffectBuilder().pressShadow(hdsEffect.PressShadowType.BLEND_WHITE).buildEffect())
     .backgroundColor(this.pressed ? $r('app.color.surface_accent') : $r('app.color.surface_card'))
-    .accessibilityText(`${this.item.name}，${this.locationText()}，总量${this.item.quantity}${this.item.unit}，${expiryStatusLabel(this.item.expiryStatus)}，查看详情`)
+    .accessibilityText(`${this.item.name}，${this.locationText()}，总量${this.item.quantity}${this.item.unit}，${expiryDescription(this.item.expiryStatus, this.item.expirationDate ?? '')}，查看详情`)
     .scale({ x: this.pressed && !this.reduceAnimation ? 0.97 : 1, y: this.pressed && !this.reduceAnimation ? 0.97 : 1 })
     .animation(uiSpring(this.reduceAnimation, 0.32, 0.82))
     .onTouch((event: TouchEvent) => {
@@ -84,7 +87,11 @@ export struct ItemCard {
     .transition(uiReveal(this.reduceAnimation))
     .onClick(() => {
       this.pressed = false;
-      SharedRouteMotion.openItem(this.getUIContext(), this.item, this.thumbnailKey(), this.reduceAnimation);
+      if (this.detailSection.length > 0) {
+        NavigationHelper.pushUrl({ url: RouteName.ITEM_DETAIL, params: { itemId: this.item.id, section: this.detailSection } });
+      } else {
+        SharedRouteMotion.openItem(this.getUIContext(), this.item, this.thumbnailKey(), this.reduceAnimation);
+      }
     })
   }
 }
