@@ -65,6 +65,6 @@ export class ItemUpdateService {
       createdAt: existing.createdAt,
       updatedAt: this.clock()
     };
-    return this.repository.update(updatedItem, singleBatchId);
+    return this.repository.update(updatedItem, singleBatchId, true);
   }
 }

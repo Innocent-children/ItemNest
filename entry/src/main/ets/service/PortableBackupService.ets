@@ -14,6 +14,7 @@ import { AssetRepositoryPort } from '../data/repository/AssetRepository';
 import { StockThresholdRepository } from '../data/repository/StockThresholdRepository';
 import { RdbDatabase } from '../data/rdb/RdbDatabase';
 import { migrateLendingRelations } from '../data/rdb/TraceEventSchema';
+import { backfillLocationUsage } from '../data/dao/LocationDao';
 import { Item, PhotoState } from '../model/Item';
 import { ItemAsset, AssetSource } from '../model/ItemAsset';
 import { ExportService } from './ExportService';
@@ -276,7 +277,8 @@ export class PortableBackupService {
     await store.execute('DELETE FROM managed_category');
     for (const location of payload.locations) {
       await store.insert('managed_location', { id: location.id, name: location.name, parent_id: location.parentId ?? null,
-        path: location.path, active: location.active ? 1 : 0, created_at: location.createdAt, updated_at: location.updatedAt });
+        path: location.path, active: location.active ? 1 : 0, created_at: location.createdAt, updated_at: location.updatedAt,
+        last_used_at: location.lastUsedAt ?? null });
     }
     for (const label of payload.locationLabels ?? []) {
       await store.insert('location_label', { token: label.token, location_id: label.locationId });
@@ -322,5 +324,6 @@ export class PortableBackupService {
       predicates.equalTo('id', item.id);
       await store.update({ updated_at: item.updatedAt }, predicates);
     }
+    await backfillLocationUsage(store);
   }
 }

@@ -11,6 +11,7 @@ import refreshContractTest from './RefreshContract.test';
 import searchRequestCoordinatorTest from './SearchRequestCoordinator.test';
 import barcodeMigrationTest from './BarcodeMigration.test';
 import portableBackupDeviceTest from './PortableBackupDevice.test';
+import locationHistoryDeviceTest from './LocationHistoryDevice.test';
 
 export default function testsuite() {
   systemCapabilitiesDeviceTest();
@@ -26,4 +27,5 @@ export default function testsuite() {
   searchRequestCoordinatorTest();
   barcodeMigrationTest();
   portableBackupDeviceTest();
+  locationHistoryDeviceTest();
 }

@@ -9,7 +9,7 @@ import { createAssetSchema } from './AssetSchema';
 import { createBatchSchema } from './BatchSchema';
 import { createStockThresholdSchema } from './StockThresholdSchema';
 import { createTraceEventSchema, migrateLendingRelations } from './TraceEventSchema';
-import { createLocationSchema } from './LocationSchema';
+import { addLocationUsage, createLocationSchema } from './LocationSchema';
 import { createCategorySchema } from './CategorySchema';
 import { createSearchHistorySchema } from './SearchHistorySchema';
 import { createInventoryIntegritySchema, updateInventoryIntegritySchema } from './InventoryIntegritySchema';
@@ -65,6 +65,7 @@ export async function migrateToLatest(store: relationalStore.RdbStore): Promise<
       await updateInventoryIntegritySchema(transaction);
     }
     if (currentVersion < 13) { await createLocationLabelSchema(transaction); }
+    if (currentVersion < 14) { await addLocationUsage(transaction); }
     await transaction.execute(`PRAGMA user_version = ${DATABASE_VERSION}`);
     await transaction.commit();
   } catch (error) {

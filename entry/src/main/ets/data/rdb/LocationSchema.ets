@@ -1,5 +1,6 @@
 import { relationalStore } from '@kit.ArkData';
 import { SchemaExecutor } from './SchemaExecutor';
+import { backfillLocationUsage } from '../dao/LocationDao';
 
 export const LOCATION_TABLE: string = 'managed_location';
 
@@ -40,4 +41,9 @@ export async function createLocationSchema(store: relationalStore.Transaction): 
     await SchemaExecutor.execute(store, LOCATION_INDEXES[index]);
   }
   await SchemaExecutor.execute(store, MIGRATE_ITEM_LOCATIONS);
+}
+
+export async function addLocationUsage(store: relationalStore.Transaction): Promise<void> {
+  await SchemaExecutor.execute(store, 'ALTER TABLE managed_location ADD COLUMN last_used_at INTEGER');
+  await backfillLocationUsage(store);
 }

@@ -52,7 +52,7 @@ export class LocationService {
         locations: affected.map((location: LocationRecord): LocationRecord => ({
           id: location.id, name: location.id === locationId ? name : location.name, parentId: location.parentId,
           path: nextPath + location.path.substring(original.path.length), active: location.active,
-          createdAt: location.createdAt, updatedAt: now
+          createdAt: location.createdAt, updatedAt: now, lastUsedAt: location.lastUsedAt
         })) });
     });
   }

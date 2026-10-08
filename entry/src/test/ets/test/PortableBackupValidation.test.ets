@@ -21,6 +21,18 @@ function backup(): PortableBackupPayload {
 
 export default function portableBackupValidationTest() {
   describe('Portable backup validation', () => {
+    it('历史位置的完整名称和最近使用时间随备份保留，拒绝无效时间', 0, () => {
+      const validator = new PortableBackupValidation();
+      const payload = backup();
+      const path = '柜'.repeat(100);
+      payload.locations.push({ id: 'history-location', name: path, path: path, active: true,
+        createdAt: 1, updatedAt: 1, lastUsedAt: 20 });
+      const valid = validator.validate(JSON.stringify(payload));
+      expect(valid.ok).assertTrue();
+      expect(valid.getData().locations[0].lastUsedAt).assertEqual(20);
+      payload.locations[0].lastUsedAt = -1;
+      expect(validator.validate(JSON.stringify(payload)).ok).assertFalse();
+    });
     it('收纳标签随位置备份且拒绝悬空和重复标签', 0, () => {
       const validator = new PortableBackupValidation();
       const payload = backup();

@@ -5,6 +5,7 @@ import { LocationRecord, LocationRenamePlan } from '../../model/Location';
 import { LOCATION_TABLE } from '../rdb/LocationSchema';
 import { RdbDatabase } from '../rdb/RdbDatabase';
 import { ResultSetReader } from '../rdb/ResultSetReader';
+import { readLocationRecord } from '../dao/LocationDao';
 
 export interface LocationRepositoryPort {
   renameAtomic(decide: (locations: LocationRecord[], referencedPaths: string[]) => Result<LocationRenamePlan>): Promise<Result<void>>;
@@ -30,7 +31,7 @@ export class LocationRepository implements LocationRepositoryPort {
         const rows = await store.querySql('SELECT * FROM managed_location');
         const locations: LocationRecord[] = [];
         try {
-          while (ResultSetReader.goToNextRow(rows)) { locations.push(this.mapLocation(rows)); }
+          while (ResultSetReader.goToNextRow(rows)) { locations.push(readLocationRecord(rows)); }
         } finally { ResultSetReader.close(rows); }
         const references = await store.querySql('SELECT location_path FROM item UNION SELECT location_path FROM batch UNION SELECT location_path FROM search_history');
         const paths: string[] = [];
@@ -119,7 +120,7 @@ export class LocationRepository implements LocationRepositoryPort {
       const locations: LocationRecord[] = [];
       try {
         while (ResultSetReader.goToNextRow(resultSet)) {
-          locations.push(this.mapLocation(resultSet));
+          locations.push(readLocationRecord(resultSet));
         }
       } finally {
         ResultSetReader.close(resultSet);
@@ -130,26 +131,6 @@ export class LocationRepository implements LocationRepositoryPort {
     }
   }
 
-  private mapLocation(resultSet: relationalStore.ResultSet): LocationRecord {
-    return {
-      id: this.readString(resultSet, 'id') ?? '',
-      name: this.readString(resultSet, 'name') ?? '',
-      parentId: this.readString(resultSet, 'parent_id'),
-      path: this.readString(resultSet, 'path') ?? '',
-      active: this.readLong(resultSet, 'active') === 1,
-      createdAt: this.readLong(resultSet, 'created_at') ?? 0,
-      updatedAt: this.readLong(resultSet, 'updated_at') ?? 0
-    };
-  }
-
-  private readString(resultSet: relationalStore.ResultSet, column: string): string | undefined {
-    return ResultSetReader.readString(resultSet, column);
-  }
-
-  private readLong(resultSet: relationalStore.ResultSet, column: string): number | undefined {
-    return ResultSetReader.readLong(resultSet, column);
-  }
-
   private toValues(location: LocationRecord): relationalStore.ValuesBucket {
     return {
       id: location.id,
@@ -158,7 +139,8 @@ export class LocationRepository implements LocationRepositoryPort {
       path: location.path,
       active: location.active ? 1 : 0,
       created_at: location.createdAt,
-      updated_at: location.updatedAt
+      updated_at: location.updatedAt,
+      last_used_at: location.lastUsedAt ?? null
     };
   }
 }

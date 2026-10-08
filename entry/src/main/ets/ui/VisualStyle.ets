@@ -1,23 +1,7 @@
-import { curves, uiMaterial, SymbolGlyphModifier } from '@kit.ArkUI';
+import { curves, uiMaterial } from '@kit.ArkUI';
 import { hdsEffect } from '@kit.UIDesignKit';
 
 export const dockBarHeight: number = 56;
-
-/**
- * 图标、文字和点击反馈都由原生页签绘制，避免叠加两套选中背景。
- */
-export function bottomTabStyle(label: string, symbol: Resource, reduceAnimation: boolean): BottomTabBarStyle {
-  return BottomTabBarStyle.of({
-    normal: new SymbolGlyphModifier(symbol).fontSize(22).fontColor([$r('app.color.text_secondary')])
-      .symbolEffect(new BounceSymbolEffect(), -1),
-    selected: new SymbolGlyphModifier(symbol).fontSize(22).fontColor([$r('app.color.brand_primary')])
-      .symbolEffect(new BounceSymbolEffect(), reduceAnimation ? -1 : 1)
-  }, label)
-    .layoutMode(LayoutMode.VERTICAL)
-    .padding({ top: 5, bottom: 5, left: 4, right: 4 })
-    .labelStyle({ font: { size: 11, weight: FontWeight.Medium },
-      selectedColor: $r('app.color.brand_primary'), unselectedColor: $r('app.color.text_secondary') });
-}
 
 /**
  * 系统减少动画开启时，同时关闭弹簧效果和过渡时间。

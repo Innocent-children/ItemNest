@@ -14,6 +14,7 @@ import itemSearchAndSummaryTest from './ets/test/ItemSearchAndSummary.test';
 import itemValidatorTest from './ets/test/ItemValidator.test';
 import lendingServiceTest from './ets/test/LendingService.test';
 import locationServiceTest from './ets/test/LocationService.test';
+import locationSuggestionsTest from './ets/test/LocationSuggestions.test';
 import latestRequestCoordinatorTest from './ets/test/LatestRequestCoordinator.test';
 import lowStockServiceTest from './ets/test/LowStockService.test';
 import refreshContractTest from './ets/test/RefreshContract.test';
@@ -34,6 +35,7 @@ export default function testsuite() {
   itemValidatorTest();
   lendingServiceTest();
   locationServiceTest();
+  locationSuggestionsTest();
   latestRequestCoordinatorTest();
   lowStockServiceTest();
   itemSchemaTest();

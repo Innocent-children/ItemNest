@@ -8,6 +8,7 @@ import { BATCH_TABLE } from '../rdb/BatchSchema';
 import { ITEM_TABLE } from '../rdb/ItemSchema';
 import { RdbDatabase } from '../rdb/RdbDatabase';
 import { ResultSetReader } from '../rdb/ResultSetReader';
+import { recordLocationUsage } from './LocationDao';
 
 export class ItemDao {
   private readonly database: RdbDatabase;
@@ -23,6 +24,7 @@ export class ItemDao {
         if (rowId < 0) {
           throw new AppError(AppErrorCode.DATABASE_WRITE, '保存物品失败，请重试');
         }
+        await recordLocationUsage(store, item.locationPath, item.updatedAt);
       });
     } catch (error) {
       if (error instanceof AppError) {
@@ -73,7 +75,10 @@ export class ItemDao {
     });
   }
 
-  async update(item: Item, singleBatchId?: string): Promise<boolean> {
+  /**
+   * 表单更新记录本次使用的位置；照片等后台更新保持原有的位置顺序。
+   */
+  async update(item: Item, singleBatchId?: string, rememberLocation: boolean = false): Promise<boolean> {
     try {
       return await this.database.transaction(async (store: relationalStore.Transaction): Promise<boolean> => {
         if (singleBatchId !== undefined) {
@@ -87,6 +92,9 @@ export class ItemDao {
           batchPredicates.equalTo('id', singleBatchId).equalTo('item_id', item.id);
           await store.update({ quantity: item.quantity, expiration_date: item.expirationDate ?? null,
             location_path: item.locationPath ?? null, updated_at: item.updatedAt }, batchPredicates);
+        }
+        if (changedRows > 0 && rememberLocation) {
+          await recordLocationUsage(store, item.locationPath, item.updatedAt);
         }
         return changedRows > 0;
       });

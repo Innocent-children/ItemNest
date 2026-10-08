@@ -6,6 +6,7 @@ export interface LocationRecord {
   active: boolean;
   createdAt: number;
   updatedAt: number;
+  lastUsedAt?: number;
 }
 
 export interface LocationDraft {

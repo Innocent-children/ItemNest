@@ -11,7 +11,6 @@ import { RoundedButtonStyle, uiSpring, nativeTitleOptions } from '../ui/VisualSt
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { LocationInput } from '../components/LocationInput';
-import { LocationSelector } from '../components/LocationSelector';
 import { LoadingState } from '../components/LoadingState';
 import { QuantityInput } from '../components/QuantityInput';
 import { ITEM_UNIT_OPTIONS, Item, ItemDraft, ItemUnit } from '../model/Item';
@@ -60,6 +59,7 @@ export struct ItemFormPage {
   @State private pendingPhotoUri: string = '';
   @State private existingPhotoLocalId: string = '';
   @State private managedLocations: LocationRecord[] = [];
+  @State private locationLoadError: string = '';
   @State private categoryOptions: string[] = [];
   @State private categoryLoadError: string = '';
   @State private categoryLoading: boolean = false;
@@ -80,6 +80,7 @@ export struct ItemFormPage {
   private existingLoaded: boolean = false;
   private managedFieldsRequestId: number = 0;
   private categoryLoadRequestId: number = 0;
+  private locationLoadRequestId: number = 0;
 
   aboutToAppear(): void {
     NavigationHelper.registerBackHandler(this.backHandler);
@@ -354,18 +355,12 @@ export struct ItemFormPage {
     Column({ space: $r('app.float.space_4') }) {
       this.fieldTitle(this.editMode && this.singleBatchId.length === 0 ? '默认存放位置' : '放在哪里？',
         this.editMode && this.singleBatchId.length === 0 ? '未填写批次位置时使用这里；各批次位置可在库存明细修改。' : '记下位置，下次一找就到。')
-      LocationInput({ locationPath: $locationPath })
+      LocationInput({ locationPath: $locationPath, locations: this.managedLocations, inputEnabled: !this.saving,
+        loadError: this.locationLoadError, onRetry: () => this.loadManagedLocations() })
       Button('选择或新增位置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
         .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
         .enabled(!this.saving).onClick(() => NavigationHelper.pushUrl({ url: RouteName.LOCATION_MANAGEMENT,
           params: { selectionMode: true } }))
-      if (this.managedLocations.length > 0) {
-        Text('常用位置')
-          .fontSize($r('app.float.font_body'))
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
-        LocationSelector({ selectedPath: $locationPath, locations: this.managedLocations })
-      }
     }
     .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
@@ -717,9 +712,18 @@ export struct ItemFormPage {
   }
 
   private async loadManagedLocations(): Promise<void> {
-    const result = await AppServices.get().locations.list();
-    if (result.ok) {
-      this.managedLocations = result.getData().filter((location: LocationRecord) => location.active);
+    const requestId = ++this.locationLoadRequestId;
+    try {
+      const result = await AppServices.get().locations.list();
+      if (requestId !== this.locationLoadRequestId) { return; }
+      if (result.ok) {
+        this.managedLocations = result.getData();
+        this.locationLoadError = '';
+      } else { this.locationLoadError = '暂时无法读取历史位置，可以继续手动填写。'; }
+    } catch (_) {
+      if (requestId === this.locationLoadRequestId) {
+        this.locationLoadError = '暂时无法读取历史位置，可以继续手动填写。';
+      }
     }
   }
 

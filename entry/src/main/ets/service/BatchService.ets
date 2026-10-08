@@ -3,7 +3,6 @@ import { ItemValidator } from '../common/ItemValidator';
 import { failure, Result, success } from '../common/Result';
 import { Batch, BatchDraft, createBatchId } from '../model/Batch';
 import { isItemUnit, ItemUnit } from '../model/Item';
-import { normalizeLocationPath } from '../model/LocationPath';
 import { BatchRepositoryPort } from '../data/repository/BatchRepository';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
 
@@ -159,13 +158,15 @@ export class BatchService {
     if (notes.length > 500) {
       return failure<Batch>(new AppError(AppErrorCode.VALIDATION, '批次备注不能超过 500 个字符'));
     }
+    const locationResult = this.itemValidator.validateLocationPath(draft.locationPath);
+    if (!locationResult.ok) { return failure<Batch>(locationResult.getError()); }
     const validatedBatch: Batch = {
       id: '',
       itemId: itemId,
       quantity: quantity,
       unit: unit,
       expirationDate: expirationResult.getData(),
-      locationPath: normalizeLocationPath(draft.locationPath),
+      locationPath: locationResult.getData(),
       notes: notes.length === 0 ? undefined : notes,
       createdAt: 0,
       updatedAt: 0

@@ -135,6 +135,8 @@ export default function inventoryUpgradeDeviceTest() {
         expect((await portable.restore(exported.getData(), true)).ok).assertTrue();
         expect(files.safetyText.includes('temporary-replacement')).assertTrue();
         expect((await labels.list())[0].locationId).assertEqual('label-location');
+        const restoredLocations = (await new LocationRepository(db).listAll()).getData();
+        expect(restoredLocations.find((location) => location.path === '旧位置')?.lastUsedAt).assertEqual(1);
         expect((await items.listAll()).getData().length).assertEqual(1);
         const state = (await lending.getState('backup-owned')).getData();
         expect(state.totalQuantity).assertEqual(5);

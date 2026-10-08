@@ -7,9 +7,10 @@ import { ItemActionPage } from './ItemActionPage';
 import { ExternalRequest } from '../model/SystemFeatures';
 import { ExternalNavigation } from '../navigation/ExternalNavigation';
 import { PageHeader } from '../components/PageHeader';
+import { DockTab } from '../components/DockTab';
 import { SharedSearchField } from '../components/SharedSearchField';
 import { SharedRouteMotion } from '../ui/SharedRouteMotion';
-import { RoundedButtonStyle, dockBarHeight, dockContentInset, uiSpring, FloatingTabsStyle, nativeTitleOptions, numericMotion, bottomTabStyle } from '../ui/VisualStyle';
+import { RoundedButtonStyle, dockBarHeight, dockContentInset, uiSpring, FloatingTabsStyle, nativeTitleOptions, numericMotion } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { accessibility } from '@kit.AccessibilityKit';
 import { EmptyState } from '../components/EmptyState';
@@ -65,6 +66,10 @@ struct Index {
   @State private sidebarLocation: string = '';
   @State private mainTabIndex: number = 0;
   @State private selectedTabIndex: number = 0;
+  @State private dockHighlightIndex: number = 0;
+  @State private dockSlotWidth: number = 68;
+  private dockItemsWindowX: number = 0;
+  private dockTouchId: number = -1;
   @State private navigationRootVisible: boolean = true;
   @StorageLink('itemnest.keyboardVisible') private keyboardVisible: boolean = false;
   @State private dockRoute: string = RouteName.HOME;
@@ -236,6 +241,36 @@ struct Index {
     this.tabsController.changeIndex(index);
   }
 
+  private moveDockHighlight(index: number): void {
+    this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.3, 0.82), () => {
+      this.dockHighlightIndex = index;
+    });
+  }
+
+  /**
+   * 按原生页签的实际宽度和窗口位置换算手指所在的页签位置。
+   * 只观察触摸事件，原生栏继续处理粒子效果和页面切换。
+   */
+  private onDockTouch(event: TouchEvent): void {
+    if (event.type === TouchType.Down && this.dockTouchId < 0 && event.changedTouches.length > 0) {
+      this.dockTouchId = event.changedTouches[0].id;
+    }
+    if (event.type === TouchType.Cancel) {
+      this.dockTouchId = -1;
+      this.moveDockHighlight(this.selectedTabIndex);
+      return;
+    }
+    const touch = event.changedTouches.find((point: TouchObject) => point.id === this.dockTouchId);
+    if (touch === undefined) { return; }
+    if (event.type === TouchType.Up) {
+      this.dockTouchId = -1;
+      this.moveDockHighlight(this.selectedTabIndex);
+      return;
+    }
+    this.dockHighlightIndex = Math.max(0, Math.min(this.mainTabRoutes.length - 1,
+      (touch.windowX - this.dockItemsWindowX) / this.dockSlotWidth - 0.5));
+  }
+
   onBackPress(): boolean {
     if (this.pathStack.size() === 0 && this.selectedTabIndex !== 0) {
       this.selectMainTab(RouteName.HOME);
@@ -340,16 +375,16 @@ struct Index {
       Tabs({ index: this.mainTabIndex, controller: this.tabsController }) {
         TabContent() {
           this.homeContent()
-        }.tabBar(bottomTabStyle('首页', $r('sys.symbol.house'), this.reduceAnimation))
+        }.tabBar(this.dockTab(0, '首页', $r('sys.symbol.house')))
         TabContent() {
           ItemListPage({ isMainTab: true, locationFilter: this.sidebarLocation })
-        }.tabBar(bottomTabStyle('物品', $r('sys.symbol.archivebox'), this.reduceAnimation))
+        }.tabBar(this.dockTab(1, '物品', $r('sys.symbol.archivebox')))
         TabContent() {
           SearchPage({ isMainTab: true })
-        }.tabBar(bottomTabStyle('查找', $r('sys.symbol.magnifyingglass'), this.reduceAnimation))
+        }.tabBar(this.dockTab(2, '查找', $r('sys.symbol.magnifyingglass')))
         TabContent() {
           SettingsPage({ isMainTab: true })
-        }.tabBar(bottomTabStyle('我的', $r('sys.symbol.person'), this.reduceAnimation))
+        }.tabBar(this.dockTab(3, '我的', $r('sys.symbol.person')))
       }
       .attributeModifier(new FloatingTabsStyle(this.reduceAnimation))
       .barPosition(BarPosition.End)
@@ -366,6 +401,7 @@ struct Index {
       .onSelected((index: number) => {
         this.selectedTabIndex = index;
         this.dockRoute = this.mainTabRoutes[index];
+        if (this.dockTouchId < 0) { this.moveDockHighlight(index); }
       })
       .onChange((index: number) => {
         this.mainTabIndex = index;
@@ -374,6 +410,18 @@ struct Index {
         }
       })
         }.width('100%').height('100%')
+  }
+
+  @Builder
+  private dockTab(index: number, label: string, symbol: Resource) {
+    DockTab({ label: label, symbol: symbol, selected: this.selectedTabIndex === index,
+      index: index, highlightPosition: this.dockHighlightIndex, slotWidth: this.dockSlotWidth,
+      reduceAnimation: this.reduceAnimation,
+      onDockTouch: (event: TouchEvent) => this.onDockTouch(event),
+      onTabAreaChanged: (width: number, windowX: number) => {
+        this.dockSlotWidth = width;
+        this.dockItemsWindowX = windowX - index * width;
+      } })
   }
 
   @Builder

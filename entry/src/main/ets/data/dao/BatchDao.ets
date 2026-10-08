@@ -8,6 +8,7 @@ import { BATCH_TABLE } from '../rdb/BatchSchema';
 import { inventoryOutstandingSql } from '../rdb/InventoryIntegritySchema';
 import { RdbDatabase } from '../rdb/RdbDatabase';
 import { ResultSetReader } from '../rdb/ResultSetReader';
+import { recordLocationUsage } from './LocationDao';
 
 interface InventorySnapshot {
   quantity: number;
@@ -32,6 +33,7 @@ export class BatchDao {
         if (rowId < 0) {
           throw new AppError(AppErrorCode.DATABASE_WRITE, '保存批次失败，请重试');
         }
+        await recordLocationUsage(store, batch.locationPath, batch.updatedAt);
       });
     } catch (error) {
       if (error instanceof AppError) {
@@ -72,6 +74,7 @@ export class BatchDao {
         const nextQuantity = Math.round((inventory.quantity - existing[0].quantity + batch.quantity) * 100) / 100;
         this.validateReduction(inventory.quantity, nextQuantity, inventory.borrowedQuantity);
         const changedRows = await store.update(this.toUpdateValues(batch), predicates);
+        if (changedRows > 0) { await recordLocationUsage(store, batch.locationPath, batch.updatedAt); }
         return changedRows > 0;
       });
     } catch (error) {

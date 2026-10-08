@@ -13,6 +13,8 @@ import { buildBatchRefreshParams } from '../navigation/RefreshContract';
 import { BatchRouteParams, requireBatchId, requireItemId } from '../navigation/RouteContract';
 import { RouteName } from '../navigation/RouteName';
 import { AppServices } from '../service/AppServices';
+import { LocationInput } from '../components/LocationInput';
+import { LocationRecord } from '../model/Location';
 
 @Component
 export struct BatchFormPage {
@@ -34,6 +36,9 @@ export struct BatchFormPage {
   @State private unit: ItemUnit = ItemUnit.PIECE;
   @State private expirationDate: string = '';
   @State private locationPath: string = '';
+  @State private managedLocations: LocationRecord[] = [];
+  @State private locationLoadError: string = '';
+  private locationLoadRequestId: number = 0;
   @State private notes: string = '';
   @State private showDiscardConfirm: boolean = false;
   @State @Watch('handleDiscardRequest') private discardConfirmed: boolean = false;
@@ -64,6 +69,7 @@ export struct BatchFormPage {
       this.batchId = batchIdResult.getData();
     }
     this.loadForm();
+    this.loadManagedLocations();
   }
 
   aboutToDisappear(): void {
@@ -147,18 +153,9 @@ export struct BatchFormPage {
               }
               Text('到期日期（可选）').fontSize(15).fontColor($r('app.color.text_primary')).width('100%')
               OptionalDateField({ value: $expirationDate, editable: !this.saving })
-              TextInput({ text: this.locationPath, placeholder: '存放位置，可选' })
-                .borderWidth(1)
-                .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'locationPath'))
-                .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
-                  if (this.focusedField === 'locationPath') { this.focusedField = ''; }
-                }))
-                .backgroundColor($r('app.color.surface_card'))
-                .border({ width: 1, color: $r('app.color.border_subtle') })
-                .borderRadius($r('app.float.radius_control'))
-                .borderColor(this.focusedField === 'locationPath' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
-                .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-                .onChange((value: string) => this.locationPath = value)
+              Text('存放位置（可选）').fontSize(15).fontColor($r('app.color.text_primary')).width('100%')
+              LocationInput({ locationPath: $locationPath, locations: this.managedLocations, inputEnabled: !this.saving,
+                loadError: this.locationLoadError, onRetry: () => this.loadManagedLocations() })
               Text('未填写位置时，使用物品的默认位置。').fontSize(12)
                 .fontColor($r('app.color.text_secondary')).width('100%')
               TextArea({ text: this.notes, placeholder: '备注，可选' })
@@ -261,6 +258,22 @@ export struct BatchFormPage {
       this.errorMessage = '读取批次信息失败，请稍后重试';
     } finally {
       this.loading = false;
+    }
+  }
+
+  private async loadManagedLocations(): Promise<void> {
+    const requestId = ++this.locationLoadRequestId;
+    try {
+      const result = await AppServices.get().locations.list();
+      if (requestId !== this.locationLoadRequestId) { return; }
+      if (result.ok) {
+        this.managedLocations = result.getData();
+        this.locationLoadError = '';
+      } else { this.locationLoadError = '暂时无法读取历史位置，可以继续手动填写。'; }
+    } catch (_) {
+      if (requestId === this.locationLoadRequestId) {
+        this.locationLoadError = '暂时无法读取历史位置，可以继续手动填写。';
+      }
     }
   }
 

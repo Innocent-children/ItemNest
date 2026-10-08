@@ -116,10 +116,11 @@ export class PortableBackupValidation {
       }
       for (const location of payload.locations) {
         if (!location || !this.validId(location.id) || locationIds.has(location.id) ||
-          typeof location.name !== 'string' || location.name.length === 0 || location.name.length > 80 ||
+          typeof location.name !== 'string' || location.name.length === 0 || location.name.length > 200 ||
           typeof location.path !== 'string' || location.path.length === 0 || location.path.length > 200 ||
           typeof location.active !== 'boolean' || !Number.isFinite(location.createdAt) ||
-          !Number.isFinite(location.updatedAt)) {
+          !Number.isFinite(location.updatedAt) ||
+          (location.lastUsedAt !== undefined && (!Number.isFinite(location.lastUsedAt) || location.lastUsedAt < 0))) {
           return this.invalid('备份文件包含无效位置');
         }
         locationIds.add(location.id);
