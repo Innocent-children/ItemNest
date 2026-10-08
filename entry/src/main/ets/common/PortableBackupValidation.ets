@@ -174,7 +174,7 @@ export class PortableBackupValidation {
           (trace.batchId !== undefined && !batchIds.has(trace.batchId)) ||
           (trace.batchId !== undefined && batchOwners.get(trace.batchId) !== trace.itemId) ||
           (trace.type !== TraceEventType.BORROW && trace.type !== TraceEventType.RETURN &&
-            trace.type !== TraceEventType.CONSUME &&
+            trace.type !== TraceEventType.CONSUME && trace.type !== TraceEventType.STOCK_ADD && trace.type !== TraceEventType.MOVE &&
             trace.type !== TraceEventType.QUANTITY_ADJUST && trace.type !== TraceEventType.IMPORT &&
             trace.type !== TraceEventType.EXPORT) ||
           !Number.isFinite(trace.quantity) || trace.quantity < 0 || !Number.isFinite(trace.createdAt) ||

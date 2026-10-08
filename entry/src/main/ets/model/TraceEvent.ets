@@ -4,6 +4,8 @@ export enum TraceEventType {
   BORROW = 'BORROW',
   RETURN = 'RETURN',
   CONSUME = 'CONSUME',
+  STOCK_ADD = 'STOCK_ADD',
+  MOVE = 'MOVE',
   QUANTITY_ADJUST = 'QUANTITY_ADJUST',
   IMPORT = 'IMPORT',
   EXPORT = 'EXPORT'

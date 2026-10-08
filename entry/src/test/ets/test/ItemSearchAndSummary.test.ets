@@ -25,6 +25,22 @@ function createItem(index: number): Item {
 
 export default function itemSearchAndSummaryTest() {
   describe('ItemSearchService and HomeSummaryService', () => {
+    it('自由查找覆盖有效位置和分类，保留筛选交集及系统名称查询语义', 0, async () => {
+      const repository = new FakeItemRepository();
+      const item = createItem(100);
+      item.name = '护手霜'; item.category = '生活用品'; item.barcode = 'AB123';
+      item.locationPath = '已废弃位置'; item.activeLocationPaths = ['客厅 / 收纳格'];
+      repository.items.push(item);
+      const service = new ItemSearchService(repository, new ItemListService(repository, new ExpiryService()));
+      expect((await service.searchEverywhere(new ItemQuery('客厅'))).getData().items.length).assertEqual(1);
+      expect((await service.searchEverywhere(new ItemQuery('生活'))).getData().items.length).assertEqual(1);
+      expect((await service.searchEverywhere(new ItemQuery('ab123'))).getData().items.length).assertEqual(1);
+      expect((await service.searchEverywhere(new ItemQuery('客厅', undefined, '工具'))).getData().items.length).assertEqual(0);
+      expect((await service.searchEverywhere(new ItemQuery('已废弃位置'))).getData().items.length).assertEqual(0);
+      expect((await service.search(new ItemQuery('客厅'))).getData().items.length).assertEqual(0);
+      repository.failNextOperation = true;
+      expect((await service.searchEverywhere(new ItemQuery('护手'))).ok).assertFalse();
+    });
     it('在 50 条数据中按名称、位置和分类取交集', 0, async () => {
       const repository = new FakeItemRepository();
       for (let index = 0; index < 50; index++) {

@@ -258,7 +258,7 @@ export struct SearchPage {
                   actionText: '记录第一件物品', actionRoute: RouteName.ITEM_FORM,
                   actionMode: 'create', actionReturnTo: RouteName.SEARCH })
               } else {
-                EmptyState({ title: '还没有找到', description: '试试更短的名称，或移除位置和分类条件。' })
+                EmptyState({ title: '还没有找到', description: '试试名称、位置或分类关键词，或清除筛选条件。' })
               }
             } else {
               ForEach(this.items, (item: ItemSummary) => {
@@ -707,7 +707,7 @@ export struct SearchPage {
 
 
   private async queryItems(query: ItemQuery): Promise<Result<SearchResult>> {
-    const result = await AppServices.get().searchItems.search(query);
+    const result = await AppServices.get().searchItems.searchEverywhere(query);
     if (!result.ok || !this.includePhotos || query.name.trim().length === 0) { return result; }
     const photos = await AppServices.get().photoSearch.search(query);
     const combined = result.getData();

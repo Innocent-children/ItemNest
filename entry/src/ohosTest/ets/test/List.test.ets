@@ -1,3 +1,4 @@
+import reminderRecoveryDeviceTest from './ReminderRecoveryDevice.test';
 import systemCapabilitiesDeviceTest from './SystemCapabilitiesDevice.test';
 import userFlowRepairDeviceTest from './UserFlowRepairDevice.test';
 import inventoryUpgradeDeviceTest from './InventoryUpgradeDevice.test';
@@ -14,6 +15,7 @@ import portableBackupDeviceTest from './PortableBackupDevice.test';
 import locationHistoryDeviceTest from './LocationHistoryDevice.test';
 
 export default function testsuite() {
+  reminderRecoveryDeviceTest();
   systemCapabilitiesDeviceTest();
   userFlowRepairDeviceTest();
   inventoryUpgradeDeviceTest();

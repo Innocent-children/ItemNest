@@ -14,9 +14,15 @@ import { ItemUpdateService } from '../../../main/ets/service/ItemUpdateService';
 import { LendingService } from '../../../main/ets/service/LendingService';
 import { BatchService } from '../../../main/ets/service/BatchService';
 import { LocalAssetStorage } from '../../../main/ets/service/LocalAssetStorage';
+import { TraceEventType } from '../../../main/ets/model/TraceEvent';
+import { ItemHistoryService } from '../../../main/ets/service/ItemHistoryService';
+import { ItemSearchService } from '../../../main/ets/service/ItemSearchService';
+import { ItemListService } from '../../../main/ets/service/ItemListService';
+import { ExpiryService } from '../../../main/ets/service/ExpiryService';
+import { ItemQuery } from '../../../main/ets/model/ItemQuery';
 
 export default function userFlowRepairDeviceTest() {
-  describe('User flow repair on device', () => {
+  describe('UserFlowRepairDevice', () => {
     it('消耗撤销恢复原库存且不能重复撤销，换位置不改变数量和到期日', 0, async () => {
       const ctx = (await abilityDelegatorRegistry.getAbilityDelegator().getCurrentTopAbility()).context;
       const name = 'itemnest-ux-undo-isolated.db';
@@ -57,6 +63,13 @@ export default function userFlowRepairDeviceTest() {
         expect((await batches.getById(first.id)).getData()?.quantity).assertEqual(0);
         expect((await items.getById('undo-item')).getData()?.quantity).assertEqual(4);
         expect((await inventory.adjustQuantity(second.id, 1)).ok).assertFalse();
+        const history = (await new ItemHistoryService(traces).list('undo-item')).getData();
+        expect(history.some(event => event.type === TraceEventType.MOVE && event.note?.includes('客厅'))).assertTrue();
+        expect(history.some(event => event.type === TraceEventType.STOCK_ADD && event.quantity === 4)).assertTrue();
+        expect(history.filter(event => event.type === TraceEventType.QUANTITY_ADJUST).length).assertEqual(1);
+        const search = new ItemSearchService(items, new ItemListService(items, new ExpiryService()));
+        expect((await search.searchEverywhere(new ItemQuery('书房'))).getData().items.length).assertEqual(1);
+        expect((await search.searchEverywhere(new ItemQuery('厨房'))).getData().items.length).assertEqual(0);
         const editor = new ItemUpdateService(items, new ItemValidator(), () => Date.now(), batches);
         const details = await editor.updateDetails('undo-item', { name: '纸巾资料', unit: ItemUnit.PACK, notes: '只更新资料' });
         expect(details.ok).assertTrue();

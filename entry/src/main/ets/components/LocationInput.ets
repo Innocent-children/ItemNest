@@ -10,6 +10,7 @@ export struct LocationInput {
   @Link locationPath: string;
   @Prop locations: LocationRecord[] = [];
   @Prop inputEnabled: boolean = true;
+  @Prop compact: boolean = false;
   @Prop loadError: string = '';
   @State private showPresets: boolean = false;
   onRetry: () => void = () => {};
@@ -38,7 +39,11 @@ export struct LocationInput {
         .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
         .onChange((value: string) => this.locationPath = value)
         .onSubmit(() => this.locationPath = this.locationPath.trim())
-      this.suggestionContent()
+      if (this.compact) {
+        LocationSelector({ selectedPath: $locationPath, paths: this.compactSuggestions(), inputEnabled: this.inputEnabled })
+      } else {
+        this.suggestionContent()
+      }
       if (this.loadError.length > 0) {
         Text(this.loadError).fontSize($r('app.float.font_caption')).fontColor($r('app.color.text_secondary'))
         Button('重新读取历史位置').enabled(this.inputEnabled).onClick(() => this.onRetry())
@@ -84,6 +89,11 @@ export struct LocationInput {
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
     }
+  }
+
+  private compactSuggestions(): string[] {
+    const suggestions = this.suggestions();
+    return suggestions.recentPaths.concat(suggestions.savedPaths, suggestions.presetPaths).slice(0, 3);
   }
 
   @Builder

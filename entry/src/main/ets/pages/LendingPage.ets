@@ -2,6 +2,7 @@ import { InventoryMetrics } from '../components/InventoryMetrics';
 import { PageHeader } from '../components/PageHeader';
 import { RoundedButtonStyle, uiSpring, nativeTitleOptions, nativeSheetOptions } from '../ui/VisualStyle';
 import { LendingRouteParams } from '../navigation/RouteContract';
+import { historyTime } from '../service/ItemHistoryService';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
@@ -203,11 +204,11 @@ export struct LendingPage {
               .borderRadius($r('app.float.radius_control'))
             }, (loan: OutstandingLoan) => `${loan.borrowEvent.id}-${loan.remainingQuantity}-${loan.borrowEvent.counterpart ?? ''}-${loan.borrowEvent.note ?? ''}`)
 
-            Text('操作记录').width('100%')
+            Text('借还记录').width('100%')
               .fontSize($r('app.float.font_section'))
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))
-            ForEach(this.events, (event: TraceEvent) => {
+            ForEach(this.events.filter((event: TraceEvent) => event.type === TraceEventType.BORROW || event.type === TraceEventType.RETURN), (event: TraceEvent) => {
               this.eventCard(event)
             }, (event: TraceEvent) => `${event.id}-${event.quantity}-${event.voidedAt ?? 0}-${event.note ?? ''}-${event.counterpart ?? ''}-${JSON.stringify(event.returnAllocations ?? [])}`)
           }
@@ -325,7 +326,7 @@ export struct LendingPage {
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
-      Text(`${new Date(event.createdAt).toLocaleString()}${event.counterpart === undefined ? '' : ` · ${event.counterpart}`}`)
+      Text(`${historyTime(event.createdAt)}${event.counterpart === undefined ? '' : ` · ${event.counterpart}`}`)
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
       if (event.note !== undefined) {
@@ -520,7 +521,7 @@ export struct LendingPage {
   }
 
   private loanLabel(loan: OutstandingLoan): string {
-    return `${loan.borrowEvent.counterpart ?? '未填写借用人'} · 未归还 ${loan.remainingQuantity}${this.unit} · ${new Date(loan.borrowEvent.createdAt).toLocaleString()}`;
+    return `${loan.borrowEvent.counterpart ?? '未填写借用人'} · 未归还 ${loan.remainingQuantity}${this.unit} · ${historyTime(loan.borrowEvent.createdAt)}`;
   }
 
   private returnCandidates(): OutstandingLoan[] {
@@ -551,7 +552,7 @@ export struct LendingPage {
     const allocations = event.returnAllocations ?? [];
     const sources = allocations.map((allocation: ReturnAllocation) => {
       const borrow = this.events.find((candidate: TraceEvent) => candidate.id === allocation.borrowEventId);
-      return `${borrow?.counterpart ?? '未填写借用人'} ${allocation.quantity}${this.unit}（${new Date(borrow?.createdAt ?? event.createdAt).toLocaleString()} 借出）`;
+      return `${borrow?.counterpart ?? '未填写借用人'} ${allocation.quantity}${this.unit}（${historyTime(borrow?.createdAt ?? event.createdAt)} 借出）`;
     });
     return sources.length === 0 ? '尚未对应借出，请核对后纠正' : `对应借出：${sources.join('；')}`;
   }

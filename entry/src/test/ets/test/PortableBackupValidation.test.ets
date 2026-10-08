@@ -21,6 +21,18 @@ function backup(): PortableBackupPayload {
 
 export default function portableBackupValidationTest() {
   describe('Portable backup validation', () => {
+    it('使用记录中的补入和移动随备份往返保留', 0, () => {
+      const payload = backup();
+      payload.traceEvents = [
+        { id: 'added', itemId: 'item-1', batchId: 'batch-1', type: TraceEventType.STOCK_ADD,
+          quantity: 2, note: '补入到厨房', createdAt: 2 },
+        { id: 'moved', itemId: 'item-1', batchId: 'batch-1', type: TraceEventType.MOVE,
+          quantity: 2, note: '从厨房移到客厅', createdAt: 3 }
+      ];
+      const result = new PortableBackupValidation().validate(JSON.stringify(payload));
+      expect(result.ok).assertTrue();
+      expect(result.getData().traceEvents[1].note).assertEqual('从厨房移到客厅');
+    });
     it('常用单位和标签名称在备份中保留，拒绝空白或超长标签名', 0, () => {
       const validator = new PortableBackupValidation();
       const payload = backup();

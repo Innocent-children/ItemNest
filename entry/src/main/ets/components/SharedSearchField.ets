@@ -9,7 +9,7 @@ export struct SharedSearchField {
   @Prop editable: boolean = true;
   @Prop inputId: string = '';
   @Prop transitionId: string = '';
-  @Prop placeholder: string = '物品名称或条码';
+  @Prop placeholder: string = '名称、位置、分类或条码';
   @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   controller: SearchController = new SearchController();
   onChange: (value: string) => void = (_value: string) => {};

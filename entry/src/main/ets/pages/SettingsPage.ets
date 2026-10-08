@@ -387,7 +387,7 @@ export struct SettingsPage {
   private async loadNotificationStatus(): Promise<void> {
     try {
       this.notificationAllowed = await notificationManager.isNotificationEnabled();
-      this.notificationStatus = this.notificationAllowed ? '系统通知权限已允许。是否发送通知由上方开关决定。' :
+      this.notificationStatus = this.notificationAllowed ? '系统通知权限已允许。每件物品是否成功安排通知，请查看物品详情。' :
         '系统通知权限关闭。开启到期通知时会引导你授权。';
     } catch (_) {
       this.notificationStatus = '暂时无法读取系统通知授权状态。';

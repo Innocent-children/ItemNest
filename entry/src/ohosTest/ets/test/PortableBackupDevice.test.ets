@@ -8,7 +8,7 @@ import { ResultSetReader } from '../../../main/ets/data/rdb/ResultSetReader';
 const TEST_DATABASE_NAME = 'itemnest-restore-transaction-test.db';
 
 export default function portableBackupDeviceTest() {
-  describe('Portable backup device', () => {
+  describe('PortableBackupDevice', () => {
     it('恢复写入中途失败会保留原物品和批次', 0, async () => {
       const ability = await abilityDelegatorRegistry.getAbilityDelegator().getCurrentTopAbility();
       const context = ability.context;

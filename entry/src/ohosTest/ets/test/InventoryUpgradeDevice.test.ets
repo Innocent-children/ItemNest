@@ -93,7 +93,7 @@ function fixtureItem(id: string, quantity: number): Item {
 }
 
 export default function inventoryUpgradeDeviceTest() {
-  describe('Inventory v12 device safety', () => {
+  describe('InventoryUpgradeDevice', () => {
 
     it('真实数据库备份恢复保留关联归还撤销备注消耗并先备份当前数据', 0, async () => {
       const ctx = await context();

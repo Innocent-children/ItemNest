@@ -25,6 +25,7 @@ import { HomeSummaryService } from './HomeSummaryService';
 import { ItemCreateService } from './ItemCreateService';
 import { ItemDeleteService } from './ItemDeleteService';
 import { ItemDetailService } from './ItemDetailService';
+import { ItemHistoryService } from './ItemHistoryService';
 import { ItemListService } from './ItemListService';
 import { ItemSearchService } from './ItemSearchService';
 import { ItemUpdateService } from './ItemUpdateService';
@@ -75,6 +76,7 @@ export class AppServices {
   readonly createItem: ItemCreateService;
   readonly listItems: ItemListService;
   readonly detailItem: ItemDetailService;
+  readonly history: ItemHistoryService;
   readonly updateItem: ItemUpdateService;
   readonly deleteItem: ItemDeleteService;
   readonly searchItems: ItemSearchService;
@@ -118,6 +120,7 @@ export class AppServices {
     this.createItem = new ItemCreateService(repository, validator);
     this.listItems = listItems;
     this.detailItem = new ItemDetailService(repository);
+    this.history = new ItemHistoryService(traceRepository);
     this.updateItem = new ItemUpdateService(repository, validator, () => Date.now(), batchRepository);
     const preferenceRepository = new PreferenceRepository(context);
     const preferenceService = new PreferenceService(preferenceRepository);

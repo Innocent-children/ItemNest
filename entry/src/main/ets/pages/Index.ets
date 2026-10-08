@@ -29,6 +29,7 @@ import { BatchFormPage } from './BatchFormPage';
 import { BatchListPage } from './BatchListPage';
 import { CategoryManagementPage } from './CategoryManagementPage';
 import { ItemDetailPage } from './ItemDetailPage';
+import { ItemHistoryPage } from './ItemHistoryPage';
 import { ItemFormPage } from './ItemFormPage';
 import { ItemListPage } from './ItemListPage';
 import { LendingPage } from './LendingPage';
@@ -79,7 +80,6 @@ struct Index {
   @State private loading: boolean = true;
   @State private initialLoadComplete: boolean = false;
   @State private totalItemCount: number = 0;
-  @State private unconfiguredStockCount: number = 0;
   @State private outstandingLoanCount: number = 0;
   @State private lendingLoadFailed: boolean = false;
   @State private errorMessage: string = '';
@@ -445,22 +445,19 @@ struct Index {
                   actionText: '记录第一件物品', actionRoute: RouteName.ITEM_FORM,
                   actionMode: 'create', actionReturnTo: RouteName.HOME })
               } else {
-                this.hero()
+                if ((this.showExpirySection && this.dueSoonCount > 0) || (this.showStockSection && this.restockCount > 0)) {
+                  this.hero()
+                } else {
+                  Text(`已收好 ${this.totalItemCount} 件物品`).fontSize(13).fontColor($r('app.color.text_secondary'))
+                    .width('100%')
+                }
                 if (this.showExpirySection && this.expiryAttentionItems.length > 0) {
                   this.summarySection({ title: '到期待处理', items: this.expiryAttentionItems, attention: 'expiry' })
                 }
                 if (this.showStockSection && this.restockItems.length > 0) {
                   this.summarySection({ title: '需要补货', items: this.restockItems, attention: 'restock' })
                 }
-                if (this.showStockSection && this.unconfiguredStockCount > 0) {
-                  Row({ space: 8 }) {
-                    Text(`${this.unconfiguredStockCount} 件物品未设置最低数量，目前仅在用完后提示补货。`)
-                      .layoutWeight(1).fontSize(12).fontColor($r('app.color.text_secondary'))
-                    Button('去设置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-                      .fontSize(13).fontColor($r('app.color.brand_primary')).backgroundColor(Color.Transparent)
-                      .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_LIST, params: { section: 'stock' } }))
-                  }.width('100%')
-                }
+                if (this.outstandingLoanCount > 0 || this.lendingLoadFailed) {
                 Button({ type: ButtonType.Normal }) {
                   Row() {
                     Image($r('app.media.ui_lend')).width(22).height(22).fillColor($r('app.color.brand_primary'))
@@ -472,6 +469,7 @@ struct Index {
                 }.attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).width('100%').padding(18)
                   .backgroundColor($r('app.color.surface_card')).borderRadius(18)
                   .onClick(() => NavigationHelper.pushUrl({ url: RouteName.OUTSTANDING_LOANS }))
+                }
                 if (this.locationPaths.length > 0) { this.locationShortcutSection() }
                 if (shouldShowRecentSection(this.showRecentSection) && this.recentItems.length > 0) {
                   this.summarySection({ title: '最近添加', items: this.recentItems })
@@ -515,6 +513,8 @@ struct Index {
         ItemListPage()
       } else if (name === RouteName.ITEM_DETAIL) {
         ItemDetailPage()
+      } else if (name === RouteName.ITEM_HISTORY) {
+        ItemHistoryPage()
       } else if (name === RouteName.ITEM_FORM) {
         ItemFormPage()
       } else if (name === RouteName.SEARCH) {
@@ -548,9 +548,15 @@ struct Index {
   @Builder
   private hero() {
     Row() {
+      if (this.showExpirySection && this.dueSoonCount > 0) {
       this.attentionMetric({ count: this.dueSoonCount, label: '到期待处理', icon: $r('app.media.ui_clock'), attention: 'expiry' })
+      }
+      if (this.showExpirySection && this.dueSoonCount > 0 && this.showStockSection && this.restockCount > 0) {
       Divider().vertical(true).height(42).color($r('app.color.hero_line')).margin({ left: 12, right: 20 })
+      }
+      if (this.showStockSection && this.restockCount > 0) {
       this.attentionMetric({ count: this.restockCount, label: '需要补货', icon: $r('app.media.ui_box'), attention: 'restock' })
+      }
     }.width('100%').padding(18).borderRadius(20).backgroundColor($r('app.color.hero_start'))
   }
 
@@ -591,22 +597,22 @@ struct Index {
         Row({ space: 10 }) {
           ForEach(this.locationPaths, (location: string) => {
             Button({ type: ButtonType.Normal }) {
-              Column({ space: 14 }) {
-                Image($r('app.media.ui_location')).width(24).height(24)
+              Row({ space: 8 }) {
+                Image($r('app.media.ui_location')).width(18).height(18)
                   .fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
                 Text(location).fontSize(13).fontWeight(FontWeight.Medium)
                   .fontColor($r('app.color.text_primary')).maxLines(2)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
-              }.alignItems(HorizontalAlign.Start).width('100%')
+              }
             }
               .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-            .width(130).constraintSize({ minHeight: 110 }).padding(16).borderRadius(18)
+            .constraintSize({ minHeight: 44, maxWidth: 220 }).padding({ left: 14, right: 14, top: 10, bottom: 10 }).borderRadius(14)
             .backgroundColor($r('app.color.surface_card')).accessibilityText(`查看${location}的物品`)
             .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
             .onClick(() => this.openLocationList(location))
           }, (location: string) => location)
         }
-      }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%')
+      }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%').align(Alignment.TopStart)
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
@@ -676,7 +682,6 @@ struct Index {
       await AppServices.get().photos.loadThumbnails(summary.recentItems.concat(summary.expiryAttentionItems, summary.restockItems));
       if (loadId !== this.summaryLoadId) { return; }
       this.totalItemCount = summary.totalItemCount;
-      this.unconfiguredStockCount = summary.unconfiguredStockCount;
       this.recentItems = summary.recentItems.filter((item: ItemSummary) =>
         !(this.showExpirySection && summary.expiryAttentionItems.some((attention: ItemSummary) => attention.id === item.id)) &&
         !(this.showStockSection && summary.restockItems.some((attention: ItemSummary) => attention.id === item.id)));

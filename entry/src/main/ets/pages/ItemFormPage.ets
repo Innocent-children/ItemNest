@@ -26,6 +26,7 @@ import { activeCategoryNames, refreshedUnit } from '../service/ItemFlowPresentat
 @Component
 export struct ItemFormPage {
   private pageScroller: Scroller = new Scroller();
+  private sectionOffsets: Map<string, number> = new Map<string, number>();
   @StorageLink('itemnest.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemnest.safeAreaTop') private safeAreaTop: number = 0;
   @StorageLink('itemnest.safeAreaBottom') private safeAreaBottom: number = 0;
@@ -126,6 +127,7 @@ export struct ItemFormPage {
   private selectionListenerId: number = 0;
   private defaultReminderDays: number = 7;
   private continueAfterSave: boolean = false;
+  private createdInThisForm: boolean = false;
   @State private notificationHint: string = '正在检查到期通知…';
   @State private notificationAction: string = '设置到期通知';
 
@@ -136,7 +138,7 @@ export struct ItemFormPage {
     try {
       const authorized = await notificationManager.isNotificationEnabled();
       this.notificationHint = !preferences.getData().reminderEnabled ? '到期通知已关闭，保存日期不会开启通知。可在设置中查看通知处理结果。' :
-        !authorized ? '系统通知权限已关闭，需授权后才能收到到期通知。' : '到期通知已开启；保存后，为尚未过期且有库存的物品安排通知。';
+        !authorized ? '系统通知权限已关闭，需授权后才能收到到期通知。' : '保存后尝试安排到期通知，是否安排成功可在物品详情查看。';
       this.notificationAction = !preferences.getData().reminderEnabled ? '开启到期通知' : !authorized ? '去授权通知' : '管理到期通知';
     } catch (_) { this.notificationHint = '暂时无法确认通知权限，请检查提醒设置。'; }
   }
@@ -196,7 +198,6 @@ export struct ItemFormPage {
                 }, (item: Item) => item.id)
               }
               this.coreSection()
-              if (!this.editMode) { this.locationSection() }
               this.sectionToggle('物品照片', this.hasPhoto() ? '当前物品已有照片' : '拍照识别或补充物品照片', 'photo')
               if (this.showPhotoSection) { this.photoSection() }
 
@@ -248,25 +249,11 @@ export struct ItemFormPage {
   }
 
   @Builder
-  private fieldTitle(title: string, description: string) {
-    Column({ space: $r('app.float.space_1') }) {
-      Text(title)
-        .fontSize($r('app.float.font_section'))
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.text_primary'))
-      Text(description)
-        .fontSize($r('app.float.font_caption'))
-        .fontColor($r('app.color.text_secondary'))
-    }
-    .width('100%').alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
   private coreSection() {
-    Column({ space: $r('app.float.space_4') }) {
-      this.fieldTitle('这是什么物品？', this.editMode ? '更新名称和物品资料。' : '先给它一个容易找到的名字。')
+    Column({ space: 12 }) {
+      Text('物品名称').fontSize(14).fontWeight(FontWeight.Medium).fontColor($r('app.color.text_primary'))
       TextInput({ text: this.name, placeholder: '例如：感冒药' })
-        .id('itemnest-item-name').enabled(!this.saving)
+        .id('itemnest-item-name').enabled(!this.saving).height(48)
         .borderWidth(1)
         .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'name'))
         .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
@@ -295,11 +282,13 @@ export struct ItemFormPage {
           .fontColor($r('app.color.text_secondary'))
         this.batchSourceNotice()
       } else {
-        QuantityInput({ quantityText: $quantityText, unit: $unit, errorMessage: $quantityError, inputEnabled: !this.saving })
+        this.locationSection()
+        QuantityInput({ quantityText: $quantityText, unit: $unit, errorMessage: $quantityError,
+          title: '数量', description: '', inputEnabled: !this.saving })
       }
     }
     .alignItems(HorizontalAlign.Start)
-    .padding($r('app.float.space_4'))
+    .padding(16)
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
 
@@ -339,19 +328,20 @@ export struct ItemFormPage {
 
   @Builder
   private locationSection() {
-    Column({ space: $r('app.float.space_4') }) {
-      this.fieldTitle('放在哪里？', '记下位置，下次一找就到。')
-      LocationInput({ locationPath: $locationPath, locations: this.managedLocations, inputEnabled: !this.saving,
+    Column({ space: 8 }) {
+      Row() {
+        Text('存放位置（可选）').layoutWeight(1).fontSize(14).fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.text_primary'))
+        Button('选择位置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .fontSize(13).height(44).padding({ left: 8, right: 0 })
+          .fontColor($r('app.color.brand_primary')).backgroundColor(Color.Transparent)
+          .enabled(!this.saving).onClick(() => NavigationHelper.pushUrl({ url: RouteName.LOCATION_MANAGEMENT,
+            params: { selectionMode: true } }))
+      }.width('100%')
+      LocationInput({ locationPath: $locationPath, locations: this.managedLocations, inputEnabled: !this.saving, compact: true,
         loadError: this.locationLoadError, onRetry: () => this.loadManagedLocations() })
-      Button('选择或新增位置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-        .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
-        .enabled(!this.saving).onClick(() => NavigationHelper.pushUrl({ url: RouteName.LOCATION_MANAGEMENT,
-          params: { selectionMode: true } }))
     }
-    .alignItems(HorizontalAlign.Start)
-    .padding($r('app.float.space_4'))
-    .borderRadius($r('app.float.radius_card'))
-    .backgroundColor($r('app.color.surface_card'))
+    .alignItems(HorizontalAlign.Start).width('100%')
 
   }
 
@@ -426,9 +416,10 @@ export struct ItemFormPage {
           .borderRadius($r('app.float.radius_control'))
           .backgroundColor($r('app.color.status_danger_soft'))
       }
-      Button(this.saving ? '正在保存…' : this.savedWithoutPhoto ? '重试保存照片' : this.editMode ? '保存修改' : '收好这件物品')
+      Row({ space: 10 }) {
+      Button(this.saving ? '正在保存…' : this.savedWithoutPhoto ? '重试保存照片' : this.editMode ? '保存修改' : '保存物品')
         .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-        .width('100%')
+        .layoutWeight(1).height(48).fontSize(15)
         .fontColor($r('app.color.brand_on_primary'))
         .backgroundColor($r('app.color.brand_primary'))
         .borderRadius($r('app.float.radius_control'))
@@ -445,9 +436,10 @@ export struct ItemFormPage {
         .onClick(() => this.save())
       if (!this.editMode) {
         Button('保存并继续添加').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-          .width('100%').fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+          .layoutWeight(1).height(48).fontSize(13).fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
           .enabled(!this.saving && !this.photoPicking && !this.scanning).onClick(() => this.save(true))
       }
+      }.width('100%')
     }
     .width('100%')
     .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), top: $r('app.float.space_3'), bottom: 16 + (this.keyboardVisible ? 0 : this.safeAreaBottom) })
@@ -478,22 +470,19 @@ export struct ItemFormPage {
     }
     .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
     .width('100%')
-    .padding(20)
+    .padding(14)
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
     .animation(uiSpring(this.reduceAnimation, 0.38, 0.58))
     .accessibilityText(title + '，' + (this.isSectionExpanded(section) ? '收起' : '展开'))
     .accessibilityGroup(true)
+    .onAreaChange((_old: Area, area: Area) => this.sectionOffsets.set(section, Number(area.position.y)))
     .onClick(() => this.toggleSection(section))
   }
 
   @Builder
   private expirySection() {
     Column({ space: $r('app.float.space_3') }) {
-      Text(this.notificationHint).fontSize(13).fontColor($r('app.color.text_secondary')).width('100%')
-      Button(this.notificationAction).attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-        .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
-        .enabled(!this.saving).onClick(() => NavigationHelper.pushUrl({ url: RouteName.SETTINGS, params: { section: 'reminders' } }))
       Text('到期日期（可选）')
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
@@ -525,6 +514,10 @@ export struct ItemFormPage {
         this.reminderShortcut('提前 3 天', '3')
         this.reminderShortcut('提前 7 天', '7')
       }
+      Text(this.notificationHint).fontSize(12).fontColor($r('app.color.text_secondary')).width('100%')
+      Button(this.notificationAction).attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        .fontSize(13).fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+        .enabled(!this.saving).onClick(() => NavigationHelper.pushUrl({ url: RouteName.SETTINGS, params: { section: 'reminders' } }))
     }
     .alignItems(HorizontalAlign.Start)
     .padding($r('app.float.space_4'))
@@ -797,6 +790,7 @@ export struct ItemFormPage {
         const draft = this.createDraft();
         const result = await AppServices.get().createItem.create(draft);
         if (result.ok) {
+          this.createdInThisForm = true;
           await this.completeItemSave(result.getData());
           return;
         }
@@ -891,6 +885,10 @@ export struct ItemFormPage {
       }, 0);
       return;
     }
+    this.markClean();
+    if (this.createdInThisForm && NavigationHelper.replaceCurrent({
+      url: RouteName.ITEM_DETAIL, params: { itemId: this.itemId }
+    })) { return; }
     NavigationHelper.back({
       url: this.returnToRoute,
       params: buildItemRefreshParams(refreshAt, this.itemId)
@@ -989,9 +987,17 @@ export struct ItemFormPage {
   private toggleSection(section: string): void {
     if (this.reduceAnimation) {
       this.setSectionExpanded(section);
-      return;
+    } else {
+      this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.4, 0.76), () => this.setSectionExpanded(section));
     }
-    this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.4, 0.76), () => this.setSectionExpanded(section));
+    if (this.isSectionExpanded(section)) {
+      setTimeout(() => {
+        if (NavigationHelper.isCurrentBackHandler(this.backHandler) && this.isSectionExpanded(section)) {
+          this.pageScroller.scrollTo({ xOffset: 0, yOffset: this.sectionOffsets.get(section) ?? 0,
+            animation: this.reduceAnimation ? false : { duration: 220, curve: Curve.EaseOut } });
+        }
+      }, 50);
+    }
   }
 
   private isSectionExpanded(section: string): boolean {
@@ -1072,10 +1078,10 @@ export struct ItemFormPage {
     try {
       const reminderResult = await AppServices.get().reminders.reconcileLatest(currentItem.id);
       if (!reminderResult.ok) {
-        notices.push(`物品已保存，提醒更新失败：${reminderResult.getError().message}；可在详情重试`);
+        notices.push('物品已保存，到期通知未安排，请在详情查看原因');
       }
     } catch (_) {
-      notices.push('物品已保存，提醒更新失败；可在详情重试');
+      notices.push('物品已保存，到期通知未安排，请在详情查看原因');
     }
     return notices.length === 0 ? undefined : notices.join('；');
   }

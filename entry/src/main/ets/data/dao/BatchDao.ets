@@ -2,7 +2,7 @@ import { relationalStore } from '@kit.ArkData';
 import { AppError, AppErrorCode } from '../../common/AppError';
 import { Batch, ConsumptionReceipt, ConsumedStock } from '../../model/Batch';
 import { ItemUnit } from '../../model/Item';
-import { createTraceEventId } from '../../model/TraceEvent';
+import { createTraceEventId, TraceEventType } from '../../model/TraceEvent';
 import { planConsumption, validateConsumptionUndo, validateInventoryReduction } from '../../service/InventoryPolicy';
 import { BATCH_TABLE } from '../rdb/BatchSchema';
 import { inventoryOutstandingSql } from '../rdb/InventoryIntegritySchema';
@@ -34,6 +34,8 @@ export class BatchDao {
           throw new AppError(AppErrorCode.DATABASE_WRITE, '保存批次失败，请重试');
         }
         await recordLocationUsage(store, batch.locationPath, batch.updatedAt);
+        await this.appendStockEvent(store, batch, TraceEventType.STOCK_ADD, batch.quantity,
+          `补入到 ${batch.locationPath || '未填写位置'}`, batch.createdAt);
       });
     } catch (error) {
       if (error instanceof AppError) {
@@ -74,7 +76,10 @@ export class BatchDao {
         const nextQuantity = Math.round((inventory.quantity - existing[0].quantity + batch.quantity) * 100) / 100;
         this.validateReduction(inventory.quantity, nextQuantity, inventory.borrowedQuantity);
         const changedRows = await store.update(this.toUpdateValues(batch), predicates);
-        if (changedRows > 0) { await recordLocationUsage(store, batch.locationPath, batch.updatedAt); }
+        if (changedRows > 0) {
+          await recordLocationUsage(store, batch.locationPath, batch.updatedAt);
+          await this.recordStockChanges(store, existing[0], batch.quantity, batch.locationPath, batch.updatedAt);
+        }
         return changedRows > 0;
       });
     } catch (error) {
@@ -203,7 +208,30 @@ export class BatchDao {
         await store.execute('UPDATE item SET location_path = ? WHERE id = ? AND (SELECT COUNT(*) FROM batch WHERE item_id = ?) = 1',
           [locationPath ?? null, batch.itemId, batch.itemId]);
       }
+      await this.recordStockChanges(store, batch, quantity ?? batch.quantity,
+        changeLocation ? locationPath : batch.locationPath, now);
     });
+  }
+
+  private async recordStockChanges(store: relationalStore.Transaction, before: Batch, quantity: number,
+    locationPath: string | undefined, now: number): Promise<void> {
+    if (before.quantity !== quantity) {
+      await this.appendStockEvent(store, before, TraceEventType.QUANTITY_ADJUST, quantity,
+        `从 ${before.quantity}${before.unit} 调整为 ${quantity}${before.unit}`, now);
+    }
+    if ((before.locationPath ?? '') !== (locationPath ?? '')) {
+      await this.appendStockEvent(store, before, TraceEventType.MOVE, quantity,
+        `从 ${before.locationPath || '未填写位置'} 移到 ${locationPath || '未填写位置'}`, now);
+    }
+  }
+
+  private async appendStockEvent(store: relationalStore.Transaction, batch: Batch, type: TraceEventType,
+    quantity: number, note: string, now: number): Promise<void> {
+    const rowId = await store.insert('trace_event', {
+      id: createTraceEventId(() => now), item_id: batch.itemId, batch_id: batch.id,
+      type: type, quantity: quantity, note: note, created_at: now, legacy_allocated: 0
+    });
+    if (rowId < 0) { throw new AppError(AppErrorCode.DATABASE_WRITE, '保存使用记录失败，请重试'); }
   }
 
   private itemPredicates(itemId: string): relationalStore.RdbPredicates {

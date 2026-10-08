@@ -1,5 +1,5 @@
 import { failure, Result, success } from '../common/Result';
-import { ItemSummary } from '../model/Item';
+import { Item, ItemSummary } from '../model/Item';
 import { ItemQuery } from '../model/ItemQuery';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
 import { ItemListService } from './ItemListService';
@@ -48,6 +48,20 @@ export class ItemSearchService {
       summaries.push(this.listService.toSummary(items[index], now));
     }
     return success(new SearchResult(normalized, summaries));
+  }
+
+  // Free-text browsing includes saved context; name-based system actions keep their narrower contract.
+  async searchEverywhere(query: ItemQuery, now: Date = new Date()): Promise<Result<SearchResult>> {
+    const normalized = query.normalized();
+    const result = await this.repository.list(new ItemQuery('', normalized.locationPath, normalized.category));
+    if (!result.ok) { return failure<SearchResult>(result.getError()); }
+    const keyword = normalized.name.toLocaleLowerCase();
+    const items = result.getData().filter((item: Item) => {
+      const paths = item.activeLocationPaths ?? (item.locationPath ? [item.locationPath] : []);
+      return [item.name, item.barcode ?? '', item.category ?? '', ...paths]
+        .some((value: string) => value.toLocaleLowerCase().includes(keyword));
+    });
+    return success(new SearchResult(normalized, items.map((item: Item) => this.listService.toSummary(item, now))));
   }
 
   async getFilterOptions(): Promise<Result<FilterOptions>> {

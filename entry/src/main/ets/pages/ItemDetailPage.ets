@@ -71,9 +71,13 @@ export struct ItemDetailPage {
   @State private deleting: boolean = false;
   @State private errorMessage: string = '';
   @State private actionError: string = '';
+  @State private sheetError: string = '';
   @State private item: Item | undefined = undefined;
   @State private expiryStatus: ExpiryStatus = ExpiryStatus.NO_EXPIRY_DATE;
   @State private reminderMessage: string = '';
+  @State private reminderOverview: string = '正在检查到期通知…';
+  @State private reminderIssue: boolean = false;
+  private reminderSectionOffset: number = 0;
   @State private reminderEnabled: boolean = false;
   @State private reminderAction: string = 'settings';
   @State private reminderActionText: string = '设置到期通知';
@@ -323,11 +327,33 @@ export struct ItemDetailPage {
       Column({ space: $r('app.float.space_4') }) {
         Column({ space: 20 }) {
           this.detailIdentity({ name: $$.item.name, category: $$.item.category ?? '我的物品', path: this.photoPath })
+          Row({ space: 8 }) {
+            Image($r('app.media.ui_location')).width(20).height(20).fillColor($r('app.color.brand_primary'))
+            Text(this.activeLocationText($$.item)).fontSize(17).fontWeight(FontWeight.Medium)
+              .fontColor($r('app.color.text_primary')).layoutWeight(1)
+          }.width('100%')
+          if (($$.item.activeLocationPaths?.length ?? 0) === 0 && $$.item.quantity > 0) {
+            Button('补充存放位置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+              .onClick(() => this.openStockAction('move'))
+          }
           Divider().color($r('app.color.border_subtle'))
+          if (this.borrowedQuantity > 0) {
           InventoryMetrics({ total: $$.item.quantity, unit: $$.item.unit,
             available: this.managementReady ? this.availableQuantity : undefined,
             borrowed: this.managementReady ? this.borrowedQuantity : undefined })
           Text('借出的物品也计入拥有总量。').fontSize(11).fontColor($r('app.color.text_secondary'))
+          } else {
+            Text(this.managementReady ? `可用 ${this.availableQuantity}${$$.item.unit}` : '正在读取数量…')
+              .fontSize(18).fontWeight(FontWeight.Medium).fontColor($r('app.color.text_primary'))
+          }
+          if ($$.item.expirationDate !== undefined) {
+            Button(this.reminderOverview + ' · 查看').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .fontSize(13).fontColor(this.reminderIssue ? $r('app.color.status_danger') : $r('app.color.brand_primary'))
+              .backgroundColor(this.reminderIssue ? $r('app.color.status_danger_soft') : $r('app.color.surface_accent'))
+              .onClick(() => this.pageScroller.scrollTo({ xOffset: 0, yOffset: this.reminderSectionOffset,
+                animation: !this.reduceAnimation }))
+          }
           if (this.inventoryWarning.length > 0) {
             Text(this.inventoryWarning).fontSize(13).fontColor($r('app.color.status_danger'))
           }
@@ -341,7 +367,7 @@ export struct ItemDetailPage {
           .alignItems(HorizontalAlign.Start)
 
         if (this.actionError.length > 0) {
-          this.actionErrorPanel()
+          this.actionErrorPanel(this.actionError, false)
         }
 
         this.managementSection({ item: $$.item })
@@ -354,8 +380,9 @@ export struct ItemDetailPage {
             }
           }.width('100%').padding(16).borderRadius(16).backgroundColor($r('app.color.surface_accent'))
         }
-        this.locationSection({ item: $$.item })
-        Button('分享物品').width('100%').onClick(() => NavigationHelper.pushUrl({ url: RouteName.SHARE_PREVIEW, params: { itemId: $$.item.id } }))
+        Button('使用记录').attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).width('100%')
+          .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_card'))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_HISTORY, params: { itemId: $$.item.id } }))
         this.expirySection({ item: $$.item })
         if ($$.item.notes !== undefined || $$.item.barcode !== undefined) {
           this.notesSection({ item: $$.item })
@@ -376,7 +403,10 @@ export struct ItemDetailPage {
         }
           .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).width('100%').padding(20).borderRadius(20).backgroundColor($r('app.color.surface_card'))
           .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-          .onClick(() => { this.actionSheetMode = 'stock'; this.showActionSheet = true; })
+          .onClick(() => this.openStockThreshold())
+        Button('分享物品').attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).width('100%')
+          .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_card'))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.SHARE_PREVIEW, params: { itemId: $$.item.id } }))
         if (this.photoPath.length > 0 || $$.item.photoLocalId !== undefined) {
           this.photoSection({ item: $$.item })
         }
@@ -404,7 +434,7 @@ export struct ItemDetailPage {
     Column() {
       Scroll() {
         Column({ space: 16 }) {
-          if (this.actionError.length > 0) { this.actionErrorPanel() }
+          if (this.sheetError.length > 0) { this.actionErrorPanel(this.sheetError, true) }
           if (this.item !== undefined) {
             if (this.actionSheetMode === 'consume') { this.consumptionSection({ item: this.item }) }
             else if (this.actionSheetMode === 'stock') { this.lowStockSection({ item: this.item }) }
@@ -434,9 +464,9 @@ export struct ItemDetailPage {
   }
 
   @Builder
-  private actionErrorPanel() {
+  private actionErrorPanel(message: string, inSheet: boolean) {
     Row({ space: $r('app.float.space_3') }) {
-      Text(this.actionError)
+      Text(message)
         .fontSize($r('app.float.font_body'))
         .fontColor($r('app.color.status_danger'))
         .layoutWeight(1)
@@ -446,7 +476,7 @@ export struct ItemDetailPage {
         .fontColor($r('app.color.status_danger'))
         .backgroundColor($r('app.color.status_danger_soft'))
         .borderRadius($r('app.float.radius_control'))
-        .onClick(() => this.actionError = '')
+        .onClick(() => { if (inSheet) { this.sheetError = ''; } else { this.actionError = ''; } })
     }
     .width('100%')
     .padding($r('app.float.space_3'))
@@ -521,29 +551,6 @@ export struct ItemDetailPage {
   }
 
   @Builder
-  private locationSection($$: ItemDetailParams) {
-    Column({ space: $r('app.float.space_3') }) {
-      Text('存放与分类')
-        .fontSize($r('app.float.font_section'))
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.text_primary'))
-      this.detailRow({ label: '存放位置', value: this.activeLocationText($$.item) })
-      if (($$.item.activeLocationPaths?.length ?? 0) === 0 && $$.item.quantity > 0) {
-        Button('补充存放位置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-          .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
-          .onClick(() => this.openStockAction('move'))
-      }
-      this.detailRow({ label: '分类', value: $$.item.category ?? '未设置' })
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-    .padding($r('app.float.space_4'))
-    .borderRadius($r('app.float.radius_card'))
-    .backgroundColor($r('app.color.surface_card'))
-
-  }
-
-  @Builder
   private expirySection($$: ItemDetailParams) {
     Column({ space: $r('app.float.space_3') }) {
       Text('到期与提醒')
@@ -555,7 +562,7 @@ export struct ItemDetailPage {
       if (this.reminderMessage.length > 0) {
         Text(this.reminderMessage)
           .fontSize($r('app.float.font_caption'))
-          .fontColor($r('app.color.text_secondary'))
+          .fontColor(this.reminderIssue ? $r('app.color.status_danger') : $r('app.color.text_secondary'))
           .width('100%')
       }
       if (this.reminderMessage.length > 0) {
@@ -578,6 +585,7 @@ export struct ItemDetailPage {
     .padding($r('app.float.space_4'))
     .borderRadius($r('app.float.radius_card'))
     .backgroundColor($r('app.color.surface_card'))
+    .onAreaChange((_old: Area, area: Area) => this.reminderSectionOffset = Number(area.position.y))
 
   }
 
@@ -694,7 +702,7 @@ export struct ItemDetailPage {
       if (this.loadRequestCoordinator.isCurrent(requestId) && this.initialSection.length > 0) {
         const section = this.initialSection;
         this.initialSection = '';
-        if (section === 'stock') { this.actionSheetMode = 'stock'; this.showActionSheet = true; }
+        if (section === 'stock') { this.openStockThreshold(); }
         else if (section === 'consume-one' && this.managementReady && this.allBatches.length === 1) {
           this.openStockAction('consume', false);
           this.actionUnit = this.requestedUnit ?? this.actionUnit;
@@ -755,11 +763,17 @@ export struct ItemDetailPage {
   private async loadReminderState(item: Item, requestId?: number): Promise<void> {
     this.reminderAction = 'settings';
     this.reminderActionText = '管理到期通知';
-    if (!this.reminderSettingsReady) { this.reminderMessage = '暂时无法读取通知设置，请打开设置后重试。'; return; }
+    this.reminderIssue = false;
+    if (!this.reminderSettingsReady) {
+      this.reminderIssue = true; this.reminderOverview = '通知状态读取失败';
+      this.reminderMessage = '暂时无法读取通知设置，请打开设置后重试。'; return;
+    }
     if (!this.reminderEnabled) {
+      this.reminderOverview = '到期通知已关闭';
       const disabledRecord = await AppServices.get().reminders.getRecord(item.id);
       if (!this.canApplyLoadResult(requestId)) { return; }
       if (!disabledRecord.ok || disabledRecord.getData()?.systemReminderId !== undefined) {
+        this.reminderIssue = true; this.reminderOverview = '旧通知尚未取消';
         this.reminderMessage = '到期通知已关闭，但旧通知尚未确认取消，请重试检查。';
         this.reminderAction = 'retry'; this.reminderActionText = '重试取消旧通知';
       } else {
@@ -772,12 +786,14 @@ export struct ItemDetailPage {
       const allowed = await notificationManager.isNotificationEnabled();
       if (!this.canApplyLoadResult(requestId)) { return; }
       if (!allowed) {
+        this.reminderIssue = true; this.reminderOverview = '到期通知未获授权';
         this.reminderMessage = '系统通知权限已关闭，授权后才能收到通知。';
         this.reminderActionText = '去授权通知';
         return;
       }
     } catch (_) {
       if (!this.canApplyLoadResult(requestId)) { return; }
+      this.reminderIssue = true; this.reminderOverview = '通知状态读取失败';
       this.reminderMessage = '暂时无法确认通知权限，请检查提醒设置。';
       return;
     }
@@ -789,6 +805,10 @@ export struct ItemDetailPage {
     const result = await AppServices.get().reminders.getRecord(item.id);
     if (!this.canApplyLoadResult(requestId)) { return; }
     const record = result.ok ? result.getData() : undefined;
+    this.reminderIssue = !result.ok || record === undefined || record.status === ReminderRecordStatus.FAILED ||
+      record.status === ReminderRecordStatus.DISABLED || record.status === ReminderRecordStatus.CANCELLED;
+    this.reminderOverview = this.reminderIssue ? (record?.systemReminderId === undefined ? '到期通知未安排' : '到期通知待检查') : record?.status === ReminderRecordStatus.SCHEDULED ?
+      '到期通知已安排' : record?.status === ReminderRecordStatus.DUE ? '已到提醒时间' : '当前无需到期通知';
     this.reminderMessage = result.ok ? AppServices.get().reminders.describeRecord(record) : '提醒状态暂时无法读取，请重试。';
     if (!result.ok || record === undefined || record.status === ReminderRecordStatus.FAILED ||
       record.status === ReminderRecordStatus.DISABLED || record.status === ReminderRecordStatus.CANCELLED) {
@@ -803,16 +823,16 @@ export struct ItemDetailPage {
     }
     const item = this.item;
     this.reminderRetrying = true;
-    this.actionError = '';
     try {
       const result = await AppServices.get().reminders.reconcileLatest(item.id);
       AppEventBus.notifyDataChanged();
       await this.loadReminderState(item);
       if (!result.ok) {
-        this.actionError = result.getError().message;
+        this.reminderMessage = '提醒未同步：' + result.getError().message;
       }
     } catch (_) {
-      this.actionError = '重试创建提醒失败，请稍后再试';
+      this.reminderMessage = '重试创建提醒失败，请稍后再试';
+      this.reminderIssue = true; this.reminderOverview = '到期通知待检查';
     } finally {
       this.reminderRetrying = false;
     }
@@ -916,46 +936,42 @@ export struct ItemDetailPage {
     const value = this.consumeQuantityText.trim();
     const quantity = Number(value);
     if (value.length === 0 || !Number.isFinite(quantity) || quantity <= 0) {
-      this.actionError = '请输入这次用掉的数量，必须大于 0';
+      this.sheetError = '请输入这次用掉的数量，必须大于 0';
       return;
     }
     this.consuming = true;
-    this.actionError = '';
+    this.sheetError = '';
     try {
       const result = await AppServices.get().batches.consumeRecorded(this.itemId, quantity, this.consumeBatchId.length > 0 ? this.consumeBatchId : undefined, this.actionUnit);
       if (!result.ok) {
-        this.actionError = result.getError().message;
+        this.sheetError = result.getError().message;
         return;
       }
       this.lastConsumption = result.getData();
       const receipt = result.getData();
       this.consumptionMessage = `已用掉 ${receipt.quantity}${receipt.unit}，在手从 ${receipt.availableBefore} 变为 ${receipt.availableAfter}${receipt.unit}。`;
-      let notice = '消耗已记录，库存已扣减';
-      try {
-        const reminderResult = await AppServices.get().reminders.reconcileLatest(this.itemId);
-        if (!reminderResult.ok) {
-          this.actionError = '消耗已记录，系统提醒更新失败，可在下方重试同步';
-          notice += '，提醒更新失败';
-        }
-      } catch (_) {
-        this.actionError = '消耗已记录，系统提醒更新失败，可在下方重试同步';
-        notice += '，提醒更新失败';
-      }
       this.showActionSheet = false;
       this.consumeQuantityText = '1';
-      this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
-      await this.loadDetail(false);
-      this.showToast(notice);
+      await this.refreshAfterStockChange();
+      this.showToast(this.reminderIssue ? '消耗已记录，到期通知状态请查看详情' : '消耗已记录，库存已扣减');
     } catch (_) {
-      this.actionError = '记录消耗失败，请重试';
+      this.sheetError = '记录消耗失败，请重试';
     } finally {
       this.consuming = false;
     }
   }
 
+  private openStockThreshold(): void {
+    this.sheetError = '';
+    this.thresholdText = this.stockThreshold === undefined ? '2' : `${this.stockThreshold.threshold}`;
+    this.thresholdEnabled = this.stockThreshold?.enabled ?? false;
+    this.actionSheetMode = 'stock';
+    this.showActionSheet = true;
+  }
+
   private openStockAction(mode: string, showSheet: boolean = true): void {
     if (!this.managementReady || this.item === undefined) { return; }
-    this.actionError = '';
+    this.sheetError = '';
     this.operationQuantityError = '';
     this.actionUnit = this.item.unit;
     this.actionSheetMode = mode;
@@ -1014,24 +1030,24 @@ export struct ItemDetailPage {
 
   private async saveStockChange(): Promise<void> {
     if (this.stockSaving || this.consuming || this.selectedStockId.length === 0) {
-      this.actionError = '请先选择要修改的库存'; return;
+      this.sheetError = '请先选择要修改的库存'; return;
     }
     if (this.actionSheetMode === 'adjust' && (this.stockQuantityText.trim().length === 0 || this.operationQuantityError.length > 0)) {
-      this.actionError = this.operationQuantityError || '请填写核对后的数量'; return;
+      this.sheetError = this.operationQuantityError || '请填写核对后的数量'; return;
     }
     this.stockSaving = true;
-    this.actionError = '';
+    this.sheetError = '';
     try {
       const result = this.actionSheetMode === 'move' ?
         await AppServices.get().batches.move(this.selectedStockId, this.stockLocationPath) :
         await AppServices.get().batches.adjustQuantity(this.selectedStockId, Number(this.stockQuantityText), this.actionUnit);
-      if (!result.ok) { this.actionError = result.getError().message; return; }
+      if (!result.ok) { this.sheetError = result.getError().message; return; }
       this.showActionSheet = false;
       this.lastConsumption = undefined;
       this.consumptionMessage = '';
       await this.refreshAfterStockChange();
       this.showToast(this.actionSheetMode === 'move' ? '存放位置已更新' : '数量已更新');
-    } catch (_) { this.actionError = '保存失败，请重试'; }
+    } catch (_) { this.sheetError = '保存失败，请重试'; }
     finally { this.stockSaving = false; }
   }
 
@@ -1052,11 +1068,17 @@ export struct ItemDetailPage {
 
   private async refreshAfterStockChange(): Promise<void> {
     this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
+    let reminderError = '';
     try {
       const reminder = await AppServices.get().reminders.reconcileLatest(this.itemId);
-      if (!reminder.ok) { this.actionError = '库存已更新，提醒同步失败，可在详情重新检查。'; }
-    } catch (_) { this.actionError = '库存已更新，提醒同步失败，可在详情重新检查。'; }
+      if (!reminder.ok) { reminderError = reminder.getError().message; }
+    } catch (_) { reminderError = '提醒更新失败，请重新检查。'; }
     await this.loadDetail(false);
+    if (reminderError.length > 0) {
+      if (!this.reminderIssue) { this.reminderOverview = '到期通知待检查'; }
+      this.reminderIssue = true;
+      this.reminderMessage = '提醒未同步：' + reminderError;
+    }
   }
 
   private async prepareDeletePreview(): Promise<void> {
@@ -1221,15 +1243,15 @@ export struct ItemDetailPage {
     }
     const value = this.thresholdText.trim();
     if (value.length === 0) {
-      this.actionError = '请输入需要补货的最低数量';
+      this.sheetError = '请输入需要补货的最低数量';
       return;
     }
     this.thresholdSaving = true;
-    this.actionError = '';
+    this.sheetError = '';
     try {
       const result = await AppServices.get().lowStock.saveThreshold(item.id, Number(value), this.thresholdEnabled);
       if (!result.ok) {
-        this.actionError = result.getError().message;
+        this.sheetError = result.getError().message;
         return;
       }
       const threshold = result.getData();
@@ -1241,7 +1263,7 @@ export struct ItemDetailPage {
       this.showActionSheet = false;
       this.showToast('补货设置已保存');
     } catch (_) {
-      this.actionError = '保存补货设置失败，请重试';
+      this.sheetError = '保存补货设置失败，请重试';
     } finally {
       this.thresholdSaving = false;
     }

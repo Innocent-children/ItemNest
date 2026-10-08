@@ -41,6 +41,16 @@ export class NavigationHelper {
     return Promise.resolve(NavigationHelper.replaceWithPathStack(options));
   }
 
+  static replaceCurrent(options: NavigationOptions): boolean {
+    const stack = NavigationHelper.pathStack;
+    if (stack === undefined || stack.size() === 0) { return false; }
+    try {
+      NavigationHelper.lastPopResult = undefined;
+      stack.replacePathByName(options.url, NavigationHelper.toObjectParams(options.params));
+      return true;
+    } catch (_) { return false; }
+  }
+
   static getParams(): Object | undefined {
     return NavigationHelper.lastPopResult ?? NavigationHelper.getPathStackParams();
   }

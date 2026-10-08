@@ -8,6 +8,7 @@ import { ReminderRecord, ReminderRecordStatus } from '../../../main/ets/model/Re
 import { DEFAULT_USER_PREFERENCES, UserPreferences } from '../../../main/ets/model/UserPreferences';
 import { PreferenceService } from '../../../main/ets/service/PreferenceService';
 import { ReminderService } from '../../../main/ets/service/ReminderService';
+import { reminderPublishFailure } from '../../../main/ets/service/ReminderFailure';
 import { ReminderAdapter } from '../../../main/ets/service/adapter/ReminderAdapter';
 import { FakeItemRepository } from './FakeItemRepository';
 
@@ -132,6 +133,15 @@ function enabledPreferences(): UserPreferences {
 
 export default function reminderServiceTest() {
   describe('ReminderService', () => {
+    it('零条提醒却被限额拒绝时不误导清理数据，权限错误仍指向通知授权', 0, () => {
+      const zero = reminderPublishFailure(1700002, 0);
+      expect(zero.code).assertEqual(AppErrorCode.REMINDER_DISPATCH);
+      expect(zero.message.includes('尚不能')).assertTrue();
+      expect(zero.message.includes('清理')).assertFalse();
+      expect(reminderPublishFailure(1700002, 30).message.includes('30 条')).assertTrue();
+      expect(reminderPublishFailure(1700002).message.includes('undefined')).assertFalse();
+      expect(reminderPublishFailure(1700001).code).assertEqual(AppErrorCode.SYSTEM_PERMISSION_DENIED);
+    });
     it('位置变动会更新提醒内容且不推迟原时间', 0, async () => {
       const preferences = new FakePreferenceRepository();
       preferences.value = enabledPreferences();

@@ -39,6 +39,14 @@
 
 ## 平台申请和真机条件
 
+### 到期代理提醒
+
+系统通知授权与代理提醒的使用资格分别检查。声明 `ohos.permission.PUBLISH_AGENT_REMINDER`、通知开关开启，不代表发布代理提醒一定成功。平台管控说明见 [代理提醒常见问题](https://developer.huawei.com/consumer/cn/doc/doccenter-dev-faq/faqs-background-tasks-11) 和 [代理提醒接入指南](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/agent-powered-reminder)。
+
+2026-10-08 在当前签名包的实机上，`getValidReminders()` 返回 0 条，独立测试发布仍返回 `1700002`。这不能按“用户已有提醒太多”处理；需要核实 `com.imotong.itemnest` 的平台使用资格及设备限制。应用保留到期日期、展示未安排状态，并允许重新检查，不清空用户或其他应用的提醒。`ReminderRecoveryDevice` 检查真实发布结果：若可用则创建并撤销测试提醒；若受限则输出 `blocked=1700002`。该分支通过仅代表错误报告正确，不能作为通知实际送达的验收。
+
+补入、换位置和数量调整的使用记录从本版本开始在库存事务中同时保存；历史版本没有记录的操作不补造。
+
 ### 小艺与系统搜索
 
 应用包已包含 JumpFunctionPage、ViewSearchPageLocal，以及 QueryStoredItems、RecordStoredItem、ViewStoredItem 自定义意图和可查询的 ItemIntentEntity。平台侧需要以 com.imotong.itemnest 对应的实际应用身份申请/配置接入，完成调试账号、意图注册和审核。
