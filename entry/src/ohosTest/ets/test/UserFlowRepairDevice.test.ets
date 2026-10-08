@@ -17,6 +17,58 @@ import { LocalAssetStorage } from '../../../main/ets/service/LocalAssetStorage';
 
 export default function userFlowRepairDeviceTest() {
   describe('User flow repair on device', () => {
+    it('消耗撤销恢复原库存且不能重复撤销，换位置不改变数量和到期日', 0, async () => {
+      const ctx = (await abilityDelegatorRegistry.getAbilityDelegator().getCurrentTopAbility()).context;
+      const name = 'itemnest-ux-undo-isolated.db';
+      try { await relationalStore.deleteRdbStore(ctx, name); } catch (_) {}
+      const db = new RdbDatabase(ctx, name);
+      const items = new ItemRepository(new ItemDao(db));
+      const batches = new BatchRepository(new BatchDao(db));
+      const traces = new TraceEventRepository(db);
+      const inventory = new BatchService(batches, items);
+      const lending = new LendingService(traces, items);
+      try {
+        expect((await items.create({ id: 'undo-item', name: '纸巾', quantity: 6, unit: ItemUnit.PACK,
+          locationPath: '厨房', expirationDate: '2027-01-01', photoState: PhotoState.NONE, createdAt: 1, updatedAt: 1 })).ok).assertTrue();
+        const first = (await batches.listByItemId('undo-item')).getData()[0];
+        expect((await inventory.move(first.id, '客厅')).ok).assertTrue();
+        expect((await batches.getById(first.id)).getData()?.quantity).assertEqual(6);
+        expect((await batches.getById(first.id)).getData()?.expirationDate).assertEqual('2027-01-01');
+        expect((await items.getById('undo-item')).getData()?.locationPath).assertEqual('客厅');
+        const second = (await inventory.create({ itemId: 'undo-item', quantity: 4, unit: ItemUnit.PACK,
+          locationPath: '书房', expirationDate: '2027-02-01' })).getData();
+        expect((await lending.borrow('undo-item', 2, '借用人')).ok).assertTrue();
+        expect((await items.getById('undo-item')).getData()?.borrowedQuantity).assertEqual(2);
+        const consumed = await inventory.consumeRecorded('undo-item', 7);
+        expect(consumed.ok).assertTrue();
+        expect(consumed.getData().stocks.length).assertEqual(2);
+        expect((await items.getById('undo-item')).getData()?.quantity).assertEqual(3);
+        expect((await inventory.undoConsumption(consumed.getData())).ok).assertTrue();
+        expect((await batches.getById(first.id)).getData()?.quantity).assertEqual(6);
+        expect((await batches.getById(second.id)).getData()?.quantity).assertEqual(4);
+        expect((await items.getById('undo-item')).getData()?.quantity).assertEqual(10);
+        expect((await inventory.undoConsumption(consumed.getData())).ok).assertFalse();
+        expect((await items.getById('undo-item')).getData()?.quantity).assertEqual(10);
+        const event = (await traces.listByItemId('undo-item')).getData().find(value => value.id === consumed.getData().eventId);
+        expect(event?.voidedAt !== undefined).assertTrue();
+        const another = (await inventory.consumeRecorded('undo-item', 7)).getData();
+        expect((await inventory.adjustQuantity(second.id, 4)).ok).assertTrue();
+        expect((await inventory.undoConsumption(another)).ok).assertFalse();
+        expect((await batches.getById(first.id)).getData()?.quantity).assertEqual(0);
+        expect((await items.getById('undo-item')).getData()?.quantity).assertEqual(4);
+        expect((await inventory.adjustQuantity(second.id, 1)).ok).assertFalse();
+        const editor = new ItemUpdateService(items, new ItemValidator(), () => Date.now(), batches);
+        const details = await editor.updateDetails('undo-item', { name: '纸巾资料', unit: ItemUnit.PACK, notes: '只更新资料' });
+        expect(details.ok).assertTrue();
+        expect(details.getData().quantity).assertEqual(4);
+        expect(details.getData().expirationDate).assertEqual('2027-02-01');
+        expect(details.getData().locationPath).assertEqual('客厅');
+      } finally {
+        db.close();
+        await relationalStore.deleteRdbStore(ctx, name);
+      }
+    });
+
     it('图片通过 URI 读取并复制到私有目录，失败时不遗留文件', 0, async () => {
       const ctx = (await abilityDelegatorRegistry.getAbilityDelegator().getCurrentTopAbility()).context;
       const source = `${ctx.cacheDir}/ux-repair-image-source`;

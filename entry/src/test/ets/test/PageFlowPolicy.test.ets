@@ -3,6 +3,10 @@ import { describe, it, expect } from '@ohos/hypium';
 import { CategoryRecord } from '../../../main/ets/model/Category';
 import { ItemUnit } from '../../../main/ets/model/Item';
 import { activeCategoryNames, activeLocationText, refreshedUnit, expiryDescription } from '../../../main/ets/service/ItemFlowPresentation';
+import { ItemListService } from '../../../main/ets/service/ItemListService';
+import { ExpiryService } from '../../../main/ets/service/ExpiryService';
+import { FakeItemRepository } from './FakeItemRepository';
+import { PhotoState } from '../../../main/ets/model/Item';
 
 function category(name: string, active: boolean, systemPreset: boolean): CategoryRecord {
   return { id: name, name: name, active: active, systemPreset: systemPreset, createdAt: 1, updatedAt: 1 };
@@ -10,6 +14,15 @@ function category(name: string, active: boolean, systemPreset: boolean): Categor
 
 export default function pageFlowPolicyTest() {
   describe('Item flow presentation', () => {
+    it('拥有三件且借出两件时，列表同时保留总量并显示在手一件', 0, () => {
+      const summary = new ItemListService(new FakeItemRepository(), new ExpiryService()).toSummary({
+        id: 'tool', name: '工具', quantity: 3, borrowedQuantity: 2, unit: ItemUnit.PIECE,
+        photoState: PhotoState.NONE, createdAt: 1, updatedAt: 1
+      });
+      expect(summary.quantity).assertEqual(3);
+      expect(summary.availableQuantity).assertEqual(1);
+      expect(summary.borrowedQuantity).assertEqual(2);
+    });
     it('到期提示区分今天明天和过期天数', 0, () => {
       const now = new Date(2026, 9, 6, 23, 59);
       expect(expiryDescription(ExpiryStatus.DUE_SOON, '2026-10-06', now)).assertEqual('今天到期');

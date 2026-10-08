@@ -4,6 +4,7 @@ import { AppServices } from '../service/AppServices';
 
 @Component
 export struct RecognitionPanel {
+  @Prop includeExpiry: boolean = true;
   @Prop @Watch('reset') photoUri: string = '';
   @Prop inputEnabled: boolean = true;
   onApply: (draft: CaptureDraft) => void = () => {};
@@ -44,6 +45,7 @@ export struct RecognitionPanel {
           .onChange((value: string) => this.name = value)
         Text('生产日期：' + (this.productionDate || '未识别') + '　保质期：' + (this.shelfLife || '未识别'))
           .fontSize(13).fontColor($r('app.color.text_secondary')).width('100%')
+        if (this.includeExpiry) {
         TextInput({ text: this.expirationDate, placeholder: '确认到期日期，例如 2026-12-31' })
           .maxLength(10).onChange((value: string) => this.expirationDate = value)
         Flex({ wrap: FlexWrap.Wrap }) {
@@ -51,6 +53,9 @@ export struct RecognitionPanel {
             Button('选为到期日：' + date).fontSize(12).margin(4)
               .onClick(() => this.expirationDate = date)
           }, (date: string) => date)
+        }
+        } else {
+          Text('到期日期请在存放明细中修改。').fontSize(13).fontColor($r('app.color.text_secondary'))
         }
         Text(this.text).fontSize(13).fontColor($r('app.color.text_secondary')).copyOption(CopyOptions.LocalDevice)
           .width('100%')
@@ -82,10 +87,10 @@ export struct RecognitionPanel {
   }
 
   private apply(): void {
-    if (this.expirationDate.length > 0 && AppServices.get().captureDraft.normalizeDate(this.expirationDate).length === 0) {
+    if (this.includeExpiry && this.expirationDate.length > 0 && AppServices.get().captureDraft.normalizeDate(this.expirationDate).length === 0) {
       this.notice = '请填写有效的到期日期，或清空日期后手动补充。'; return;
     }
-    this.onApply({ name: this.name, productionDate: this.productionDate, expirationDate: this.expirationDate,
+    this.onApply({ name: this.name, productionDate: this.productionDate, expirationDate: this.includeExpiry ? this.expirationDate : '',
       shelfLife: this.shelfLife, text: this.text, dateCandidates: this.dates, notice: '' });
     this.notice = '内容已填入，点击表单保存后生效。';
   }

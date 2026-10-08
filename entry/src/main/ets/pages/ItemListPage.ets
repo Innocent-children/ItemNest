@@ -1,4 +1,5 @@
 import { PageHeader } from '../components/PageHeader';
+import { SharedSearchField } from '../components/SharedSearchField';
 import { RoundedButtonStyle, dockContentInset, uiSpring, nativeTitleOptions } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { EmptyState } from '../components/EmptyState';
@@ -24,6 +25,9 @@ export struct ItemListPage {
   @State private filterNotice: string = '';
   @Prop @Watch('onLocationFilterChanged') locationFilter: string = '';
   @Prop isMainTab: boolean = false;
+  onSearch: (query: ItemQuery) => void = (query: ItemQuery) => {
+    NavigationHelper.pushUrl({ url: RouteName.SEARCH, params: { query: query } });
+  };
   @State private contentWidth: number = 0;
   @State private selectedSort: ItemSortMode | undefined = undefined;
   @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
@@ -122,12 +126,18 @@ export struct ItemListPage {
     PageHeader({ title: this.settingStock ? '设置补货提醒' : this.attention === 'reminders' ? '今日提醒' : this.attention === 'expiry' ? '到期待处理' : this.attention === 'restock' ? '需要补货' : this.query.isEmpty() ? '我的物品' : '筛选结果',
         subtitle: this.settingStock ? '选择物品，设置少于多少时需要补货。' : this.attention === 'reminders' ? '今天安排通知的物品，点击查看详情。' : '每一件，都好好收着。', eyebrow: this.isMainTab ? 'YOUR COLLECTION' : '',
         showBack: !this.isMainTab, actionText: this.attention === undefined ? '查找与筛选' : '查找其他物品', actionIcon: $r('app.media.dock_search'),
-        onAction: () => NavigationHelper.pushUrl({ url: RouteName.SEARCH, params: { query: this.query } }) })
+        onAction: () => this.onSearch(this.query) })
   }
 
   @Builder
   private pageContent() {
     Column() {
+      if (this.isMainTab) {
+        Row() {
+          SharedSearchField({ editable: false, placeholder: '搜索物品，或按位置与分类筛选',
+            onOpen: () => this.onSearch(this.query) })
+        }.width('100%').constraintSize({ maxWidth: 960 }).padding({ left: 24, right: 24, bottom: 12 })
+      }
       if (this.query.locationPath !== undefined) {
         Button('在此位置记录物品').onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM,
           params: { mode: 'create', externalRequest: { action: 'add', locationPath: this.query.locationPath } } }))
@@ -153,6 +163,10 @@ export struct ItemListPage {
         }
       }.width('100%').constraintSize({ maxWidth: 960 })
         .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: 6 })
+      if (this.items.length > 0) {
+        Text('长按物品可记录用量、换位置或调整数量').fontSize(12).fontColor($r('app.color.text_secondary'))
+          .width('100%').constraintSize({ maxWidth: 960 }).padding({ left: 24, right: 24, bottom: 8 })
+      }
       if (!this.query.isEmpty()) {
         Row({ space: 8 }) {
           Text([this.query.name, this.query.locationPath ?? '', this.query.category ?? ''].filter((value: string) => value.length > 0).join(' · '))

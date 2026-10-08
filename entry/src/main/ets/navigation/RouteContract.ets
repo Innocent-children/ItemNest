@@ -2,8 +2,10 @@ import { ExternalRequest } from '../model/SystemFeatures';
 import { AppError, AppErrorCode } from '../common/AppError';
 import { failure, Result, success } from '../common/Result';
 import { ItemQuery } from '../model/ItemQuery';
+import { ItemUnit } from '../model/Item';
 
 export interface ItemRouteParams {
+  expectedUnit?: ItemUnit;
   externalRequest?: ExternalRequest;
   locationId?: string;
   section?: string;
@@ -44,6 +46,7 @@ export interface LendingRouteParams extends ItemRouteParams {
 }
 
 export interface NavigationRouteParams extends ManagementRouteParams {
+  expectedUnit?: ItemUnit;
   externalRequest?: ExternalRequest;
   locationId?: string;
   section?: string;

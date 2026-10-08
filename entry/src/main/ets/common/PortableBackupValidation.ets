@@ -148,6 +148,9 @@ export class PortableBackupValidation {
         }
         const tokens = new Set<string>();
         for (const label of payload.locationLabels) {
+          if (label?.name !== undefined && (typeof label.name !== 'string' || label.name.trim().length === 0 || label.name.length > 40)) {
+            return this.invalid('备份中的收纳标签名称无效');
+          }
           if (!label || typeof label.token !== 'string' || !/^[a-fA-F0-9-]{32,36}$/.test(label.token) ||
             tokens.has(label.token) || !locationIds.has(label.locationId)) {
             return this.invalid('备份包含重复或没有对应位置的收纳标签');

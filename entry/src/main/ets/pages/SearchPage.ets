@@ -5,7 +5,6 @@ import { ExternalNavigation } from '../navigation/ExternalNavigation';
 import { NavigationRouteParams } from '../navigation/RouteContract';
 import { PageHeader } from '../components/PageHeader';
 import { SharedSearchField } from '../components/SharedSearchField';
-import { SharedRouteMotion } from '../ui/SharedRouteMotion';
 import { RoundedButtonStyle, dockContentInset, uiSpring, nativeTitleOptions, nativeSheetOptions } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { RouteName } from '../navigation/RouteName';
@@ -31,14 +30,16 @@ export struct SearchPage {
   @State private scanning: boolean = false;
   @State private filterNotice: string = '';
   private focusOnShown: boolean = false;
-  @State private homeTransition: boolean = false;
-  @StorageLink('itemnest.searchExpanded') private searchExpanded: boolean = true;
-  @StorageLink('itemnest.sharedPageProgress') private sharedPageProgress: number = 1;
-  @StorageLink('itemnest.sharedPageRoute') private sharedPageRoute: string = '';
+  private pageVisible: boolean = false;
   private pageScroller: Scroller = new Scroller();
   private searchController: SearchController = new SearchController();
   @State private viewportWidth: number = 360;
   @Prop isMainTab: boolean = false;
+  @Prop @Watch('onTabVisibilityChanged') active: boolean = true;
+  @Prop requestedQuery: ItemQuery | undefined = undefined;
+  @Prop @Watch('onSearchRequested') requestRevision: number = 0;
+  @State private draftLocation: string = '';
+  @State private draftCategory: string = '';
   @State private showFilters: boolean = false;
   @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @StorageLink('itemnest.keyboardVisible') private keyboardVisible: boolean = false;
@@ -67,9 +68,9 @@ export struct SearchPage {
   private lastHandledDataRevision: number = -1;
 
   aboutToAppear(): void {
-    this.homeTransition = !this.isMainTab && (NavigationHelper.getParams() as NavigationRouteParams | undefined)?.source === 'home-search';
-    this.focusOnShown = this.homeTransition && this.reduceAnimation;
     this.readInitialQuery();
+    this.focusOnShown = this.isMainTab && this.requestRevision > 0;
+    if (this.isMainTab && this.requestedQuery !== undefined) { this.applyRequestedQuery(); }
     const hasInitialQuery = !this.currentQuery().isEmpty();
     this.loadSearchDataForCurrentRevision(!hasInitialQuery, false);
     if (hasInitialQuery) {
@@ -82,7 +83,41 @@ export struct SearchPage {
   }
 
   aboutToDisappear(): void {
-    if (this.homeTransition) { SharedRouteMotion.release(RouteName.SEARCH); }
+    this.inputSearchVersion++;
+    this.requestCoordinator.invalidateQueryRequests();
+  }
+
+  private applyRequestedQuery(): void {
+    if (this.requestedQuery === undefined) { return; }
+    this.name = this.requestedQuery.name;
+    this.selectedLocation = this.requestedQuery.locationPath ?? '';
+    this.selectedCategory = this.requestedQuery.category ?? '';
+  }
+
+  private onSearchRequested(): void {
+    if (!this.isMainTab || this.requestRevision === 0) { return; }
+    this.inputSearchVersion++;
+    this.requestCoordinator.invalidateQueryRequests();
+    this.applyRequestedQuery();
+    if (this.requestedQuery !== undefined) { this.search(true, false, true); }
+    this.focusOnShown = true;
+    if (this.pageVisible) { this.focusSearch(); }
+  }
+
+  private focusSearch(): void {
+    if (!this.focusOnShown) { return; }
+    try {
+      this.getUIContext().getFocusController().requestFocus(this.isMainTab ? 'itemnest-tab-search-input' : 'itemnest-search-input');
+      this.focusOnShown = false;
+    } catch (_) {}
+  }
+
+  private onTabVisibilityChanged(): void {
+    if (!this.active) {
+      this.searchController.stopEditing();
+      this.pageVisible = false;
+      this.focusOnShown = false;
+    }
   }
 
   private onDataRevisionChanged(): void {
@@ -118,13 +153,7 @@ export struct SearchPage {
       .hideBackButton(true)
       .bindToScrollable([this.pageScroller])
       .backgroundColor($r('app.color.surface_app'))
-      .opacity(this.homeTransition && this.sharedPageRoute === RouteName.SEARCH ? this.sharedPageProgress : 1)
-      .onShown(() => {
-        if (this.focusOnShown) {
-          this.focusOnShown = false;
-          this.getUIContext().getFocusController().requestFocus('itemnest-search-input');
-        }
-      })
+      .onShown(() => this.focusSearch())
       .onHidden(() => this.searchController.stopEditing())
       .onBackPressed(() => NavigationHelper.handleBackPressed())
     }
@@ -132,6 +161,8 @@ export struct SearchPage {
 
   private openFilters(): void {
     this.searchController.stopEditing();
+    this.draftLocation = this.selectedLocation;
+    this.draftCategory = this.selectedCategory;
     this.showFilters = true;
   }
 
@@ -155,10 +186,9 @@ export struct SearchPage {
     Column() {
 
       Row({ space: 10 }) {
-        if (!this.homeTransition || this.searchExpanded) {
         SharedSearchField({ value: this.name, controller: this.searchController,
           inputId: this.isMainTab ? 'itemnest-tab-search-input' : 'itemnest-search-input',
-          transitionId: this.homeTransition ? 'itemnest-home-search' : '',
+          placeholder: this.includePhotos ? '名称或外观，例如：红色盒子' : '物品名称或条码',
           onChange: (value: string) => {
             this.name = value;
             this.requestCoordinator.invalidateSearchResults();
@@ -167,10 +197,9 @@ export struct SearchPage {
             this.loadSuggestions();
             this.scheduleSearch();
           }, onSubmit: () => this.search(true) }).layoutWeight(1)
-        }
       }.width('100%').height(68).constraintSize({ maxWidth: 960 })
         .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), bottom: 12 })
-        .onAreaChange(() => { if (this.homeTransition) { SharedRouteMotion.targetReady(); } })
+        .onVisibleAreaChange([0.5], (visible: boolean) => { this.pageVisible = visible; if (visible) { this.focusSearch(); } })
       Row({ space: 12 }) {
         Button(this.scanning ? '正在扫码…' : '扫码查找').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
           .fontSize(13).fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
@@ -185,6 +214,10 @@ export struct SearchPage {
           .onChange((value: boolean) => { this.includePhotos = value; this.search(true, false); })
         Text('同时按照片外观查找').fontSize(14).fontColor($r('app.color.text_secondary'))
       }.width('100%').constraintSize({ maxWidth: 960 }).padding({ left: 24, right: 24, bottom: 8 })
+      if (this.includePhotos) {
+        Text('输入颜色或形状等描述，查找已保存的照片，例如“黑色遥控器”。')
+          .fontSize(12).fontColor($r('app.color.text_secondary')).padding({ left: 24, right: 24, bottom: 8 })
+      }
       if (this.photoNotice.length > 0) {
         Text(this.photoNotice).fontSize(12).fontColor($r('app.color.text_secondary')).padding({ left: 24, right: 24 })
       }
@@ -313,7 +346,14 @@ export struct SearchPage {
           .width('100%').height(50).fontColor($r('app.color.brand_on_primary'))
           .backgroundColor($r('app.color.brand_primary'))
           .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-          .onClick(() => { this.showFilters = false; this.search(true, true, true); })
+          .enabled(!this.filterLoading && this.filterErrorMessage.length === 0)
+          .onClick(() => {
+            this.selectedLocation = this.draftLocation;
+            this.selectedCategory = this.draftCategory;
+            this.showFilters = false;
+            this.inputSearchVersion++;
+            this.search(true, true, true);
+          })
       }.width('100%').padding({ left: 24, right: 24, bottom: 24 })
     }.width('100%').height('100%')
   }
@@ -322,16 +362,15 @@ export struct SearchPage {
   private filterChoice(label: string, value: string, type: string) {
     Button(label).attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
       .fontSize(13).borderRadius(24)
-      .fontColor((type === 'location' ? this.selectedLocation : this.selectedCategory) === value
+      .fontColor((type === 'location' ? this.draftLocation : this.draftCategory) === value
         ? $r('app.color.brand_on_primary') : $r('app.color.text_primary'))
-      .backgroundColor((type === 'location' ? this.selectedLocation : this.selectedCategory) === value
+      .backgroundColor((type === 'location' ? this.draftLocation : this.draftCategory) === value
         ? $r('app.color.brand_primary') : $r('app.color.surface_card'))
       .margin({ right: 8, bottom: 8 })
-      .accessibilitySelected((type === 'location' ? this.selectedLocation : this.selectedCategory) === value)
+      .accessibilitySelected((type === 'location' ? this.draftLocation : this.draftCategory) === value)
       .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
       .onClick(() => {
-        if (type === 'location') { this.selectedLocation = value; } else { this.selectedCategory = value; }
-        this.search(false, false);
+        if (type === 'location') { this.draftLocation = value; } else { this.draftCategory = value; }
       })
   }
 
@@ -439,6 +478,8 @@ export struct SearchPage {
       this.filterErrorMessage = '';
       this.locationPaths = result.getData().locationPaths;
       this.categories = result.getData().categories;
+      if (this.draftLocation.length > 0 && this.locationPaths.indexOf(this.draftLocation) < 0) { this.draftLocation = ''; }
+      if (this.draftCategory.length > 0 && this.categories.indexOf(this.draftCategory) < 0) { this.draftCategory = ''; }
       if (!showLoading) {
         let changed = false;
         if (this.selectedLocation.length > 0 && this.locationPaths.indexOf(this.selectedLocation) < 0) {
@@ -567,6 +608,7 @@ export struct SearchPage {
     this.searched = false;
     this.searchLoading = false;
     this.searchErrorMessage = '';
+    this.photoNotice = '';
     this.loadSuggestions();
   }
 
@@ -671,7 +713,7 @@ export struct SearchPage {
     const combined = result.getData();
     if (!photos.ok) { combined.photoNotice = photos.getError().message + '；名称搜索结果仍可查看。'; return success(combined); }
     for (const item of photos.getData()) {
-      if (!combined.items.some((existing: ItemSummary) => existing.id === item.id)) { combined.items.push(item); }
+      if (!combined.items.some((existing: ItemSummary) => existing.id === item.id)) { item.photoMatch = true; combined.items.push(item); }
     }
     const merged = new SearchResult(query, combined.items);
     merged.photoNotice = '包含照片外观匹配的候选物品，请对照照片确认。';

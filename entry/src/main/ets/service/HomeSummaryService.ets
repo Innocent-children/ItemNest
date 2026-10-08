@@ -1,6 +1,7 @@
+import { ItemListService } from './ItemListService';
 import { failure, Result, success } from '../common/Result';
 import { ExpiryStatus } from '../model/ExpiryStatus';
-import { Item, ItemSummary, PhotoState } from '../model/Item';
+import { Item, ItemSummary } from '../model/Item';
 import { StockStatus } from '../model/StockStatus';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
 import { StockThresholdRepositoryPort } from '../data/repository/StockThresholdRepository';
@@ -30,12 +31,12 @@ export class HomeSummary {
 
 export class HomeSummaryService {
   private readonly repository: ItemRepositoryPort;
-  private readonly expiryService: ExpiryService;
+  private readonly listItems: ItemListService;
   private readonly thresholds: StockThresholdRepositoryPort;
 
   constructor(repository: ItemRepositoryPort, expiryService: ExpiryService, thresholds: StockThresholdRepositoryPort) {
     this.repository = repository;
-    this.expiryService = expiryService;
+    this.listItems = new ItemListService(repository, expiryService);
     this.thresholds = thresholds;
   }
 
@@ -57,7 +58,7 @@ export class HomeSummaryService {
     const items = itemsResult.getData();
     for (let index = 0; index < items.length; index++) {
       const item = items[index];
-      const summary = this.toSummary(item, now);
+      const summary = this.listItems.toSummary(item, now);
       if (summary.expiryStatus === ExpiryStatus.DUE_SOON || summary.expiryStatus === ExpiryStatus.EXPIRED) {
         expiryAttentionItems.push(summary);
       }
@@ -75,26 +76,9 @@ export class HomeSummaryService {
   private toSummaries(items: Item[], now: Date): ItemSummary[] {
     const summaries: ItemSummary[] = [];
     for (let index = 0; index < items.length; index++) {
-      summaries.push(this.toSummary(items[index], now));
+      summaries.push(this.listItems.toSummary(items[index], now));
     }
     return summaries;
   }
 
-  private toSummary(item: Item, now: Date): ItemSummary {
-    return {
-      id: item.id,
-      name: item.name,
-      quantity: item.quantity,
-      unit: item.unit,
-      locationPath: item.locationPath,
-      activeLocationPaths: item.activeLocationPaths,
-      category: item.category,
-      expirationDate: item.expirationDate,
-      expiryStatus: this.expiryService.getExpiryStatus(item, now),
-      stockStatus: this.expiryService.getStockStatus(item),
-      photoLocalId: item.photoState === PhotoState.LOCAL ? item.photoLocalId : undefined,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt
-    };
-  }
 }

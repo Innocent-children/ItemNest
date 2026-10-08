@@ -26,6 +26,8 @@ export class ItemListService {
       name: item.name,
       quantity: item.quantity,
       unit: item.unit,
+      borrowedQuantity: item.borrowedQuantity,
+      availableQuantity: item.borrowedQuantity === undefined ? undefined : Math.max(0, Math.round((item.quantity - item.borrowedQuantity) * 100) / 100),
       locationPath: item.locationPath,
       activeLocationPaths: item.activeLocationPaths,
       category: item.category,

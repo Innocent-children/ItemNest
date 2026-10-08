@@ -1,9 +1,9 @@
 import { relationalStore } from '@kit.ArkData';
 import { AppError, AppErrorCode } from '../../common/AppError';
-import { Batch } from '../../model/Batch';
+import { Batch, ConsumptionReceipt, ConsumedStock } from '../../model/Batch';
 import { ItemUnit } from '../../model/Item';
 import { createTraceEventId } from '../../model/TraceEvent';
-import { planConsumption, validateInventoryReduction } from '../../service/InventoryPolicy';
+import { planConsumption, validateConsumptionUndo, validateInventoryReduction } from '../../service/InventoryPolicy';
 import { BATCH_TABLE } from '../rdb/BatchSchema';
 import { inventoryOutstandingSql } from '../rdb/InventoryIntegritySchema';
 import { RdbDatabase } from '../rdb/RdbDatabase';
@@ -114,23 +114,32 @@ export class BatchDao {
     }
   }
 
-  async consume(itemId: string, quantity: number, batchId: string | undefined, now: number): Promise<void> {
-    await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
+  async consume(itemId: string, quantity: number, batchId: string | undefined, now: number, expectedUnit?: ItemUnit): Promise<ConsumptionReceipt> {
+    return this.database.transaction(async (store: relationalStore.Transaction): Promise<ConsumptionReceipt> => {
       const inventory = await this.readInventory(store, itemId);
+      if (expectedUnit !== undefined) { this.validateUnit(expectedUnit, inventory.unit); }
       const batches = await this.readBatches(await store.query(this.itemPredicates(itemId)));
       const planned = planConsumption(batches, quantity, inventory.borrowedQuantity, batchId);
       if (!planned.ok) {
         throw planned.getError();
       }
       const allocations = planned.getData();
+      const receipt: ConsumptionReceipt = { eventId: createTraceEventId(() => now), itemId: itemId,
+        quantity: quantity, unit: inventory.unit, createdAt: now,
+        availableBefore: Math.max(0, Math.round((inventory.quantity - inventory.borrowedQuantity) * 100) / 100),
+        availableAfter: Math.max(0, Math.round((inventory.quantity - inventory.borrowedQuantity - quantity) * 100) / 100), stocks: allocations.map((allocation): ConsumedStock => ({
+          batchId: allocation.batch.id, beforeQuantity: allocation.batch.quantity, afterQuantity: allocation.remainingQuantity
+        })) };
       for (let index = 0; index < allocations.length; index++) {
         const allocation = allocations[index];
         const predicates = new relationalStore.RdbPredicates(BATCH_TABLE);
         predicates.equalTo('id', allocation.batch.id);
-        await store.update({ quantity: allocation.remainingQuantity, updated_at: now }, predicates);
+        if (await store.update({ quantity: allocation.remainingQuantity, updated_at: now }, predicates) !== 1) {
+          throw new AppError(AppErrorCode.DATABASE_WRITE, '库存已变化，请重试');
+        }
       }
       const rowId = await store.insert('trace_event', {
-        id: createTraceEventId(() => now),
+        id: receipt.eventId,
         item_id: itemId,
         batch_id: allocations.length === 1 ? allocations[0].batch.id : null,
         type: 'CONSUME',
@@ -144,6 +153,55 @@ export class BatchDao {
       });
       if (rowId < 0) {
         throw new AppError(AppErrorCode.DATABASE_WRITE, '保存消耗记录失败，请重试');
+      }
+      return receipt;
+    });
+  }
+
+  async undoConsumption(receipt: ConsumptionReceipt, now: number): Promise<void> {
+    await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
+      const rows = await store.querySql('SELECT item_id,type,quantity,created_at,voided_at FROM trace_event WHERE id = ?', [receipt.eventId]);
+      try {
+        if (!ResultSetReader.goToFirstRow(rows) || ResultSetReader.readString(rows, 'item_id') !== receipt.itemId ||
+          ResultSetReader.readString(rows, 'type') !== 'CONSUME' || ResultSetReader.readLong(rows, 'voided_at') !== undefined ||
+          ResultSetReader.readDouble(rows, 'quantity') !== receipt.quantity || ResultSetReader.readLong(rows, 'created_at') !== receipt.createdAt) {
+          throw new AppError(AppErrorCode.VALIDATION, '这次消耗已撤销或记录已变化，请重新查看库存');
+        }
+      } finally { ResultSetReader.close(rows); }
+      const batches = await this.readBatches(await store.query(this.itemPredicates(receipt.itemId)));
+      const validated = validateConsumptionUndo(batches, receipt);
+      if (!validated.ok) { throw validated.getError(); }
+      for (const stock of receipt.stocks) {
+        const changed = await store.update({ quantity: stock.beforeQuantity, updated_at: now },
+          new relationalStore.RdbPredicates(BATCH_TABLE).equalTo('id', stock.batchId).equalTo('item_id', receipt.itemId));
+        if (changed !== 1) { throw new AppError(AppErrorCode.DATABASE_WRITE, '恢复库存失败，请重试'); }
+      }
+      if (await store.update({ voided_at: now }, new relationalStore.RdbPredicates('trace_event').equalTo('id', receipt.eventId)) !== 1) {
+        throw new AppError(AppErrorCode.DATABASE_WRITE, '撤销消耗失败，请重试');
+      }
+    });
+  }
+
+  async changeStock(batchId: string, quantity: number | undefined, locationPath: string | undefined,
+    changeLocation: boolean, now: number, expectedUnit?: ItemUnit): Promise<void> {
+    await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
+      const predicates = new relationalStore.RdbPredicates(BATCH_TABLE).equalTo('id', batchId);
+      const batches = await this.readBatches(await store.query(predicates));
+      if (batches.length === 0) { throw new AppError(AppErrorCode.NOT_FOUND, '这份库存已删除，请重新选择'); }
+      const batch = batches[0];
+      const inventory = await this.readInventory(store, batch.itemId);
+      const values: relationalStore.ValuesBucket = { updated_at: now };
+      if (quantity !== undefined) {
+        if (expectedUnit !== undefined) { this.validateUnit(expectedUnit, inventory.unit); }
+        this.validateReduction(inventory.quantity, Math.round((inventory.quantity - batch.quantity + quantity) * 100) / 100, inventory.borrowedQuantity);
+        values.quantity = quantity;
+      }
+      if (changeLocation) { values.location_path = locationPath ?? null; }
+      if (await store.update(values, predicates) !== 1) { throw new AppError(AppErrorCode.DATABASE_WRITE, '保存库存失败，请重试'); }
+      if (changeLocation) { await recordLocationUsage(store, locationPath, now); }
+      if (changeLocation) {
+        await store.execute('UPDATE item SET location_path = ? WHERE id = ? AND (SELECT COUNT(*) FROM batch WHERE item_id = ?) = 1',
+          [locationPath ?? null, batch.itemId, batch.itemId]);
       }
     });
   }

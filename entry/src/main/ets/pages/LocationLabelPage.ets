@@ -19,6 +19,8 @@ export struct LocationLabelPage {
   @State private labels: LocationLabel[] = [];
   @State private token: string = '';
   @State private uri: string = '';
+  @State private labelName: string = '';
+  @State private savedLabelName: string = '';
   @State private message: string = '';
   @State private busy: boolean = false;
   @State private listening: boolean = false;
@@ -45,13 +47,22 @@ export struct LocationLabelPage {
             .onSelect((index: number) => { this.locationId = this.locations[index].id; this.token = ''; this.uri = ''; })
           Button('生成新标签').enabled(this.locationId.length > 0 && !this.busy && !this.listening).onClick(() => this.createLabel())
           ForEach(this.labels.filter((label: LocationLabel) => label.locationId === this.locationId), (label: LocationLabel) => {
-            Button('查看标签 ' + label.token.slice(0, 8)).enabled(!this.busy && !this.listening)
+            Button(label.name ?? ('未命名标签 · ' + label.token.slice(0, 8))).enabled(!this.busy && !this.listening)
               .onClick(() => this.selectLabel(label))
           }, (label: LocationLabel) => label.token)
           if (this.uri.length > 0) {
-            QRCode(this.uri).width(240).height(240).color('#17242D').backgroundColor('#FFFFFF')
-            Text(this.locations.find((location: LocationRecord) => location.id === this.locationId)?.path ?? '')
-              .fontSize(16).fontColor($r('app.color.text_primary'))
+            TextInput({ text: this.labelName, placeholder: '给标签起个名字，例如：冬季衣物箱' }).maxLength(40)
+              .enabled(!this.busy && !this.listening).onChange((value: string) => this.labelName = value)
+            Button('保存标签名称').enabled(!this.busy && !this.listening && this.labelName.trim().length > 0 && this.labelName !== this.savedLabelName)
+              .onClick(() => this.rename())
+            Column({ space: 16 }) {
+              QRCode(this.uri).width(240).height(240).color('#17242D').backgroundColor('#FFFFFF')
+              if (this.savedLabelName.length > 0) { Text(this.savedLabelName).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#17242D') }
+              Text(this.locations.find((location: LocationRecord) => location.id === this.locationId)?.path ?? '')
+                .fontSize(16).fontColor('#17242D').textAlign(TextAlign.Center)
+              Text('我的家当 · 扫一扫查看物品').fontSize(12).fontColor('#54615B')
+            }.id('itemnest-printable-label').width('100%').constraintSize({ maxWidth: 360 }).padding(24).backgroundColor('#FFFFFF')
+            Button('保存标签图片，可打印或贴到收纳箱').enabled(!this.busy && !this.listening).onClick(() => this.saveImage())
             Button('分享标签链接').enabled(!this.busy).onClick(() => this.share())
             Button('将标签写入 NFC').enabled(!this.busy && !this.listening).onClick(() => this.startNfc(true))
             Button('解除这个标签的关联').enabled(!this.busy && !this.listening).onClick(() => this.remove())
@@ -81,6 +92,31 @@ export struct LocationLabelPage {
   }
   private selectLabel(label: LocationLabel): void {
     this.token = label.token; this.uri = AppServices.get().locationLabels.uri(label);
+    this.savedLabelName = label.name ?? ''; this.labelName = this.savedLabelName;
+  }
+
+  private async rename(): Promise<void> {
+    this.busy = true;
+    try {
+      await AppServices.get().locationLabels.rename(this.token, this.labelName);
+      this.savedLabelName = this.labelName.trim(); this.labelName = this.savedLabelName;
+      await this.load(); this.message = '标签名称已保存';
+    } catch (error) { this.message = (error as Error).message || '保存标签名称失败，请重试'; }
+    finally { this.busy = false; }
+  }
+
+  private async saveImage(): Promise<void> {
+    const context = this.getUIContext().getHostContext();
+    if (context === undefined) { this.message = '文件选择器暂不可用'; return; }
+    this.busy = true;
+    try {
+      const pixels = await this.getUIContext().getComponentSnapshot().get('itemnest-printable-label', { scale: 3 });
+      try {
+        const saved = await AppServices.get().labelImages.save(context, pixels, this.savedLabelName || '我的家当-收纳标签');
+        this.message = saved ? '标签图片已保存，可从文件中分享或打印。' : '已取消保存';
+      } finally { await pixels.release(); }
+    } catch (_) { this.message = '保存标签图片失败，请重试'; }
+    finally { this.busy = false; }
   }
   private async createLabel(): Promise<void> {
     this.busy = true;
@@ -118,7 +154,10 @@ export struct LocationLabelPage {
     this.busy = true;
     try {
       await AppServices.get().locationLabels.bind(request.locationId, this.locationId);
-      this.selectLabel({ token: request.locationId, locationId: this.locationId }); await this.load(); this.message = '已重新绑定';
+      await this.load();
+      const label = this.labels.find((value: LocationLabel) => value.token === request.locationId);
+      if (label !== undefined) { this.selectLabel(label); }
+      this.message = '已重新绑定';
     } catch (_) { this.message = '重新绑定失败，请重试'; }
     finally { this.busy = false; }
   }

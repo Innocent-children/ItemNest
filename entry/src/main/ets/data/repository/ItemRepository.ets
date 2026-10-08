@@ -8,6 +8,7 @@ export interface ItemRepositoryPort {
   create(item: Item): Promise<Result<Item>>;
   getById(itemId: string): Promise<Result<Item | undefined>>;
   update(item: Item, singleBatchId?: string, rememberLocation?: boolean): Promise<Result<Item>>;
+  updateDetails?(item: Item): Promise<Result<Item>>;
   deleteConfirmed(itemId: string): Promise<Result<void>>;
   listAll(): Promise<Result<Item[]>>;
   list(query: ItemQuery): Promise<Result<Item[]>>;
@@ -68,6 +69,15 @@ export class ItemRepository implements ItemRepositoryPort {
     } catch (error) {
       return failure<void>(toAppError(error, AppErrorCode.DATABASE_WRITE, '删除物品失败，请重试'));
     }
+  }
+
+  async updateDetails(item: Item): Promise<Result<Item>> {
+    try {
+      if (!await this.itemDao.updateDetails(item)) { return failure<Item>(new AppError(AppErrorCode.NOT_FOUND, '物品不存在或已删除')); }
+      const saved = await this.itemDao.findById(item.id);
+      if (saved === undefined) { return failure<Item>(new AppError(AppErrorCode.NOT_FOUND, '物品已保存，但当前记录已不存在')); }
+      return success(saved);
+    } catch (error) { return failure<Item>(toAppError(error, AppErrorCode.DATABASE_WRITE, '保存物品资料失败，请重试')); }
   }
 
   async listAll(): Promise<Result<Item[]>> {

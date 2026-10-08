@@ -10,10 +10,13 @@ export struct QuantityInput {
   @Link unit: ItemUnit;
   @Link errorMessage: string;
   @Prop inputEnabled: boolean = true;
+  @Prop title: string = '拥有多少？';
+  @Prop description: string = '总量包含借出部分。';
+  @Prop unitEditable: boolean = true;
 
   build() {
     Column({ space: 12 }) {
-      Text('拥有多少？').fontSize(14).fontWeight(FontWeight.Medium).fontColor($r('app.color.text_primary'))
+      Text(this.title).fontSize(14).fontWeight(FontWeight.Medium).fontColor($r('app.color.text_primary'))
       Row({ space: 8 }) {
         Button('−').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
           .width(44).height(48).fontSize(22).fontColor($r('app.color.brand_primary'))
@@ -37,13 +40,19 @@ export struct QuantityInput {
           .backgroundColor($r('app.color.surface_accent')).accessibilityText('数量增加一')
           .enabled(this.inputEnabled).animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
           .onClick(() => this.adjustQuantity(1))
+        if (this.unitEditable) {
         Select(ITEM_UNIT_OPTIONS.map((unit: ItemUnit): SelectOption => { return { value: unit }; }))
           .selected(ITEM_UNIT_OPTIONS.indexOf(this.unit)).value(this.unit).font({ size: 14 })
           .fontColor($r('app.color.text_primary')).backgroundColor($r('app.color.surface_input'))
           .borderRadius(14).width(78).height(48).enabled(this.inputEnabled).accessibilityText('物品单位')
           .onSelect((index: number) => this.unit = ITEM_UNIT_OPTIONS[index])
+        } else {
+          Text(this.unit).fontSize(14).fontColor($r('app.color.text_primary')).width(44).textAlign(TextAlign.Center)
+        }
       }.width('100%')
-      Text('总量包含借出部分。').fontSize(11).fontColor($r('app.color.text_secondary'))
+      if (this.description.length > 0) {
+        Text(this.description).fontSize(11).fontColor($r('app.color.text_secondary'))
+      }
       if (this.errorMessage.length > 0) {
         Text(this.errorMessage).fontSize(13).fontColor($r('app.color.status_danger'))
       }

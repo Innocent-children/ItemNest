@@ -1,6 +1,7 @@
+import { ItemUnit } from '../../model/Item';
 import { AppError, AppErrorCode, toAppError } from '../../common/AppError';
 import { failure, Result, success } from '../../common/Result';
-import { Batch } from '../../model/Batch';
+import { Batch, ConsumptionReceipt } from '../../model/Batch';
 import { BatchDao } from '../dao/BatchDao';
 
 export interface BatchRepositoryPort {
@@ -11,6 +12,9 @@ export interface BatchRepositoryPort {
   update(batch: Batch): Promise<Result<Batch>>;
   deleteConfirmed(batchId: string): Promise<Result<void>>;
   consumeAtomic?(itemId: string, quantity: number, batchId: string | undefined, now: number): Promise<Result<void>>;
+  consumeRecorded?(itemId: string, quantity: number, batchId: string | undefined, now: number, expectedUnit?: ItemUnit): Promise<Result<ConsumptionReceipt>>;
+  undoConsumption?(receipt: ConsumptionReceipt, now: number): Promise<Result<void>>;
+  changeStock?(batchId: string, quantity: number | undefined, locationPath: string | undefined, changeLocation: boolean, now: number, expectedUnit?: ItemUnit): Promise<Result<void>>;
 }
 
 export class BatchRepository implements BatchRepositoryPort {
@@ -27,6 +31,22 @@ export class BatchRepository implements BatchRepositoryPort {
     } catch (error) {
       return failure<void>(toAppError(error, AppErrorCode.DATABASE_WRITE, '记录消耗失败，请重试'));
     }
+  }
+
+  async consumeRecorded(itemId: string, quantity: number, batchId: string | undefined, now: number, expectedUnit?: ItemUnit): Promise<Result<ConsumptionReceipt>> {
+    try { return success(await this.dao.consume(itemId, quantity, batchId, now, expectedUnit)); }
+    catch (error) { return failure<ConsumptionReceipt>(toAppError(error, AppErrorCode.DATABASE_WRITE, '记录消耗失败，请重试')); }
+  }
+
+  async undoConsumption(receipt: ConsumptionReceipt, now: number): Promise<Result<void>> {
+    try { await this.dao.undoConsumption(receipt, now); return success<void>(undefined); }
+    catch (error) { return failure<void>(toAppError(error, AppErrorCode.DATABASE_WRITE, '撤销消耗失败，请重试')); }
+  }
+
+  async changeStock(batchId: string, quantity: number | undefined, locationPath: string | undefined,
+    changeLocation: boolean, now: number, expectedUnit?: ItemUnit): Promise<Result<void>> {
+    try { await this.dao.changeStock(batchId, quantity, locationPath, changeLocation, now, expectedUnit); return success<void>(undefined); }
+    catch (error) { return failure<void>(toAppError(error, AppErrorCode.DATABASE_WRITE, '修改库存失败，请重试')); }
   }
 
   async create(batch: Batch): Promise<Result<Batch>> {

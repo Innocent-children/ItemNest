@@ -281,7 +281,7 @@ export class PortableBackupService {
         last_used_at: location.lastUsedAt ?? null });
     }
     for (const label of payload.locationLabels ?? []) {
-      await store.insert('location_label', { token: label.token, location_id: label.locationId });
+      await store.insert('location_label', { token: label.token, location_id: label.locationId, name: label.name ?? null });
     }
     for (const category of payload.categories) {
       await store.insert('managed_category', { id: category.id, name: category.name, active: category.active ? 1 : 0,

@@ -1,7 +1,8 @@
 import { AppError, AppErrorCode } from '../common/AppError';
 import { ItemValidator } from '../common/ItemValidator';
 import { failure, Result, success } from '../common/Result';
-import { Batch, BatchDraft, createBatchId } from '../model/Batch';
+import { Batch, BatchDraft, ConsumptionReceipt, createBatchId } from '../model/Batch';
+import { isValidStockQuantity } from './InventoryPolicy';
 import { isItemUnit, ItemUnit } from '../model/Item';
 import { BatchRepositoryPort } from '../data/repository/BatchRepository';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
@@ -100,6 +101,42 @@ export class BatchService {
       return failure<void>(new AppError(AppErrorCode.SYSTEM_UNAVAILABLE, '当前无法记录消耗，请重新打开应用后重试'));
     }
     return this.batches.consumeAtomic(itemId, quantity, batchId, this.clock());
+  }
+
+  async consumeRecorded(itemId: string, quantity: number, batchId?: string, expectedUnit?: ItemUnit): Promise<Result<ConsumptionReceipt>> {
+    if (this.batches.consumeRecorded === undefined) {
+      return failure<ConsumptionReceipt>(new AppError(AppErrorCode.SYSTEM_UNAVAILABLE, '当前无法记录消耗，请重新打开应用后重试'));
+    }
+    return this.batches.consumeRecorded(itemId, quantity, batchId, this.clock(), expectedUnit);
+  }
+
+  async undoConsumption(receipt: ConsumptionReceipt): Promise<Result<void>> {
+    if (this.batches.undoConsumption === undefined) {
+      return failure<void>(new AppError(AppErrorCode.SYSTEM_UNAVAILABLE, '当前无法撤销消耗，请重新打开应用后重试'));
+    }
+    return this.batches.undoConsumption(receipt, this.clock());
+  }
+
+  async adjustQuantity(batchId: string, quantity: number, expectedUnit?: ItemUnit): Promise<Result<void>> {
+    if (!isValidStockQuantity(quantity)) {
+      return failure<void>(new AppError(AppErrorCode.VALIDATION, '数量必须是最多两位小数的非负数'));
+    }
+    return this.changeStock(batchId, quantity, undefined, false, expectedUnit);
+  }
+
+  async move(batchId: string, locationPath: string): Promise<Result<void>> {
+    const location = this.itemValidator.validateLocationPath(locationPath);
+    if (!location.ok) { return failure<void>(location.getError()); }
+    if (location.getData() === undefined) { return failure<void>(new AppError(AppErrorCode.VALIDATION, '请填写新的存放位置')); }
+    return this.changeStock(batchId, undefined, location.getData(), true);
+  }
+
+  private async changeStock(batchId: string, quantity: number | undefined, locationPath: string | undefined,
+    changeLocation: boolean, expectedUnit?: ItemUnit): Promise<Result<void>> {
+    if (this.batches.changeStock === undefined) {
+      return failure<void>(new AppError(AppErrorCode.SYSTEM_UNAVAILABLE, '当前无法修改库存，请重新打开应用后重试'));
+    }
+    return this.batches.changeStock(batchId, quantity, locationPath, changeLocation, this.clock(), expectedUnit);
   }
 
   async delete(batchId: string): Promise<Result<void>> {

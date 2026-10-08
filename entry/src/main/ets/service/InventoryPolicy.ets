@@ -1,6 +1,6 @@
 import { AppError, AppErrorCode } from '../common/AppError';
 import { failure, Result, success } from '../common/Result';
-import { Batch } from '../model/Batch';
+import { Batch, ConsumptionReceipt, ConsumedStock } from '../model/Batch';
 
 export interface ConsumptionAllocation {
   batch: Batch;
@@ -75,4 +75,28 @@ export function isSameOrDescendantLocation(path: string, rootPath: string): bool
     }
   }
   return true;
+}
+
+/**
+ * 只恢复这次实际扣减的库存；库存随后被调整、删除或换单位时，要求用户重新核对。
+ */
+export function validateConsumptionUndo(batches: Batch[], receipt: ConsumptionReceipt): Result<void> {
+  if (receipt.stocks.length === 0 || !isValidStockQuantity(receipt.quantity) || receipt.quantity <= 0 ||
+    new Set(receipt.stocks.map((stock: ConsumedStock) => stock.batchId)).size !== receipt.stocks.length) {
+    return failure<void>(new AppError(AppErrorCode.VALIDATION, '消耗记录不完整，无法撤销'));
+  }
+  let restored = 0;
+  for (const stock of receipt.stocks) {
+    const batch = batches.find((value: Batch) => value.id === stock.batchId && value.itemId === receipt.itemId);
+    if (batch === undefined || batch.unit !== receipt.unit || batch.updatedAt !== receipt.createdAt ||
+      Math.round(batch.quantity * 100) !== Math.round(stock.afterQuantity * 100)) {
+      return failure<void>(new AppError(AppErrorCode.VALIDATION, '库存已变化，无法直接撤销，请通过“调整数量”核对库存'));
+    }
+    if (!isValidStockQuantity(stock.beforeQuantity) || !isValidStockQuantity(stock.afterQuantity) || stock.beforeQuantity <= stock.afterQuantity) {
+      return failure<void>(new AppError(AppErrorCode.VALIDATION, '消耗记录不完整，无法撤销'));
+    }
+    restored += Math.round(stock.beforeQuantity * 100) - Math.round(stock.afterQuantity * 100);
+  }
+  return restored === Math.round(receipt.quantity * 100) ? success<void>(undefined) :
+    failure<void>(new AppError(AppErrorCode.VALIDATION, '消耗记录数量不一致，无法撤销'));
 }

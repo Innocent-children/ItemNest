@@ -36,6 +36,7 @@ export struct BatchFormPage {
   @State private unit: ItemUnit = ItemUnit.PIECE;
   @State private expirationDate: string = '';
   @State private locationPath: string = '';
+  @State private chooseLocation: boolean = false;
   @State private managedLocations: LocationRecord[] = [];
   @State private locationLoadError: string = '';
   private locationLoadRequestId: number = 0;
@@ -153,10 +154,10 @@ export struct BatchFormPage {
               }
               Text('到期日期（可选）').fontSize(15).fontColor($r('app.color.text_primary')).width('100%')
               OptionalDateField({ value: $expirationDate, editable: !this.saving })
-              Text('存放位置（可选）').fontSize(15).fontColor($r('app.color.text_primary')).width('100%')
+              Text(this.chooseLocation ? '存放位置（请选择）' : '存放位置（可选）').fontSize(15).fontColor($r('app.color.text_primary')).width('100%')
               LocationInput({ locationPath: $locationPath, locations: this.managedLocations, inputEnabled: !this.saving,
                 loadError: this.locationLoadError, onRetry: () => this.loadManagedLocations() })
-              Text('未填写位置时，使用物品的默认位置。').fontSize(12)
+              Text(this.chooseLocation ? '物品分放在不同位置，请确认这份库存放在哪里。' : '可以选择历史位置，也可以手动填写；留空会沿用已记录的位置。').fontSize(12)
                 .fontColor($r('app.color.text_secondary')).width('100%')
               TextArea({ text: this.notes, placeholder: '备注，可选' })
                 .borderWidth(1)
@@ -230,11 +231,13 @@ export struct BatchFormPage {
         return;
       }
       this.unit = itemResult.getData().unit;
+      const paths = itemResult.getData().activeLocationPaths ?? [];
+      this.chooseLocation = paths.length > 1;
       if (!this.editMode) {
         const draft = (NavigationHelper.getParams() as BatchRouteParams | undefined)?.externalRequest;
         this.recognitionPhoto = draft?.photoUri ?? '';
         this.expirationDate = draft?.expirationDate ?? '';
-        this.locationPath = draft?.locationPath || itemResult.getData().locationPath || '';
+        this.locationPath = draft?.locationPath || (paths.length === 1 ? paths[0] : this.chooseLocation ? '' : itemResult.getData().locationPath ?? '');
       }
       if (this.editMode) {
         const result = await AppServices.get().batches.listByItemId(this.itemId);
@@ -249,7 +252,7 @@ export struct BatchFormPage {
         }
         this.quantityText = batch.quantity.toString();
         this.expirationDate = batch.expirationDate ?? '';
-        this.locationPath = batch.locationPath ?? '';
+        this.locationPath = batch.locationPath ?? itemResult.getData().locationPath ?? '';
         this.notes = batch.notes ?? '';
       }
       this.formReady = true;
@@ -328,6 +331,10 @@ export struct BatchFormPage {
 
   private async save(): Promise<void> {
     if (this.saving || !this.formReady) {
+      return;
+    }
+    if (this.chooseLocation && this.locationPath.trim().length === 0) {
+      this.errorMessage = '请先选择或填写这份库存的存放位置';
       return;
     }
     this.savePressed = false;

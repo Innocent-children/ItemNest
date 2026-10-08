@@ -9,12 +9,12 @@ export class LocationLabelRepository {
 
   async list(): Promise<LocationLabel[]> {
     const store = await this.database.requireStore();
-    const rows = await store.querySql('SELECT token, location_id FROM location_label ORDER BY token');
+    const rows = await store.querySql('SELECT token, location_id, name FROM location_label ORDER BY token');
     const labels: LocationLabel[] = [];
     try {
       while (ResultSetReader.goToNextRow(rows)) {
         labels.push({ token: ResultSetReader.readString(rows, 'token') ?? '',
-          locationId: ResultSetReader.readString(rows, 'location_id') ?? '' });
+          locationId: ResultSetReader.readString(rows, 'location_id') ?? '', name: ResultSetReader.readString(rows, 'name') });
       }
     } finally { ResultSetReader.close(rows); }
     return labels;
@@ -22,7 +22,7 @@ export class LocationLabelRepository {
 
   async save(label: LocationLabel): Promise<void> {
     await this.database.transaction(async (store: relationalStore.Transaction): Promise<void> => {
-      await store.execute('INSERT OR REPLACE INTO location_label (token, location_id) VALUES (?, ?)', [label.token, label.locationId]);
+      await store.execute('INSERT OR REPLACE INTO location_label (token, location_id, name) VALUES (?, ?, ?)', [label.token, label.locationId, label.name ?? null]);
     });
   }
 

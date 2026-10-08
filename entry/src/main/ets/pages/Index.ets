@@ -65,6 +65,8 @@ struct Index {
   @State private viewportWidth: number = 360;
   @State private sidebarLocation: string = '';
   @State private mainTabIndex: number = 0;
+  @State private searchQuery: ItemQuery | undefined = undefined;
+  @State private searchRequestRevision: number = 0;
   @State private selectedTabIndex: number = 0;
   @State private dockHighlightIndex: number = 0;
   @State private dockSlotWidth: number = 68;
@@ -98,7 +100,6 @@ struct Index {
   private lastHandledDataRevision: number = -1;
   private lastHandledPreferenceRevision: number = -1;
   private pathStack: NavPathStack = new NavPathStack();
-  @StorageLink('itemnest.searchSourceHidden') private searchSourceHidden: boolean = false;
   private homeScroller: Scroller = new Scroller();
   @State private homeScrolled: boolean = false;
   private tabsController: TabsController = new TabsController();
@@ -292,7 +293,7 @@ struct Index {
     .onKeyEvent((event: KeyEvent) => {
       if (event.type === KeyType.Down && event.getModifierKeyState?.(['Ctrl'])) {
         if (event.keyCode === KeyCode.KEYCODE_F) { this.selectMainTab(RouteName.SEARCH); event.stopPropagation(); }
-        if (event.keyCode === KeyCode.KEYCODE_N) { this.openCreateMenu(); event.stopPropagation(); }
+        if (event.keyCode === KeyCode.KEYCODE_N) { this.openCreateForm(); event.stopPropagation(); }
       }
     })
   }
@@ -325,8 +326,10 @@ struct Index {
   }
 
 
-  private openSearch(): void {
-    SharedRouteMotion.openSearch(this.getUIContext(), this.reduceAnimation);
+  private openSearch(query?: ItemQuery): void {
+    this.searchQuery = query;
+    this.selectMainTab(RouteName.SEARCH);
+    this.searchRequestRevision++;
   }
 
   @Builder
@@ -337,22 +340,12 @@ struct Index {
         this.mainTabIndex === 2 ? '知道放在哪里，就少一点寻找。' : '让整理，更合你的习惯。',
       largeTitle: this.mainTabIndex === 0 && !this.homeScrolled,
       actionText: '记录新物品', actionIcon: $r('app.media.dock_add'),
-      onAction: () => this.openCreateMenu() })
+      onAction: () => this.openCreateForm() })
   }
 
-  private async openCreateMenu(): Promise<void> {
-    const result = await this.getUIContext().getPromptAction().showActionMenu({
-      title: '记录新物品', buttons: [
-        { text: '手动记录', color: $r('app.color.brand_primary') },
-        { text: '扫描条码后填写', color: $r('app.color.brand_primary') },
-        { text: '拍照并填写物品', color: $r('app.color.brand_primary') }
-      ]
-    }).catch(() => undefined);
-    if (result !== undefined) {
-      NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM,
-        params: { mode: 'create', returnTo: this.dockRoute,
-          source: result.index === 1 ? 'scan' : result.index === 2 ? 'camera' : 'manual' } });
-    }
+  private openCreateForm(): void {
+    NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM,
+      params: { mode: 'create', returnTo: this.dockRoute, source: 'manual' } });
   }
 
   @Builder
@@ -377,10 +370,12 @@ struct Index {
           this.homeContent()
         }.tabBar(this.dockTab(0, '首页', $r('sys.symbol.house')))
         TabContent() {
-          ItemListPage({ isMainTab: true, locationFilter: this.sidebarLocation })
+          ItemListPage({ isMainTab: true, locationFilter: this.sidebarLocation,
+            onSearch: (query: ItemQuery) => this.openSearch(query) })
         }.tabBar(this.dockTab(1, '物品', $r('sys.symbol.archivebox')))
         TabContent() {
-          SearchPage({ isMainTab: true })
+          SearchPage({ isMainTab: true, active: this.mainTabIndex === 2,
+            requestedQuery: this.searchQuery, requestRevision: this.searchRequestRevision })
         }.tabBar(this.dockTab(2, '查找', $r('sys.symbol.magnifyingglass')))
         TabContent() {
           SettingsPage({ isMainTab: true })
@@ -546,10 +541,7 @@ struct Index {
   @Builder
   private homeHeader() {
     Column() {
-      if (!this.searchSourceHidden) {
-        SharedSearchField({ editable: false, inputId: 'itemnest-home-search-input',
-          transitionId: 'itemnest-home-search', onOpen: () => this.openSearch() })
-      }
+      SharedSearchField({ editable: false, inputId: 'itemnest-home-search-input', onOpen: () => this.openSearch() })
     }.width('100%').height(52).alignItems(HorizontalAlign.Start)
   }
 

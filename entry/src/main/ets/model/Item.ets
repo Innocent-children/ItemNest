@@ -7,6 +7,14 @@ export enum ItemUnit {
   BOTTLE = '瓶',
   PACK = '包',
   ITEM = '件',
+  STICK = '支',
+  TABLET = '片',
+  ROLL = '卷',
+  PAIR = '双',
+  BAG = '袋',
+  BOOK = '本',
+  GRAM = '克',
+  MILLILITER = '毫升',
   OTHER = '其他'
 }
 
@@ -16,6 +24,14 @@ export const ITEM_UNIT_OPTIONS: ItemUnit[] = [
   ItemUnit.BOTTLE,
   ItemUnit.PACK,
   ItemUnit.ITEM,
+  ItemUnit.STICK,
+  ItemUnit.TABLET,
+  ItemUnit.ROLL,
+  ItemUnit.PAIR,
+  ItemUnit.BAG,
+  ItemUnit.BOOK,
+  ItemUnit.GRAM,
+  ItemUnit.MILLILITER,
   ItemUnit.OTHER
 ];
 
@@ -29,6 +45,7 @@ export interface Item {
   name: string;
   quantity: number;
   unit: ItemUnit;
+  borrowedQuantity?: number;
   locationPath?: string;
   // 读取时计算的现存批次位置；空数组表示没有现存批次，locationPath仍保留默认存放位置。
   activeLocationPaths?: string[];
@@ -43,16 +60,19 @@ export interface Item {
   updatedAt: number;
 }
 
-export interface ItemDraft {
+export interface ItemDetailsDraft {
   name?: string;
-  quantity?: number;
   unit?: ItemUnit;
-  locationPath?: string;
   category?: string;
-  expirationDate?: string;
   reminderDays?: number;
   notes?: string;
   barcode?: string;
+}
+
+export interface ItemDraft extends ItemDetailsDraft {
+  quantity?: number;
+  locationPath?: string;
+  expirationDate?: string;
 }
 
 export interface ItemSummary {
@@ -60,6 +80,9 @@ export interface ItemSummary {
   name: string;
   quantity: number;
   unit: ItemUnit;
+  availableQuantity?: number;
+  borrowedQuantity?: number;
+  photoMatch?: boolean;
   locationPath?: string;
   // 读取时计算的现存批次位置；空数组表示没有现存批次，locationPath仍保留默认存放位置。
   activeLocationPaths?: string[];

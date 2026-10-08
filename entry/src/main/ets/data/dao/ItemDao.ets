@@ -149,6 +149,15 @@ export class ItemDao {
     }
   }
 
+  async updateDetails(item: Item): Promise<boolean> {
+    return this.database.transaction(async (store: relationalStore.Transaction): Promise<boolean> => {
+      const changed = await store.update({ name: item.name, unit: item.unit, category: item.category ?? null,
+        reminder_days: item.reminderDays ?? null, notes: item.notes ?? null, barcode: item.barcode ?? null,
+        updated_at: item.updatedAt }, new relationalStore.RdbPredicates(ITEM_TABLE).equalTo('id', item.id));
+      return changed === 1;
+    });
+  }
+
   private async queryItems(predicates: relationalStore.RdbPredicates): Promise<Item[]> {
     try {
       const store = await this.database.requireStore();
@@ -162,6 +171,7 @@ export class ItemDao {
         ResultSetReader.close(resultSet);
       }
       await this.populateActiveLocations(store, items);
+      await this.populateBorrowedQuantities(store, items);
       return items;
     } catch (error) {
       if (error instanceof AppError) {
@@ -169,6 +179,22 @@ export class ItemDao {
       }
       throw new AppError(AppErrorCode.DATABASE_READ, '读取物品失败，请重试');
     }
+  }
+
+  private async populateBorrowedQuantities(store: relationalStore.RdbStore, items: Item[]): Promise<void> {
+    if (items.length === 0) { return; }
+    const placeholders = items.map(() => '?').join(',');
+    const rows = await store.querySql(`SELECT id, quantity, ${inventoryOutstandingSql('item.id')} AS borrowed_quantity
+      FROM item WHERE id IN (${placeholders})`, items.map((item: Item) => item.id));
+    try {
+      while (ResultSetReader.goToNextRow(rows)) {
+        const item = items.find((value: Item) => value.id === ResultSetReader.readString(rows, 'id'));
+        if (item !== undefined) {
+          item.quantity = ResultSetReader.readDouble(rows, 'quantity') ?? item.quantity;
+          item.borrowedQuantity = ResultSetReader.readDouble(rows, 'borrowed_quantity') ?? 0;
+        }
+      }
+    } finally { ResultSetReader.close(rows); }
   }
 
   private async populateActiveLocations(store: relationalStore.RdbStore, items: Item[]): Promise<void> {

@@ -1,6 +1,9 @@
+import { LocationInput } from '../components/LocationInput';
+import { QuantityInput } from '../components/QuantityInput';
+import { LocationRecord } from '../model/Location';
 import { notificationManager } from '@kit.NotificationKit';
 import { ReminderRecordStatus } from '../model/ReminderRecord';
-import { Batch } from '../model/Batch';
+import { Batch, ConsumptionReceipt } from '../model/Batch';
 import { localImageSource } from '../ui/ImageSource';
 import { SharedRouteMotion } from '../ui/SharedRouteMotion';
 import { PhotoViewer } from '../components/PhotoViewer';
@@ -15,7 +18,7 @@ import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
 import { LatestRequestCoordinator } from '../common/LatestRequestCoordinator';
 import { ExpiryStatus } from '../model/ExpiryStatus';
-import { Item, ItemSummary } from '../model/Item';
+import { Item, ItemSummary, ItemUnit } from '../model/Item';
 import { StockThreshold } from '../model/StockThreshold';
 import { buildItemRefreshParams, getUnhandledRouteRefreshAt } from '../navigation/RefreshContract';
 import { ItemFormRouteParams, requireItemId, RouteRefreshParams } from '../navigation/RouteContract';
@@ -81,6 +84,17 @@ export struct ItemDetailPage {
   @State private removingPhoto: boolean = false;
   @State private batchCount: number = 0;
   @State private stockBatches: Batch[] = [];
+  @State private allBatches: Batch[] = [];
+  @State private selectedStockId: string = '';
+  @State private stockQuantityText: string = '';
+  @State private stockLocationPath: string = '';
+  @State private actionUnit: ItemUnit = ItemUnit.PIECE;
+  @State private operationQuantityError: string = '';
+  @State private stockSaving: boolean = false;
+  @State private managedLocations: LocationRecord[] = [];
+  @State private locationLoadError: string = '';
+  @State private lastConsumption: ConsumptionReceipt | undefined = undefined;
+  @State private consumptionMessage: string = '';
   @State private consumeBatchId: string = '';
   @State private borrowedQuantity: number = 0;
   @State private availableQuantity: number = 0;
@@ -100,6 +114,7 @@ export struct ItemDetailPage {
   @State @Watch('handleDeleteRequest') private deleteRequested: boolean = false;
   private itemId: string = '';
   private initialSection: string = '';
+  private requestedUnit: ItemUnit | undefined = undefined;
   @State private reminderSettingsReady: boolean = false;
   private lastRouteRefreshAt: number = 0;
   private lastHandledDataRevision: number = -1;
@@ -121,6 +136,7 @@ export struct ItemDetailPage {
     }
     this.itemId = itemIdResult.getData();
     this.initialSection = params.section ?? '';
+    this.requestedUnit = params.expectedUnit;
     this.heroPreview = SharedRouteMotion.preview(this.itemId);
     this.sharedPhotoId = SharedRouteMotion.itemTransitionId(this.itemId);
     this.loadDetailForCurrentRevision(true);
@@ -192,7 +208,7 @@ export struct ItemDetailPage {
   @Builder
   private pageHeader() {
     PageHeader({ title: '物品档案', showBack: true, actionText: this.item === undefined ? '' : '编辑',
-          actionEnabled: !this.deleting && !this.consuming, onAction: () => this.openEdit(),
+          actionEnabled: !this.deleting && !this.consuming && !this.stockSaving, onAction: () => this.openEdit(),
           onBack: () => { if (!NavigationHelper.handleBackPressed()) { NavigationHelper.back(); } } })
   }
 
@@ -250,11 +266,11 @@ export struct ItemDetailPage {
     .bindSheet($$this.showActionSheet, this.actionSheet(), nativeSheetOptions({
       height: SheetSize.MEDIUM, detents: [SheetSize.MEDIUM, SheetSize.LARGE], dragBar: true, showClose: true,
       keyboardAvoidMode: SheetKeyboardAvoidMode.TRANSLATE_AND_RESIZE,
-      title: { title: this.actionSheetMode === 'consume' ? '记录这次用量' : '补货提醒' },
+      title: { title: this.actionSheetMode === 'consume' ? '记录这次用量' : this.actionSheetMode === 'move' ? '换个存放位置' : this.actionSheetMode === 'adjust' ? '调整数量' : '补货提醒' },
       backgroundColor: $r('app.color.surface_app'), preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
       width: this.viewportWidth >= 700 ? 560 : undefined,
       onWillDismiss: (action: DismissSheetAction) => {
-        if (!this.consuming && !this.thresholdSaving) { action.dismiss(); }
+        if (!this.consuming && !this.thresholdSaving && !this.stockSaving) { action.dismiss(); }
       }
     }, this.reduceAnimation))
   }
@@ -328,8 +344,17 @@ export struct ItemDetailPage {
           this.actionErrorPanel()
         }
 
-        this.locationSection({ item: $$.item })
         this.managementSection({ item: $$.item })
+        if (this.consumptionMessage.length > 0) {
+          Column({ space: 8 }) {
+            Text(this.consumptionMessage).fontSize(14).fontColor($r('app.color.text_primary')).width('100%')
+            if (this.lastConsumption !== undefined) {
+              Button(this.consuming ? '正在撤销…' : '撤销这次消耗').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                .enabled(!this.consuming && !this.stockSaving && !this.deleting).onClick(() => this.undoConsumption())
+            }
+          }.width('100%').padding(16).borderRadius(16).backgroundColor($r('app.color.surface_accent'))
+        }
+        this.locationSection({ item: $$.item })
         Button('分享物品').width('100%').onClick(() => NavigationHelper.pushUrl({ url: RouteName.SHARE_PREVIEW, params: { itemId: $$.item.id } }))
         this.expirySection({ item: $$.item })
         if ($$.item.notes !== undefined || $$.item.barcode !== undefined) {
@@ -382,22 +407,25 @@ export struct ItemDetailPage {
           if (this.actionError.length > 0) { this.actionErrorPanel() }
           if (this.item !== undefined) {
             if (this.actionSheetMode === 'consume') { this.consumptionSection({ item: this.item }) }
-            else { this.lowStockSection({ item: this.item }) }
+            else if (this.actionSheetMode === 'stock') { this.lowStockSection({ item: this.item }) }
+            else { this.stockChangeSection() }
           }
         }.width('100%').padding({ left: 24, right: 24, bottom: 16 })
       }.width('100%').layoutWeight(1).align(Alignment.TopStart)
       Column() {
         if (this.item !== undefined) {
-          Button(this.actionSheetMode === 'consume' ? (this.consuming ? '正在记录…' : '确认用量') :
-            (this.thresholdSaving ? '正在保存…' : '保存补货设置'))
+          Button(this.consuming || this.stockSaving || this.thresholdSaving ? '正在保存…' :
+            this.actionSheetMode === 'consume' ? '确认用量' : this.actionSheetMode === 'move' ? '确认换位置' :
+            this.actionSheetMode === 'adjust' ? '保存数量' : '保存补货设置')
             .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
             .width('100%').height(48).fontColor($r('app.color.brand_on_primary'))
             .backgroundColor($r('app.color.brand_primary'))
-            .enabled(!this.consuming && !this.deleting && !this.thresholdSaving &&
+            .enabled(!this.consuming && !this.deleting && !this.thresholdSaving && !this.stockSaving &&
               (this.actionSheetMode !== 'consume' || (this.managementReady && this.availableQuantity > 0)))
             .onClick(() => {
               if (this.actionSheetMode === 'consume') { this.consume(); }
-              else if (this.item !== undefined) { this.saveLowStockThreshold(this.item); }
+              else if (this.actionSheetMode === 'stock' && this.item !== undefined) { this.saveLowStockThreshold(this.item); }
+              else { this.saveStockChange(); }
             })
         }
       }.width('100%').padding({ left: 24, right: 24, top: 12, bottom: 24 })
@@ -503,12 +531,7 @@ export struct ItemDetailPage {
       if (($$.item.activeLocationPaths?.length ?? 0) === 0 && $$.item.quantity > 0) {
         Button('补充存放位置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
           .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
-          .onClick(() => this.openEdit())
-      }
-      if (this.batchCount > 1) {
-        this.detailRow({ label: '默认位置', value: $$.item.locationPath ?? '未设置' })
-        Text('分放在不同地方的物品，可在库存明细中分别调整。')
-          .fontSize($r('app.float.font_caption')).fontColor($r('app.color.text_secondary'))
+          .onClick(() => this.openStockAction('move'))
       }
       this.detailRow({ label: '分类', value: $$.item.category ?? '未设置' })
     }
@@ -545,7 +568,7 @@ export struct ItemDetailPage {
           .enabled(!this.reminderRetrying)
           .onClick(() => {
             if (this.reminderAction === 'retry') { this.retryReminder(); }
-            else if (this.reminderAction === 'date') { this.openEdit(); }
+            else if (this.reminderAction === 'date') { this.openExpiryEditor(); }
             else { NavigationHelper.pushUrl({ url: RouteName.SETTINGS, params: { section: 'reminders' } }); }
           })
       }
@@ -668,8 +691,17 @@ export struct ItemDetailPage {
       }
       await this.loadManagementState(item, requestId);
       await this.loadLowStockThreshold(item, requestId);
-      if (this.loadRequestCoordinator.isCurrent(requestId) && this.initialSection === 'stock') {
-        this.initialSection = ''; this.actionSheetMode = 'stock'; this.showActionSheet = true;
+      if (this.loadRequestCoordinator.isCurrent(requestId) && this.initialSection.length > 0) {
+        const section = this.initialSection;
+        this.initialSection = '';
+        if (section === 'stock') { this.actionSheetMode = 'stock'; this.showActionSheet = true; }
+        else if (section === 'consume-one' && this.managementReady && this.allBatches.length === 1) {
+          this.openStockAction('consume', false);
+          this.actionUnit = this.requestedUnit ?? this.actionUnit;
+          await this.consume();
+        } else if (['consume', 'consume-one', 'move', 'adjust'].includes(section)) {
+          this.openStockAction(section === 'consume-one' ? 'consume' : section);
+        }
       }
     } catch (_) {
       if (this.loadRequestCoordinator.isCurrent(requestId) && (showLoading || this.item === undefined)) {
@@ -680,6 +712,12 @@ export struct ItemDetailPage {
         this.loading = false;
       }
     }
+  }
+
+  private openExpiryEditor(): void {
+    const batch = this.allBatches.length === 1 ? this.allBatches[0] : undefined;
+    NavigationHelper.pushUrl({ url: batch === undefined ? RouteName.BATCH_LIST : RouteName.BATCH_FORM,
+      params: { itemId: this.itemId, batchId: batch?.id, mode: batch === undefined ? undefined : 'edit' } });
   }
 
   private openEdit(): void {
@@ -829,21 +867,15 @@ export struct ItemDetailPage {
           .width('100%').font({ size: 14 }).backgroundColor($r('app.color.surface_input')).borderRadius(14)
           .enabled(!this.consuming).onSelect((index: number) => this.consumeBatchId = index === 0 ? '' : this.stockBatches[index - 1].id)
       }
-      Text(`这次用掉多少（${$$.item.unit}）`).fontSize(14).fontColor($r('app.color.text_primary'))
-      TextInput({ text: this.consumeQuantityText, placeholder: '这次用掉多少，例如：1' })
-        .borderWidth(1)
-        .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'consumeQuantityText'))
-        .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
-          if (this.focusedField === 'consumeQuantityText') { this.focusedField = ''; }
-        }))
-        .type(InputType.NUMBER_DECIMAL)
-        .backgroundColor($r('app.color.surface_app'))
-        .border({ width: 1, color: $r('app.color.border_subtle') })
-        .borderRadius($r('app.float.radius_control'))
-        .enabled(!this.consuming && !this.deleting)
-        .borderColor(this.focusedField === 'consumeQuantityText' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
-        .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-        .onChange((value: string) => this.consumeQuantityText = value)
+      QuantityInput({ quantityText: $consumeQuantityText, unit: $actionUnit, errorMessage: $operationQuantityError,
+        title: '这次用掉多少？', description: '', unitEditable: false, inputEnabled: !this.consuming && !this.deleting })
+      Flex({ wrap: FlexWrap.Wrap }) {
+        ForEach([1, 2, 5], (quantity: number) => {
+          Button(`用掉 ${quantity}${$$.item.unit}`).attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+            .margin({ right: 8, bottom: 8 }).enabled(!this.consuming && quantity <= this.availableQuantity)
+            .onClick(() => { this.consumeQuantityText = quantity.toString(); this.operationQuantityError = ''; })
+        })
+      }
       Text(this.consumeBatchId.length > 0 ? '仅扣减所选位置的库存，借出部分不能消耗。' : '优先使用最早到期的物品；借出部分不能消耗。')
         .fontSize($r('app.float.font_caption'))
         .fontColor($r('app.color.text_secondary'))
@@ -890,11 +922,14 @@ export struct ItemDetailPage {
     this.consuming = true;
     this.actionError = '';
     try {
-      const result = await AppServices.get().batches.consume(this.itemId, quantity, this.consumeBatchId.length > 0 ? this.consumeBatchId : undefined);
+      const result = await AppServices.get().batches.consumeRecorded(this.itemId, quantity, this.consumeBatchId.length > 0 ? this.consumeBatchId : undefined, this.actionUnit);
       if (!result.ok) {
         this.actionError = result.getError().message;
         return;
       }
+      this.lastConsumption = result.getData();
+      const receipt = result.getData();
+      this.consumptionMessage = `已用掉 ${receipt.quantity}${receipt.unit}，在手从 ${receipt.availableBefore} 变为 ${receipt.availableAfter}${receipt.unit}。`;
       let notice = '消耗已记录，库存已扣减';
       try {
         const reminderResult = await AppServices.get().reminders.reconcileLatest(this.itemId);
@@ -916,6 +951,112 @@ export struct ItemDetailPage {
     } finally {
       this.consuming = false;
     }
+  }
+
+  private openStockAction(mode: string, showSheet: boolean = true): void {
+    if (!this.managementReady || this.item === undefined) { return; }
+    this.actionError = '';
+    this.operationQuantityError = '';
+    this.actionUnit = this.item.unit;
+    this.actionSheetMode = mode;
+    const candidates = mode === 'move' ? this.stockBatches : this.allBatches;
+    this.selectedStockId = candidates.length === 1 ? candidates[0].id : '';
+    this.selectStock(this.selectedStockId);
+    if (mode === 'consume') { this.consumeBatchId = ''; this.consumeQuantityText = '1'; }
+    if (mode === 'move') { this.loadLocations(); }
+    this.showActionSheet = showSheet;
+  }
+
+  private selectStock(batchId: string): void {
+    this.selectedStockId = batchId;
+    const batch = this.allBatches.find((value: Batch) => value.id === batchId);
+    this.stockQuantityText = batch?.quantity.toString() ?? '';
+    this.stockLocationPath = batch?.locationPath ?? this.item?.locationPath ?? '';
+    this.operationQuantityError = '';
+  }
+
+  private async loadLocations(): Promise<void> {
+    try {
+      const result = await AppServices.get().locations.list();
+      if (result.ok) { this.managedLocations = result.getData(); this.locationLoadError = ''; }
+      else { this.locationLoadError = '暂时无法读取历史位置，可以手动填写。'; }
+    } catch (_) { this.locationLoadError = '暂时无法读取历史位置，可以手动填写。'; }
+  }
+
+  @Builder
+  private stockChangeSection() {
+    Column({ space: 16 }) {
+      Text(this.item?.name ?? '').fontSize(20).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
+      if ((this.actionSheetMode === 'move' ? this.stockBatches : this.allBatches).length > 1) {
+        Text('选择要修改的库存').fontSize(14).fontColor($r('app.color.text_primary'))
+        ForEach(this.actionSheetMode === 'move' ? this.stockBatches : this.allBatches, (batch: Batch) => {
+          Button(`${this.selectedStockId === batch.id ? '✓ ' : ''}${batch.locationPath ?? this.item?.locationPath ?? '未设置位置'} · 总量 ${batch.quantity}${batch.unit} · ${batch.expirationDate ?? '无到期日'}`)
+            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).width('100%').height('auto').padding(12)
+            .fontColor($r('app.color.brand_primary'))
+            .backgroundColor(this.selectedStockId === batch.id ? $r('app.color.surface_accent') : $r('app.color.surface_card'))
+            .enabled(!this.stockSaving).onClick(() => this.selectStock(batch.id))
+        }, (batch: Batch) => batch.id)
+      }
+      if (this.selectedStockId.length > 0) {
+        if (this.actionSheetMode === 'move') {
+          Text('新的存放位置').fontSize(14).fontColor($r('app.color.text_primary'))
+          LocationInput({ locationPath: $stockLocationPath, locations: this.managedLocations, inputEnabled: !this.stockSaving,
+            loadError: this.locationLoadError, onRetry: () => this.loadLocations() })
+          Text('修改所选库存的存放位置，数量和到期日保持不变。').fontSize(12).fontColor($r('app.color.text_secondary'))
+        } else {
+          QuantityInput({ quantityText: $stockQuantityText, unit: $actionUnit, errorMessage: $operationQuantityError,
+            title: '核对后的总量', description: '总量包含借出部分；不能减少到借出未还的数量以下。',
+            unitEditable: false, inputEnabled: !this.stockSaving })
+        }
+      }
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  private async saveStockChange(): Promise<void> {
+    if (this.stockSaving || this.consuming || this.selectedStockId.length === 0) {
+      this.actionError = '请先选择要修改的库存'; return;
+    }
+    if (this.actionSheetMode === 'adjust' && (this.stockQuantityText.trim().length === 0 || this.operationQuantityError.length > 0)) {
+      this.actionError = this.operationQuantityError || '请填写核对后的数量'; return;
+    }
+    this.stockSaving = true;
+    this.actionError = '';
+    try {
+      const result = this.actionSheetMode === 'move' ?
+        await AppServices.get().batches.move(this.selectedStockId, this.stockLocationPath) :
+        await AppServices.get().batches.adjustQuantity(this.selectedStockId, Number(this.stockQuantityText), this.actionUnit);
+      if (!result.ok) { this.actionError = result.getError().message; return; }
+      this.showActionSheet = false;
+      this.lastConsumption = undefined;
+      this.consumptionMessage = '';
+      await this.refreshAfterStockChange();
+      this.showToast(this.actionSheetMode === 'move' ? '存放位置已更新' : '数量已更新');
+    } catch (_) { this.actionError = '保存失败，请重试'; }
+    finally { this.stockSaving = false; }
+  }
+
+  private async undoConsumption(): Promise<void> {
+    const receipt = this.lastConsumption;
+    if (receipt === undefined || this.consuming) { return; }
+    this.consuming = true;
+    this.actionError = '';
+    try {
+      const result = await AppServices.get().batches.undoConsumption(receipt);
+      if (!result.ok) { this.actionError = result.getError().message; return; }
+      this.lastConsumption = undefined;
+      this.consumptionMessage = `已撤销这次消耗，恢复 ${receipt.quantity}${receipt.unit}。`;
+      await this.refreshAfterStockChange();
+    } catch (_) { this.actionError = '撤销失败，请重试'; }
+    finally { this.consuming = false; }
+  }
+
+  private async refreshAfterStockChange(): Promise<void> {
+    this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
+    try {
+      const reminder = await AppServices.get().reminders.reconcileLatest(this.itemId);
+      if (!reminder.ok) { this.actionError = '库存已更新，提醒同步失败，可在详情重新检查。'; }
+    } catch (_) { this.actionError = '库存已更新，提醒同步失败，可在详情重新检查。'; }
+    await this.loadDetail(false);
   }
 
   private async prepareDeletePreview(): Promise<void> {
@@ -965,14 +1106,24 @@ export struct ItemDetailPage {
           }.width('100%')
         }
           .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1).padding(18).borderRadius(18).backgroundColor($r('app.color.brand_primary'))
-          .enabled(this.managementReady && this.availableQuantity > 0 && !this.consuming && !this.deleting)
+          .enabled(this.managementReady && this.availableQuantity > 0 && !this.consuming && !this.deleting && !this.stockSaving)
           .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-          .onClick(() => { this.actionError = ''; this.actionSheetMode = 'consume'; this.showActionSheet = true; })
+          .onClick(() => this.openStockAction('consume'))
         this.managementEntry({ title: '补入物品', description: '记录这次补入的数量',
           route: RouteName.BATCH_FORM, itemId: $$.item.id })
         this.managementEntry({ title: '借出归还', description: '查看借还记录', route: RouteName.LENDING, itemId: $$.item.id })
       }.width('100%')
-      Button(`库存明细 · ${this.batchCount} 个批次`).attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+      Row({ space: 10 }) {
+        Button('换位置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1)
+          .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+          .enabled(this.managementReady && this.stockBatches.length > 0 && !this.consuming && !this.stockSaving && !this.deleting)
+          .onClick(() => this.openStockAction('move'))
+        Button('调整数量').attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1)
+          .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+          .enabled(this.managementReady && this.allBatches.length > 0 && !this.consuming && !this.stockSaving && !this.deleting)
+          .onClick(() => this.openStockAction('adjust'))
+      }.width('100%')
+      Button(`存放与到期明细 · ${this.batchCount} 份`).attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
         .width('100%').fontSize(13).backgroundColor($r('app.color.surface_card')).fontColor($r('app.color.brand_primary'))
         .onClick(() => NavigationHelper.pushUrl({ url: RouteName.BATCH_LIST, params: { itemId: $$.item.id } }))
     }.width('100%')
@@ -1006,7 +1157,8 @@ export struct ItemDetailPage {
         return;
       }
       if (batchResult.ok) {
-        this.batchCount = batchResult.getData().length;
+        this.allBatches = batchResult.getData();
+        this.batchCount = this.allBatches.length;
         this.stockBatches = batchResult.getData().filter((batch: Batch) => batch.quantity > 0);
         if (!this.stockBatches.some((batch: Batch) => batch.id === this.consumeBatchId)) { this.consumeBatchId = ''; }
       }

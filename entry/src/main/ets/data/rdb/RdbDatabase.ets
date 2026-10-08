@@ -1,4 +1,4 @@
-import { createLocationLabelSchema } from './LocationLabelSchema';
+import { addLocationLabelName, createLocationLabelSchema } from './LocationLabelSchema';
 import { Context } from '@kit.AbilityKit';
 import { relationalStore } from '@kit.ArkData';
 import { AppError, AppErrorCode, toAppError } from '../../common/AppError';
@@ -66,6 +66,7 @@ export async function migrateToLatest(store: relationalStore.RdbStore): Promise<
     }
     if (currentVersion < 13) { await createLocationLabelSchema(transaction); }
     if (currentVersion < 14) { await addLocationUsage(transaction); }
+    if (currentVersion < 15) { await addLocationLabelName(transaction); }
     await transaction.execute(`PRAGMA user_version = ${DATABASE_VERSION}`);
     await transaction.commit();
   } catch (error) {

@@ -1,5 +1,6 @@
 import { relationalStore } from '@kit.ArkData';
 import { RdbDatabase, migrateToLatest } from '../../../main/ets/data/rdb/RdbDatabase';
+import { DATABASE_VERSION } from '../../../main/ets/data/rdb/ItemSchema';
 import { ItemDao } from '../../../main/ets/data/dao/ItemDao';
 import { ItemRepository } from '../../../main/ets/data/repository/ItemRepository';
 import { LocationRepository } from '../../../main/ets/data/repository/LocationRepository';
@@ -36,10 +37,12 @@ export default function systemCapabilitiesDeviceTest() {
         const created = await locations.create({ name: '测试收纳位置' });
         expect(created.ok).assertTrue();
         const label = await labels.create(created.getData().id);
+        await labels.rename(label.token, '冬季衣物箱');
         expect((await locations.rename(created.getData().id, '已改名的测试位置')).ok).assertTrue();
         expect((await labels.resolve(label.token)).path).assertEqual('已改名的测试位置');
         const other = await locations.create({ name: '第二个测试位置' });
         await labels.bind(label.token, other.getData().id);
+        expect((await labels.list()).find(value => value.token === label.token)?.name).assertEqual('冬季衣物箱');
         expect((await labels.resolve(label.token)).id).assertEqual(other.getData().id);
         await labels.remove(label.token);
         let rejected = false;
@@ -60,7 +63,7 @@ export default function systemCapabilitiesDeviceTest() {
         await store.insert('managed_location', { id: 'upgrade-location', name: '原位置', path: '原位置', active: 1, created_at: 1, updated_at: 1 });
         store.version = 12;
         await migrateToLatest(store);
-        expect(store.version).assertEqual(13);
+        expect(store.version).assertEqual(DATABASE_VERSION);
         await store.insert('location_label', { token: '12345678123412341234123456789012', location_id: 'upgrade-location' });
         const rows = await store.querySql('SELECT name FROM managed_location WHERE id = ?', ['upgrade-location']);
         try { expect(rows.rowCount).assertEqual(1); } finally { rows.close(); }

@@ -21,6 +21,21 @@ function backup(): PortableBackupPayload {
 
 export default function portableBackupValidationTest() {
   describe('Portable backup validation', () => {
+    it('常用单位和标签名称在备份中保留，拒绝空白或超长标签名', 0, () => {
+      const validator = new PortableBackupValidation();
+      const payload = backup();
+      payload.items[0].unit = ItemUnit.ROLL; payload.batches[0].unit = ItemUnit.ROLL;
+      payload.locations.push({ id: 'location-1', name: '客厅', path: '客厅', active: true, createdAt: 1, updatedAt: 1 });
+      payload.locationLabels = [{ token: '12345678123412341234123456789012', locationId: 'location-1', name: '冬季衣物箱' }];
+      const valid = validator.validate(JSON.stringify(payload));
+      expect(valid.ok).assertTrue();
+      expect(valid.getData().items[0].unit).assertEqual(ItemUnit.ROLL);
+      expect(valid.getData().locationLabels?.[0].name).assertEqual('冬季衣物箱');
+      payload.locationLabels[0].name = ' ';
+      expect(validator.validate(JSON.stringify(payload)).ok).assertFalse();
+      payload.locationLabels[0].name = '箱'.repeat(41);
+      expect(validator.validate(JSON.stringify(payload)).ok).assertFalse();
+    });
     it('历史位置的完整名称和最近使用时间随备份保留，拒绝无效时间', 0, () => {
       const validator = new PortableBackupValidation();
       const payload = backup();

@@ -13,13 +13,11 @@ export class SharedRouteMotion {
   private static context?: UIContext;
   private static item?: ItemSummary;
   private static itemKey: string = '';
-  private static search: boolean = false;
   private static opening: boolean = false;
   private static ready: boolean = false;
   private static running: boolean = false;
   private static proxy?: NavigationTransitionProxy;
   private static push: boolean = false;
-  private static searchMotion: boolean = false;
   private static interactive: boolean = false;
   private static waitId: number = -1;
 
@@ -28,7 +26,6 @@ export class SharedRouteMotion {
     SharedRouteMotion.context = undefined;
     SharedRouteMotion.item = undefined;
     SharedRouteMotion.itemKey = '';
-    SharedRouteMotion.search = false;
     SharedRouteMotion.opening = false;
     SharedRouteMotion.ready = false;
     SharedRouteMotion.running = false;
@@ -40,8 +37,6 @@ export class SharedRouteMotion {
   private static resetVisuals(): void {
     AppStorage.setOrCreate<string>('itemnest.sharedItemSource', '');
     AppStorage.setOrCreate<boolean>('itemnest.sharedItemExpanded', true);
-    AppStorage.setOrCreate<boolean>('itemnest.searchSourceHidden', false);
-    AppStorage.setOrCreate<boolean>('itemnest.searchExpanded', true);
     AppStorage.setOrCreate<number>('itemnest.sharedPageProgress', 1);
     AppStorage.setOrCreate<string>('itemnest.sharedPageRoute', '');
   }
@@ -64,11 +59,6 @@ export class SharedRouteMotion {
       SharedRouteMotion.itemKey = '';
       AppStorage.setOrCreate<string>('itemnest.sharedItemSource', '');
       AppStorage.setOrCreate<boolean>('itemnest.sharedItemExpanded', true);
-    }
-    if (route === RouteName.SEARCH && SharedRouteMotion.search) {
-      SharedRouteMotion.search = false;
-      AppStorage.setOrCreate<boolean>('itemnest.searchSourceHidden', false);
-      AppStorage.setOrCreate<boolean>('itemnest.searchExpanded', true);
     }
     if (AppStorage.get<string>('itemnest.sharedPageRoute') === route) {
       AppStorage.setOrCreate<number>('itemnest.sharedPageProgress', 1);
@@ -101,25 +91,8 @@ export class SharedRouteMotion {
     });
   }
 
-  static openSearch(context: UIContext, reduceAnimation: boolean): void {
-    if (SharedRouteMotion.opening || SharedRouteMotion.proxy !== undefined) { return; }
-    SharedRouteMotion.context = context;
-    SharedRouteMotion.search = !reduceAnimation;
-    SharedRouteMotion.opening = !reduceAnimation;
-    SharedRouteMotion.ready = false;
-    AppStorage.setOrCreate<boolean>('itemnest.searchExpanded', reduceAnimation);
-    AppStorage.setOrCreate<number>('itemnest.sharedPageProgress', reduceAnimation ? 1 : 0);
-    AppStorage.setOrCreate<string>('itemnest.sharedPageRoute', RouteName.SEARCH);
-    NavigationHelper.pushUrl({ url: RouteName.SEARCH, params: { source: 'home-search' } }).then((opened: boolean) => {
-      if (!opened) { SharedRouteMotion.clear(); }
-    });
-  }
-
-  static targetReady(itemId?: string): void {
-    if (itemId !== undefined && SharedRouteMotion.item?.id !== itemId) { return; }
-    if (itemId === undefined && !SharedRouteMotion.search) { return; }
-    const route = AppStorage.get<string>('itemnest.sharedPageRoute');
-    if (route !== (itemId === undefined ? RouteName.SEARCH : RouteName.ITEM_DETAIL)) { return; }
+  static targetReady(itemId: string): void {
+    if (SharedRouteMotion.item?.id !== itemId || AppStorage.get<string>('itemnest.sharedPageRoute') !== RouteName.ITEM_DETAIL) { return; }
     SharedRouteMotion.ready = true;
     SharedRouteMotion.run();
   }
@@ -151,16 +124,13 @@ export class SharedRouteMotion {
       to.name === RouteName.ITEM_DETAIL && (to.param as ItemRouteParams | undefined)?.itemId === itemId;
     const itemPop = SharedRouteMotion.itemKey.length > 0 && from.name === RouteName.ITEM_DETAIL &&
       (from.param as ItemRouteParams | undefined)?.itemId === itemId;
-    const searchPush = SharedRouteMotion.opening && SharedRouteMotion.search && to.name === RouteName.SEARCH && !from.name;
-    const searchPop = SharedRouteMotion.search && from.name === RouteName.SEARCH && !to.name;
     const push = operation === NavigationOperation.PUSH;
-    if (!((push && (itemPush || searchPush)) || (operation === NavigationOperation.POP && (itemPop || searchPop)))) {
+    if (!((push && itemPush) || (operation === NavigationOperation.POP && itemPop))) {
       return undefined;
     }
     SharedRouteMotion.opening = false;
-    SharedRouteMotion.searchMotion = searchPush || searchPop;
     const interactive = SharedRouteMotion.interactive && itemPop;
-    AppStorage.setOrCreate<string>('itemnest.sharedPageRoute', SharedRouteMotion.searchMotion ? RouteName.SEARCH : RouteName.ITEM_DETAIL);
+    AppStorage.setOrCreate<string>('itemnest.sharedPageRoute', RouteName.ITEM_DETAIL);
     return {
       timeout: interactive ? undefined : 1600,
       isInteractive: interactive,
@@ -193,19 +163,12 @@ export class SharedRouteMotion {
             AppStorage.setOrCreate<number>('itemnest.sharedPageProgress', 1);
           });
         }
-        if (success && push && searchPush) {
-          try {
-            SharedRouteMotion.context?.getFocusController().requestFocus('itemnest-search-input');
-          } catch (_) {
-          }
-        }
         if (success && !push) {
           if (itemPop) {
             SharedRouteMotion.item = undefined;
             SharedRouteMotion.itemKey = '';
             AppStorage.setOrCreate<string>('itemnest.sharedItemSource', '');
           }
-          if (searchPop) { SharedRouteMotion.search = false; }
           AppStorage.setOrCreate<number>('itemnest.sharedPageProgress', 1);
           AppStorage.setOrCreate<string>('itemnest.sharedPageRoute', '');
         }
@@ -225,13 +188,8 @@ export class SharedRouteMotion {
       { duration: 1000, curve: Curve.Linear } : uiSpring(false, 0.48, 0.86);
     if (!SharedRouteMotion.interactive) { options.onFinish = () => proxy.finishTransition(); }
     context.animateTo(options, () => {
-      if (SharedRouteMotion.searchMotion) {
-        AppStorage.setOrCreate<boolean>('itemnest.searchSourceHidden', push);
-        AppStorage.setOrCreate<boolean>('itemnest.searchExpanded', push);
-      } else {
-        AppStorage.setOrCreate<string>('itemnest.sharedItemSource', push ? SharedRouteMotion.itemKey : '');
-        AppStorage.setOrCreate<boolean>('itemnest.sharedItemExpanded', push);
-      }
+      AppStorage.setOrCreate<string>('itemnest.sharedItemSource', push ? SharedRouteMotion.itemKey : '');
+      AppStorage.setOrCreate<boolean>('itemnest.sharedItemExpanded', push);
       AppStorage.setOrCreate<number>('itemnest.sharedPageProgress', push ? 1 : 0);
     });
   }

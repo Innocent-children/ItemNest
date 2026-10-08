@@ -1,7 +1,7 @@
 import { AppError, AppErrorCode } from '../common/AppError';
-import { ItemValidator } from '../common/ItemValidator';
+import { ItemValidator, ValidatedItemDraft } from '../common/ItemValidator';
 import { failure, Result } from '../common/Result';
-import { Item, ItemDraft } from '../model/Item';
+import { Item, ItemDetailsDraft, ItemDraft } from '../model/Item';
 import { BatchRepositoryPort } from '../data/repository/BatchRepository';
 import { ItemRepositoryPort } from '../data/repository/ItemRepository';
 
@@ -49,22 +49,43 @@ export class ItemUpdateService {
         ));
       }
     }
-    const updatedItem: Item = {
+    return this.repository.update(this.buildUpdatedItem(existing, validated.getData()), singleBatchId, true);
+  }
+
+  /**
+   * 资料编辑只保存资料字段，读取期间发生的消耗、补入和换位置由各自的库存操作负责。
+   */
+  async updateDetails(itemId: string, draft: ItemDetailsDraft): Promise<Result<Item>> {
+    const result = await this.repository.getById(itemId);
+    if (!result.ok) { return failure<Item>(result.getError()); }
+    const item = result.getData();
+    if (item === undefined) { return failure<Item>(new AppError(AppErrorCode.NOT_FOUND, '物品不存在或已删除')); }
+    const validated = this.validator.validate({ name: draft.name, unit: draft.unit ?? item.unit,
+      category: draft.category, reminderDays: draft.reminderDays, notes: draft.notes, barcode: draft.barcode,
+      quantity: item.quantity, locationPath: item.locationPath, expirationDate: item.expirationDate });
+    if (!validated.ok) { return failure<Item>(validated.getError()); }
+    if (this.repository.updateDetails === undefined) {
+      return failure<Item>(new AppError(AppErrorCode.SYSTEM_UNAVAILABLE, '当前无法保存物品资料，请重新打开应用后重试'));
+    }
+    return this.repository.updateDetails(this.buildUpdatedItem(item, validated.getData()));
+  }
+
+  private buildUpdatedItem(existing: Item, data: ValidatedItemDraft): Item {
+    return {
       id: existing.id,
-      name: validated.getData().name,
-      quantity: validated.getData().quantity,
-      unit: validated.getData().unit,
-      locationPath: validated.getData().locationPath,
-      category: validated.getData().category,
-      expirationDate: validated.getData().expirationDate,
-      reminderDays: validated.getData().reminderDays,
-      notes: validated.getData().notes,
-      barcode: validated.getData().barcode,
+      name: data.name,
+      quantity: data.quantity,
+      unit: data.unit,
+      locationPath: data.locationPath,
+      category: data.category,
+      expirationDate: data.expirationDate,
+      reminderDays: data.reminderDays,
+      notes: data.notes,
+      barcode: data.barcode,
       photoState: existing.photoState,
       photoLocalId: existing.photoLocalId,
       createdAt: existing.createdAt,
       updatedAt: this.clock()
     };
-    return this.repository.update(updatedItem, singleBatchId, true);
   }
 }

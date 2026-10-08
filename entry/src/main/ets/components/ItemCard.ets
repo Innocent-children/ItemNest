@@ -64,11 +64,19 @@ export struct ItemCard {
             Text(this.item.category).fontSize(11).fontColor($r('app.color.text_tertiary'))
               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           }
+          if (this.item.photoMatch) {
+            Text('外观候选').fontSize(11).fontColor($r('app.color.brand_primary'))
+          }
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         Column({ space: 3 }) {
-          Text(this.item.quantity.toString()).contentTransition(numericMotion(this.reduceAnimation, this.item.quantity)).fontSize(24).fontWeight(FontWeight.Medium)
-            .fontColor(this.item.quantity === 0 ? $r('app.color.status_danger') : $r('app.color.text_primary'))
+          Text((this.item.availableQuantity ?? this.item.quantity).toString())
+            .contentTransition(numericMotion(this.reduceAnimation, this.item.availableQuantity ?? this.item.quantity)).fontSize(24).fontWeight(FontWeight.Medium)
+            .fontColor((this.item.availableQuantity ?? this.item.quantity) === 0 ? $r('app.color.status_danger') : $r('app.color.text_primary'))
           Text(this.item.unit).fontSize(11).fontColor($r('app.color.text_secondary'))
+          Text(this.item.availableQuantity === undefined ? '拥有总量' : '在手可用').fontSize(11).fontColor($r('app.color.text_secondary'))
+          if ((this.item.borrowedQuantity ?? 0) > 0) {
+            Text(`借出 ${this.item.borrowedQuantity}${this.item.unit}`).fontSize(11).fontColor($r('app.color.text_secondary'))
+          }
         }.constraintSize({ maxWidth: 96 }).alignItems(HorizontalAlign.End)
       }.width('100%')
     }
@@ -77,7 +85,7 @@ export struct ItemCard {
     .stateEffect(false)
     .visualEffect(new hdsEffect.HdsEffectBuilder().pressShadow(hdsEffect.PressShadowType.BLEND_WHITE).buildEffect())
     .backgroundColor(this.pressed ? $r('app.color.surface_accent') : $r('app.color.surface_card'))
-    .accessibilityText(`${this.item.name}，${this.locationText()}，总量${this.item.quantity}${this.item.unit}，${expiryDescription(this.item.expiryStatus, this.item.expirationDate ?? '')}，查看详情`)
+    .accessibilityText(`${this.item.name}，${this.locationText()}，拥有总量${this.item.quantity}${this.item.unit}，${this.item.availableQuantity === undefined ? '' : `在手可用${this.item.availableQuantity}${this.item.unit}，借出${this.item.borrowedQuantity ?? 0}${this.item.unit}，`}${expiryDescription(this.item.expiryStatus, this.item.expirationDate ?? '')}，${this.item.photoMatch ? '外观候选，' : ''}查看详情`)
     .scale({ x: this.pressed && !this.reduceAnimation ? 0.97 : 1, y: this.pressed && !this.reduceAnimation ? 0.97 : 1 })
     .animation(uiSpring(this.reduceAnimation, 0.32, 0.82))
     .onTouch((event: TouchEvent) => {
@@ -85,6 +93,7 @@ export struct ItemCard {
       if (event.type === TouchType.Up || event.type === TouchType.Cancel) { this.pressed = false; }
     })
     .transition(uiReveal(this.reduceAnimation))
+    .bindContextMenu(this.quickMenu, ResponseType.LongPress)
     .onClick(() => {
       this.pressed = false;
       if (this.detailSection.length > 0) {
@@ -93,5 +102,23 @@ export struct ItemCard {
         SharedRouteMotion.openItem(this.getUIContext(), this.item, this.thumbnailKey(), this.reduceAnimation);
       }
     })
+  }
+
+  @Builder
+  private quickMenu() {
+    Menu() {
+      MenuItem({ content: `记录用掉 1${this.item.unit}` })
+        .enabled((this.item.availableQuantity ?? this.item.quantity) >= 1)
+        .onClick(() => this.openStockAction('consume-one'))
+      MenuItem({ content: '记录其他用量' }).onClick(() => this.openStockAction('consume'))
+      MenuItem({ content: '换位置' }).enabled(this.item.quantity > 0).onClick(() => this.openStockAction('move'))
+      MenuItem({ content: '调整数量' }).onClick(() => this.openStockAction('adjust'))
+    }
+  }
+
+  private openStockAction(section: string): void {
+    this.pressed = false;
+    NavigationHelper.pushUrl({ url: RouteName.ITEM_DETAIL,
+      params: { itemId: this.item.id, section: section, expectedUnit: this.item.unit } });
   }
 }

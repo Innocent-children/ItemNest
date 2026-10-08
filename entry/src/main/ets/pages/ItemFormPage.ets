@@ -35,8 +35,6 @@ export struct ItemFormPage {
   @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @State private focusedField: string = '';
   @State private name: string = '';
-  @State private singleBatchId: string = '';
-  @State private batchFieldsReady: boolean = false;
   @State private savedWithoutPhoto: boolean = false;
   @State private quantityText: string = '1';
   @State private unit: ItemUnit = ItemUnit.PIECE;
@@ -71,9 +69,7 @@ export struct ItemFormPage {
   @State private showExpirySection: boolean = false;
   @State private showNotesSection: boolean = false;
   @State private showPhotoSection: boolean = false;
-  private loadedQuantityText: string = '1';
   private loadedUnit: ItemUnit = ItemUnit.PIECE;
-  private loadedExpirationDate: string = '';
   private initialDraftSignature: string = '';
   private returnToRoute: string = RouteName.HOME;
   private backHandler: () => boolean = () => this.handleNavigationBack();
@@ -129,6 +125,7 @@ export struct ItemFormPage {
   private quickEntryHandled: boolean = false;
   private selectionListenerId: number = 0;
   private defaultReminderDays: number = 7;
+  private continueAfterSave: boolean = false;
   @State private notificationHint: string = '正在检查到期通知…';
   @State private notificationAction: string = '设置到期通知';
 
@@ -172,7 +169,7 @@ export struct ItemFormPage {
   @Builder
   private pageHeader() {
     PageHeader({ title: this.editMode ? '编辑物品' : '记录新物品', showBack: true,
-          subtitle: this.editMode ? '更新名称和存放信息。' : '填写名称和位置；扫码与拍照用于补充资料。',
+          subtitle: this.editMode ? '更新名称、分类和物品资料。' : '填写名称和位置；扫码与拍照用于补充资料。',
           actionText: '扫码', actionIcon: $r('app.media.ui_scan'), actionEnabled: !this.saving && !this.scanning,
           onBack: () => this.requestClose(), onAction: () => { this.showNotesSection = true; this.scanBarcode(); } })
   }
@@ -199,7 +196,9 @@ export struct ItemFormPage {
                 }, (item: Item) => item.id)
               }
               this.coreSection()
-              this.locationSection()
+              if (!this.editMode) { this.locationSection() }
+              this.sectionToggle('物品照片', this.hasPhoto() ? '当前物品已有照片' : '拍照识别或补充物品照片', 'photo')
+              if (this.showPhotoSection) { this.photoSection() }
 
               this.sectionToggle('分类', this.categoryValue.length > 0 ? this.categoryValue : '让物品更好整理', 'category')
               if (this.showCategorySection) {
@@ -208,7 +207,7 @@ export struct ItemFormPage {
 
               this.sectionToggle(
                 '到期与提醒',
-                this.editMode && this.singleBatchId.length === 0 ? '各批次到期日可在库存明细修改' : '设置保质期和提前提醒',
+                this.editMode ? '各份库存的到期日可在存放明细修改' : '设置保质期和提前提醒',
                 'expiry'
               )
               if (this.showExpirySection) {
@@ -220,10 +219,6 @@ export struct ItemFormPage {
                 this.notesSection()
               }
 
-              this.sectionToggle('物品照片', this.hasPhoto() ? '当前物品已有照片' : '选择或拍摄一张照片', 'photo')
-              if (this.showPhotoSection) {
-                this.photoSection()
-              }
 
             }
             .width('100%')
@@ -269,8 +264,9 @@ export struct ItemFormPage {
   @Builder
   private coreSection() {
     Column({ space: $r('app.float.space_4') }) {
-      this.fieldTitle('这是什么物品？', this.editMode ? '更新名称、数量与存放位置。' : '先给它一个容易找到的名字。')
+      this.fieldTitle('这是什么物品？', this.editMode ? '更新名称和物品资料。' : '先给它一个容易找到的名字。')
       TextInput({ text: this.name, placeholder: '例如：感冒药' })
+        .id('itemnest-item-name').enabled(!this.saving)
         .borderWidth(1)
         .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'name'))
         .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
@@ -283,32 +279,23 @@ export struct ItemFormPage {
         .borderColor(this.focusedField === 'name' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
         .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
         .onChange((value: string) => this.name = value)
-      if (this.editMode && this.singleBatchId.length === 0) {
+      if (this.editMode) {
         Text(`总量 ${this.quantityText}${this.unit}（包含借出）`)
           .fontSize($r('app.float.font_body'))
           .fontColor($r('app.color.text_primary'))
         Text('统一修改单位')
           .fontSize($r('app.float.font_body'))
           .fontColor($r('app.color.text_primary'))
-        Flex({ wrap: FlexWrap.Wrap }) {
-          ForEach(ITEM_UNIT_OPTIONS, (option: ItemUnit) => {
-            Button(option)
-              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-              .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-              .type(ButtonType.Capsule)
-              .fontColor(this.unit === option ? $r('app.color.brand_on_primary') : $r('app.color.brand_primary'))
-              .backgroundColor(this.unit === option ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
-              .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-              .enabled(!this.saving)
-              .onClick(() => this.unit = option)
-          }, (option: ItemUnit) => option)
-        }
+        Select(ITEM_UNIT_OPTIONS.map((option: ItemUnit): SelectOption => ({ value: option })))
+          .selected(ITEM_UNIT_OPTIONS.indexOf(this.unit)).value(this.unit).width('100%')
+          .fontColor($r('app.color.text_primary')).backgroundColor($r('app.color.surface_input'))
+          .enabled(!this.saving).onSelect((index: number) => this.unit = ITEM_UNIT_OPTIONS[index])
         Text('修改后所有批次和借还数量使用新单位，数值不会自动换算。')
           .fontSize($r('app.float.font_caption'))
           .fontColor($r('app.color.text_secondary'))
         this.batchSourceNotice()
       } else {
-        QuantityInput({ quantityText: $quantityText, unit: $unit, errorMessage: $quantityError, inputEnabled: !this.saving && (!this.editMode || this.batchFieldsReady) })
+        QuantityInput({ quantityText: $quantityText, unit: $unit, errorMessage: $quantityError, inputEnabled: !this.saving })
       }
     }
     .alignItems(HorizontalAlign.Start)
@@ -321,11 +308,11 @@ export struct ItemFormPage {
   @Builder
   private batchSourceNotice() {
     Column({ space: $r('app.float.space_3') }) {
-      Text('物品分为多个批次，请选择对应位置修改数量和到期日。')
+      Text('数量、位置和到期日统一在存放明细中修改。')
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
-      Button('查看库存明细')
+      Button('按位置修改库存与到期日')
         .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
         .width('100%')
         .fontColor($r('app.color.brand_primary'))
@@ -353,8 +340,7 @@ export struct ItemFormPage {
   @Builder
   private locationSection() {
     Column({ space: $r('app.float.space_4') }) {
-      this.fieldTitle(this.editMode && this.singleBatchId.length === 0 ? '默认存放位置' : '放在哪里？',
-        this.editMode && this.singleBatchId.length === 0 ? '未填写批次位置时使用这里；各批次位置可在库存明细修改。' : '记下位置，下次一找就到。')
+      this.fieldTitle('放在哪里？', '记下位置，下次一找就到。')
       LocationInput({ locationPath: $locationPath, locations: this.managedLocations, inputEnabled: !this.saving,
         loadError: this.locationLoadError, onRetry: () => this.loadManagedLocations() })
       Button('选择或新增位置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
@@ -403,7 +389,7 @@ export struct ItemFormPage {
         Button('清除原分类')
           .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
           .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-          .onClick(() => this.categoryValue = '')
+          .enabled(!this.saving).onClick(() => this.categoryValue = '')
       }
       Flex({ wrap: FlexWrap.Wrap }) {
         ForEach(this.categoryOptions, (category: string) => {
@@ -415,7 +401,7 @@ export struct ItemFormPage {
             .backgroundColor(this.categoryValue === category ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
             .fontSize($r('app.float.font_caption'))
             .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-            .onClick(() => this.categoryValue = this.categoryValue === category ? '' : category)
+            .enabled(!this.saving).onClick(() => this.categoryValue = this.categoryValue === category ? '' : category)
         }, (category: string) => category)
       }
     }
@@ -457,6 +443,11 @@ export struct ItemFormPage {
           }
         })
         .onClick(() => this.save())
+      if (!this.editMode) {
+        Button('保存并继续添加').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .width('100%').fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+          .enabled(!this.saving && !this.photoPicking && !this.scanning).onClick(() => this.save(true))
+      }
     }
     .width('100%')
     .padding({ left: $r('app.float.page_gutter'), right: $r('app.float.page_gutter'), top: $r('app.float.space_3'), bottom: 16 + (this.keyboardVisible ? 0 : this.safeAreaBottom) })
@@ -507,12 +498,16 @@ export struct ItemFormPage {
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
-      OptionalDateField({ value: $expirationDate, editable: !this.saving && (!this.editMode || this.singleBatchId.length > 0) })
+      if (this.editMode) {
+        Text(this.expirationDate || '未设置').fontSize(16).fontColor($r('app.color.text_secondary'))
+      } else {
+        OptionalDateField({ value: $expirationDate, editable: !this.saving })
+      }
       Text('提前提醒天数（可选）')
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
-      TextInput({ text: this.reminderDaysText, placeholder: '未填写时使用默认天数' })
+      TextInput({ text: this.reminderDaysText, placeholder: '未填写时使用默认天数' }).enabled(!this.saving)
         .borderWidth(1)
         .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'reminderDaysText'))
         .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
@@ -551,7 +546,7 @@ export struct ItemFormPage {
       .backgroundColor(this.reminderDaysText === value ? $r('app.color.brand_primary') : $r('app.color.surface_accent'))
       .fontSize($r('app.float.font_caption'))
       .margin({ right: $r('app.float.space_2'), bottom: $r('app.float.space_2') })
-      .onClick(() => this.reminderDaysText = value)
+      .enabled(!this.saving).onClick(() => this.reminderDaysText = value)
   }
 
   @Builder
@@ -561,7 +556,7 @@ export struct ItemFormPage {
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
-      TextArea({ text: this.notes, placeholder: '写下重要说明' })
+      TextArea({ text: this.notes, placeholder: '写下重要说明' }).enabled(!this.saving)
         .borderWidth(1)
         .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'notes'))
         .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
@@ -578,7 +573,7 @@ export struct ItemFormPage {
         .fontSize($r('app.float.font_body'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
-      TextInput({ text: this.scanText, placeholder: '扫描或手动输入' })
+      TextInput({ text: this.scanText, placeholder: '扫描或手动输入' }).enabled(!this.saving)
         .borderWidth(1)
         .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'scanText'))
         .onBlur(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => {
@@ -616,9 +611,9 @@ export struct ItemFormPage {
   private photoSection() {
     Column({ space: $r('app.float.space_3') }) {
       if (this.pendingPhotoUri.length > 0) {
-        RecognitionPanel({ photoUri: this.pendingPhotoUri, inputEnabled: !this.saving, onApply: (draft: CaptureDraft) => {
+        RecognitionPanel({ photoUri: this.pendingPhotoUri, includeExpiry: !this.editMode, inputEnabled: !this.saving, onApply: (draft: CaptureDraft) => {
           if (draft.name.length > 0) { this.name = draft.name; }
-          if (!this.editMode || this.singleBatchId.length > 0) {
+          if (!this.editMode) {
             if (draft.expirationDate.length > 0) { this.expirationDate = draft.expirationDate; this.showExpirySection = true; }
           }
         } })
@@ -634,7 +629,7 @@ export struct ItemFormPage {
           .fontColor($r('app.color.brand_primary'))
           .backgroundColor($r('app.color.surface_accent'))
           .borderRadius($r('app.float.radius_control'))
-          .enabled(!this.photoPicking)
+          .enabled(!this.photoPicking && !this.saving)
           .onClick(() => this.selectPhoto())
         Button('拍摄照片')
           .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
@@ -644,7 +639,7 @@ export struct ItemFormPage {
           .backgroundColor($r('app.color.surface_app'))
           .border({ width: 1, color: $r('app.color.border_subtle') })
           .borderRadius($r('app.float.radius_control'))
-          .enabled(!this.photoPicking)
+          .enabled(!this.photoPicking && !this.saving)
           .onClick(() => this.capturePhoto())
       }
       .width('100%')
@@ -702,7 +697,6 @@ export struct ItemFormPage {
     const result = await AppServices.get().detailItem.getDetail(this.itemId);
     if (result.ok) {
       this.applyItem(result.getData());
-      await this.loadBatchFields(false);
       this.existingLoaded = true;
       this.markClean();
     } else {
@@ -756,14 +750,12 @@ export struct ItemFormPage {
 
   private applyItem(item: Item): void {
     this.name = item.name;
-    this.loadedQuantityText = item.quantity.toString();
     this.loadedUnit = item.unit;
-    this.loadedExpirationDate = item.expirationDate ?? '';
-    this.quantityText = this.loadedQuantityText;
+    this.quantityText = item.quantity.toString();
     this.unit = this.loadedUnit;
     this.locationPath = item.locationPath ?? '';
     this.categoryValue = item.category ?? '';
-    this.expirationDate = this.loadedExpirationDate;
+    this.expirationDate = item.expirationDate ?? '';
     this.reminderDaysText = item.reminderDays === undefined ? '' : item.reminderDays.toString();
     this.notes = item.notes ?? '';
     this.scanText = item.barcode ?? '';
@@ -774,8 +766,9 @@ export struct ItemFormPage {
     this.showPhotoSection = this.existingPhotoLocalId.length > 0;
   }
 
-  private async save(): Promise<void> {
+  private async save(continueAdding: boolean = false): Promise<void> {
     if (this.saving || this.loading) { return; }
+    this.continueAfterSave = continueAdding || (this.savedWithoutPhoto && this.continueAfterSave);
     this.savePressed = false;
     this.errorMessage = '';
     if (this.quantityError.length > 0) {
@@ -785,10 +778,6 @@ export struct ItemFormPage {
     this.saving = true;
     try {
       if (this.editMode) {
-        if (!this.batchFieldsReady) {
-          await this.loadBatchFields(true);
-          if (!this.batchFieldsReady) { return; }
-        }
         this.managedFieldsRequestId++;
         const latestResult = await AppServices.get().detailItem.getDetail(this.itemId);
         if (!latestResult.ok) {
@@ -796,8 +785,9 @@ export struct ItemFormPage {
           return;
         }
         this.applyManagedBatchFields(latestResult.getData());
+        this.locationPath = latestResult.getData().locationPath ?? '';
         const draft = this.createDraft();
-        const result = await AppServices.get().updateItem.update(this.itemId, draft);
+        const result = await AppServices.get().updateItem.updateDetails(this.itemId, draft);
         if (result.ok) {
           await this.completeItemSave(result.getData());
           return;
@@ -840,7 +830,6 @@ export struct ItemFormPage {
         this.errorMessage = result.getError().message;
         return;
       }
-      await this.loadBatchFields(true);
       this.applyManagedBatchFields(result.getData());
     } catch (_) {
       if (requestId === this.managedFieldsRequestId) {
@@ -849,32 +838,11 @@ export struct ItemFormPage {
     }
   }
 
-  private async loadBatchFields(preserveDraft: boolean): Promise<void> {
-    const result = await AppServices.get().batches.listByItemId(this.itemId);
-    this.batchFieldsReady = result.ok;
-    if (!result.ok) {
-      this.errorMessage = result.getError().message;
-      return;
-    }
-    const batches = result.getData();
-    this.singleBatchId = batches.length === 1 ? batches[0].id : '';
-    if (!preserveDraft && batches.length === 1) {
-      this.locationPath = batches[0].locationPath ?? this.locationPath;
-    }
-  }
-
   private applyManagedBatchFields(item: Item): void {
     const nextUnit = refreshedUnit(this.unit, this.loadedUnit, item.unit);
-    const canEditStock = this.singleBatchId.length > 0;
-    if (!canEditStock || this.quantityText === this.loadedQuantityText) {
-      this.quantityText = item.quantity.toString();
-    }
-    if (!canEditStock || this.expirationDate === this.loadedExpirationDate) {
-      this.expirationDate = item.expirationDate ?? '';
-    }
-    this.loadedQuantityText = item.quantity.toString();
+    this.quantityText = item.quantity.toString();
+    this.expirationDate = item.expirationDate ?? '';
     this.loadedUnit = item.unit;
-    this.loadedExpirationDate = item.expirationDate ?? '';
     this.unit = nextUnit;
   }
 
@@ -885,7 +853,6 @@ export struct ItemFormPage {
       this.editMode = true;
       this.existingLoaded = true;
       this.savedWithoutPhoto = true;
-      await this.loadBatchFields(true);
       this.errorMessage = notice ?? '物品信息已保存，照片保存失败，请重试或重新选择照片。';
       AppEventBus.notifyDataChanged();
       return;
@@ -896,6 +863,34 @@ export struct ItemFormPage {
   private finishSave(notice?: string): void {
     this.showToast(notice ?? '物品已保存');
     const refreshAt = AppEventBus.notifyDataChanged();
+    if (this.continueAfterSave) {
+      this.continueAfterSave = false;
+      this.itemId = '';
+      this.editMode = false;
+      this.savedWithoutPhoto = false;
+      this.existingLoaded = false;
+      this.name = '';
+      this.quantityText = '1';
+      this.quantityError = '';
+      this.expirationDate = '';
+      this.notes = '';
+      this.scanText = '';
+      this.scannedMatches = [];
+      this.pendingPhotoUri = '';
+      this.existingPhotoLocalId = '';
+      this.showPhotoSection = false;
+      this.showNotesSection = false;
+      this.showExpirySection = false;
+      this.errorMessage = notice ?? '';
+      this.markClean();
+      this.pageScroller.scrollEdge(Edge.Top);
+      setTimeout(() => {
+        if (NavigationHelper.isCurrentBackHandler(this.backHandler)) {
+          try { this.getUIContext().getFocusController().requestFocus('itemnest-item-name'); } catch (_) {}
+        }
+      }, 0);
+      return;
+    }
     NavigationHelper.back({
       url: this.returnToRoute,
       params: buildItemRefreshParams(refreshAt, this.itemId)
@@ -913,16 +908,16 @@ export struct ItemFormPage {
   }
 
   private createDraft(): ItemDraft {
-    const quantityText = this.editMode && this.singleBatchId.length === 0 ? this.loadedQuantityText : this.quantityText;
+    const quantityText = this.quantityText;
     const quantity = quantityText.trim().length === 0 ? undefined : Number(quantityText);
     const reminderDays = this.reminderDaysText.trim().length === 0 ? this.defaultReminderDays : Number(this.reminderDaysText);
     return {
       name: this.name,
-      quantity: quantity,
+      quantity: this.editMode ? undefined : quantity,
       unit: this.unit,
-      locationPath: this.locationPath,
+      locationPath: this.editMode ? undefined : this.locationPath,
       category: this.categoryValue.length === 0 ? undefined : this.categoryValue,
-      expirationDate: this.editMode && this.singleBatchId.length === 0 ? this.loadedExpirationDate : this.expirationDate,
+      expirationDate: this.editMode ? undefined : this.expirationDate,
       reminderDays: reminderDays,
       notes: this.notes,
       barcode: this.scanText
@@ -979,11 +974,11 @@ export struct ItemFormPage {
   private currentDraftSignature(): string {
     return JSON.stringify({
       name: this.name,
-      quantityText: this.editMode && this.singleBatchId.length === 0 ? '' : this.quantityText,
+      quantityText: this.editMode ? '' : this.quantityText,
       unit: this.unit,
-      locationPath: this.locationPath,
+      locationPath: this.editMode ? '' : this.locationPath,
       categoryValue: this.categoryValue,
-      expirationDate: this.editMode && this.singleBatchId.length === 0 ? '' : this.expirationDate,
+      expirationDate: this.editMode ? '' : this.expirationDate,
       reminderDaysText: this.reminderDaysText,
       notes: this.notes,
       scanText: this.scanText,

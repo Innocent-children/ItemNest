@@ -2,7 +2,7 @@ import { relationalStore } from '@kit.ArkData';
 import { SchemaExecutor } from './SchemaExecutor';
 
 export const DATABASE_NAME: string = 'itemnest.db';
-export const DATABASE_VERSION: number = 14;
+export const DATABASE_VERSION: number = 15;
 export const ITEM_TABLE: string = 'item';
 
 const CREATE_ITEM_TABLE: string = `

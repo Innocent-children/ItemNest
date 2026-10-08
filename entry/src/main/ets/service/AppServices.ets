@@ -1,4 +1,5 @@
 import { LocationLabelRepository } from '../data/repository/LocationLabelRepository';
+import { LabelImageService } from './LabelImageService';
 import { BackupProgressService } from './BackupProgressService';
 import { SystemFeatureService } from './SystemFeatureService';
 import { CaptureDraftService } from './CaptureDraftService';
@@ -67,6 +68,7 @@ export class AppServices {
   readonly textRecognition: TextRecognitionAdapter = new TextRecognitionAdapter();
   readonly photoSearch: PhotoSearchService;
   readonly locationLabels: LocationLabelService;
+  readonly labelImages: LabelImageService = new LabelImageService();
   readonly sharing: ShareService = new ShareService();
   readonly database: RdbDatabase;
   readonly repository: ItemRepository;

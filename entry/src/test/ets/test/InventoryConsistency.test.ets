@@ -8,11 +8,11 @@ import {
   INVENTORY_V12_MIGRATION_STATEMENTS
 } from '../../../main/ets/data/rdb/InventoryIntegritySchema';
 import { DATABASE_VERSION } from '../../../main/ets/data/rdb/ItemSchema';
-import { Batch } from '../../../main/ets/model/Batch';
+import { Batch, ConsumptionReceipt } from '../../../main/ets/model/Batch';
 import { Item, ItemUnit, PhotoState } from '../../../main/ets/model/Item';
 import { BatchService } from '../../../main/ets/service/BatchService';
 import { ItemUpdateService } from '../../../main/ets/service/ItemUpdateService';
-import { isSameOrDescendantLocation, planConsumption, validateInventoryReduction } from '../../../main/ets/service/InventoryPolicy';
+import { isSameOrDescendantLocation, planConsumption, validateConsumptionUndo, validateInventoryReduction } from '../../../main/ets/service/InventoryPolicy';
 import { ItemSearchService } from '../../../main/ets/service/ItemSearchService';
 import { ItemListService } from '../../../main/ets/service/ItemListService';
 import { ExpiryService } from '../../../main/ets/service/ExpiryService';
@@ -98,6 +98,38 @@ function buildDefaultBatch(): Batch {
 }
 
 export default function inventoryConsistencyTest() {
+  describe('Consumption undo', () => {
+    it('跨两份库存的消耗可以撤销，调整数量或单位后拒绝覆盖后续修改', 0, () => {
+      const first = buildDefaultBatch();
+      first.quantity = 0; first.updatedAt = 88;
+      const second = buildDefaultBatch();
+      second.id = 'second'; second.quantity = 3; second.updatedAt = 88;
+      const receipt: ConsumptionReceipt = { eventId: 'consume', itemId: 'item-1', quantity: 4, availableBefore: 7, availableAfter: 3,
+        unit: ItemUnit.BOX, createdAt: 88, stocks: [
+          { batchId: first.id, beforeQuantity: 2, afterQuantity: 0 },
+          { batchId: second.id, beforeQuantity: 5, afterQuantity: 3 }
+        ] };
+      expect(validateConsumptionUndo([first, second], receipt).ok).assertTrue();
+      second.quantity = 4;
+      expect(validateConsumptionUndo([first, second], receipt).ok).assertFalse();
+      second.quantity = 3; second.unit = ItemUnit.PACK;
+      expect(validateConsumptionUndo([first, second], receipt).ok).assertFalse();
+      second.unit = ItemUnit.BOX; second.updatedAt = 89;
+      expect(validateConsumptionUndo([first, second], receipt).ok).assertFalse();
+      expect(validateConsumptionUndo([first], receipt).ok).assertFalse();
+    });
+
+    it('撤销不能重复恢复同一份库存，也不能恢复超过原消耗数量的库存', 0, () => {
+      const batch = buildDefaultBatch(); batch.quantity = 8; batch.updatedAt = 88;
+      const receipt: ConsumptionReceipt = { eventId: 'consume', itemId: 'item-1', quantity: 2, availableBefore: 10, availableAfter: 8,
+        unit: ItemUnit.BOX, createdAt: 88, stocks: [{ batchId: batch.id, beforeQuantity: 10, afterQuantity: 8 }] };
+      expect(validateConsumptionUndo([batch], receipt).ok).assertTrue();
+      receipt.stocks.push(receipt.stocks[0]);
+      expect(validateConsumptionUndo([batch], receipt).ok).assertFalse();
+      receipt.stocks.pop(); receipt.quantity = 3;
+      expect(validateConsumptionUndo([batch], receipt).ok).assertFalse();
+    });
+  });
   describe('Inventory consistency', () => {
     it('批次校验真实日期并要求单位与父物品一致', 0, async () => {
       const items = new FakeItemRepository();
@@ -326,7 +358,7 @@ export default function inventoryConsistencyTest() {
 
     it('保留v10迁移并在v12替换汇总与单位约束', 0, () => {
       const sql = INVENTORY_V10_MIGRATION_STATEMENTS.join('\n');
-      expect(DATABASE_VERSION).assertEqual(14);
+      expect(DATABASE_VERSION).assertEqual(15);
       expect(INVENTORY_V10_TRIGGER_NAMES.length).assertEqual(10);
       expect(sql.includes('WHERE NOT EXISTS')).assertTrue();
       expect(sql.includes('AFTER INSERT ON item')).assertTrue();
