@@ -1,5 +1,6 @@
 import { StartupBrand } from '../components/StartupBrand';
 import { KeyCode } from '@kit.InputKit';
+import { KeyboardAvoidMode } from '@kit.ArkUI';
 import { SystemFeaturesPage } from './SystemFeaturesPage';
 import { LocationLabelPage } from './LocationLabelPage';
 import { SharePreviewPage } from './SharePreviewPage';
@@ -108,6 +109,7 @@ struct Index {
   };
 
   aboutToAppear(): void {
+    this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
     try {
       this.applyAnimationPreference(accessibility.isAnimationReduceEnabledSync());
       accessibility.onAnimationReduceStateChange(this.animationReduceListener);
@@ -381,7 +383,7 @@ struct Index {
           SettingsPage({ isMainTab: true })
         }.tabBar(this.dockTab(3, '我的', $r('sys.symbol.person')))
       }
-      .attributeModifier(new FloatingTabsStyle(this.reduceAnimation))
+      .attributeModifier(new FloatingTabsStyle(this.reduceAnimation, this.keyboardVisible))
       .barPosition(BarPosition.End)
       .barOverlap(true)
       .barHeight(this.keyboardVisible ? 0 : dockBarHeight)

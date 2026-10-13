@@ -40,6 +40,7 @@ export struct SearchPage {
   @Prop @Watch('onSearchRequested') requestRevision: number = 0;
   @State private draftLocation: string = '';
   @State private draftCategory: string = '';
+  @State private draftIncludePhotos: boolean = false;
   @State private showFilters: boolean = false;
   @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @StorageLink('itemnest.keyboardVisible') private keyboardVisible: boolean = false;
@@ -163,6 +164,7 @@ export struct SearchPage {
     this.searchController.stopEditing();
     this.draftLocation = this.selectedLocation;
     this.draftCategory = this.selectedCategory;
+    this.draftIncludePhotos = this.includePhotos;
     this.showFilters = true;
   }
 
@@ -188,7 +190,7 @@ export struct SearchPage {
       Row({ space: 10 }) {
         SharedSearchField({ value: this.name, controller: this.searchController,
           inputId: this.isMainTab ? 'itemnest-tab-search-input' : 'itemnest-search-input',
-          placeholder: this.includePhotos ? '名称或外观，例如：红色盒子' : '物品名称或条码',
+          placeholder: this.includePhotos ? '名称或外观，例如：红色盒子' : '名称、位置、分类或条码',
           onChange: (value: string) => {
             this.name = value;
             this.requestCoordinator.invalidateSearchResults();
@@ -204,20 +206,11 @@ export struct SearchPage {
         Button(this.scanning ? '正在扫码…' : '扫码查找').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
           .fontSize(13).fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
           .enabled(!this.scanning).onClick(() => this.scanToSearch())
-        Button('位置与分类').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+        Button(this.includePhotos ? '筛选 · 含外观查找' : '筛选位置与分类').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
           .fontSize(13).fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
           .onClick(() => this.openFilters())
       }.width('100%').constraintSize({ maxWidth: 960 })
         .padding({ left: 24, right: 24, bottom: 12 })
-      Row({ space: 12 }) {
-        Toggle({ type: ToggleType.Checkbox, isOn: this.includePhotos }).accessibilityText('同时按照片外观查找')
-          .onChange((value: boolean) => { this.includePhotos = value; this.search(true, false); })
-        Text('同时按照片外观查找').fontSize(14).fontColor($r('app.color.text_secondary'))
-      }.width('100%').constraintSize({ maxWidth: 960 }).padding({ left: 24, right: 24, bottom: 8 })
-      if (this.includePhotos) {
-        Text('输入颜色或形状等描述，查找已保存的照片，例如“黑色遥控器”。')
-          .fontSize(12).fontColor($r('app.color.text_secondary')).padding({ left: 24, right: 24, bottom: 8 })
-      }
       if (this.photoNotice.length > 0) {
         Text(this.photoNotice).fontSize(12).fontColor($r('app.color.text_secondary')).padding({ left: 24, right: 24 })
       }
@@ -258,7 +251,19 @@ export struct SearchPage {
                   actionText: '记录第一件物品', actionRoute: RouteName.ITEM_FORM,
                   actionMode: 'create', actionReturnTo: RouteName.SEARCH })
               } else {
-                EmptyState({ title: '还没有找到', description: '试试名称、位置或分类关键词，或清除筛选条件。' })
+                Column({ space: 12 }) {
+                  Text('还没有找到').fontSize(18).fontWeight(FontWeight.Medium).fontColor($r('app.color.text_primary'))
+                  Text('换个名称或位置试试，也可以清除筛选条件。').fontSize(14).fontColor($r('app.color.text_secondary'))
+                  Button('记下这件物品').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+                    .width('100%').fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+                    .onClick(() => {
+                      this.searchController.stopEditing();
+                      NavigationHelper.pushUrl({ url: RouteName.ITEM_FORM,
+                        params: { mode: 'create', returnTo: RouteName.SEARCH,
+                          externalRequest: { action: 'add', name: this.name.trim().slice(0, 80) } } });
+                    })
+                }.width('100%').alignItems(HorizontalAlign.Start).padding(20)
+                  .borderRadius(20).backgroundColor($r('app.color.surface_card'))
               }
             } else {
               ForEach(this.items, (item: ItemSummary) => {
@@ -278,15 +283,10 @@ export struct SearchPage {
                 .onClick(() => this.loadFilterOptions(true))
             } else {
               Column({ space: 16 }) {
-                Image($r('app.media.ui_collection')).width(160).height(128).accessibilityLevel('no')
-                Text('想找的，都在这里。').fontSize(19).fontWeight(FontWeight.Medium)
+                Text('想找什么？').fontSize(19).fontWeight(FontWeight.Medium)
                   .fontColor($r('app.color.text_primary'))
-                Text('输入名称，或按位置和分类缩小范围。').fontSize(13)
+                Text('输入名称，就能直接看到放在哪里。').fontSize(13)
                   .fontColor($r('app.color.text_secondary')).textAlign(TextAlign.Center)
-                Button('按位置与分类查找').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-                  .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
-                  .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-                  .onClick(() => this.openFilters())
               }.width('100%').padding({ top: 36, bottom: 24 })
             }
           }
@@ -339,6 +339,13 @@ export struct SearchPage {
               }, (value: string) => value)
             }.width('100%')
           }
+          Row({ space: 12 }) {
+            Toggle({ type: ToggleType.Checkbox, isOn: this.draftIncludePhotos })
+              .accessibilityText('同时按照片外观查找').onChange((value: boolean) => this.draftIncludePhotos = value)
+            Text('同时按照片外观查找').fontSize(14).fontColor($r('app.color.text_primary'))
+          }.width('100%')
+          Text('开启后可输入颜色或形状，例如“黑色遥控器”。')
+            .fontSize(13).fontColor($r('app.color.text_secondary'))
         }.width('100%').padding(24).alignItems(HorizontalAlign.Start)
       }.align(Alignment.TopStart).width('100%').layoutWeight(1)
       Row() {
@@ -350,6 +357,7 @@ export struct SearchPage {
           .onClick(() => {
             this.selectedLocation = this.draftLocation;
             this.selectedCategory = this.draftCategory;
+            this.includePhotos = this.draftIncludePhotos;
             this.showFilters = false;
             this.inputSearchVersion++;
             this.search(true, true, true);
@@ -603,6 +611,7 @@ export struct SearchPage {
     this.name = '';
     this.selectedLocation = '';
     this.selectedCategory = '';
+    this.includePhotos = false;
     this.items = [];
     this.suggestions = [];
     this.searched = false;

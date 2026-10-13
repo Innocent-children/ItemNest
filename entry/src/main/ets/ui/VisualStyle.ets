@@ -46,6 +46,7 @@ export function immersiveMaterial(reduceAnimation: boolean = false,
 }
 
 export function nativeSheetOptions(options: SheetOptions, reduceAnimation: boolean): SheetOptions {
+  options.keyboardAvoidMode = SheetKeyboardAvoidMode.RESIZE_ONLY;
   options.systemMaterial = immersiveMaterial(reduceAnimation, uiMaterial.ImmersiveStyle.REGULAR);
   options.backgroundColor = Color.Transparent;
   return options;
@@ -64,12 +65,18 @@ export function numericMotion(reduceAnimation: boolean, value?: number): Content
 
 export class FloatingTabsStyle implements AttributeModifier<TabsAttribute> {
   private reduceAnimation: boolean;
+  private keyboardVisible: boolean;
 
-  constructor(reduceAnimation: boolean) {
+  constructor(reduceAnimation: boolean, keyboardVisible: boolean) {
     this.reduceAnimation = reduceAnimation;
+    this.keyboardVisible = keyboardVisible;
   }
 
   applyNormalAttribute(instance: TabsAttribute): void {
+    if (this.keyboardVisible) {
+      instance.barFloatingStyle(undefined);
+      return;
+    }
     instance.barFloatingStyle({
       barWidth: { smallBarWidth: 296, mediumBarWidth: 320, largeBarWidth: 320 },
       barSideMargin: 32, barBottomMargin: 14,

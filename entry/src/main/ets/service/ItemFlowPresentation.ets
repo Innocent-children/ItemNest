@@ -28,7 +28,12 @@ export function refreshedUnit(currentUnit: ItemUnit, loadedUnit: ItemUnit, lates
   return currentUnit === loadedUnit ? latestUnit : currentUnit;
 }
 
-export function activeLocationText(locations: string[] | undefined, defaultLocation: string | undefined, quantity: number): string {
+export function activeLocationText(locations: string[] | undefined, defaultLocation: string | undefined,
+  quantity: number, borrowedQuantity: number = 0): string {
+  if (quantity > 0 && borrowedQuantity >= quantity) {
+    const previous = locations === undefined ? defaultLocation : locations.join('；');
+    return previous ? `已全部借出 · 原位置：${previous}` : '已全部借出，等待归还';
+  }
   if (locations === undefined) {
     return defaultLocation ?? '位置未设置';
   }

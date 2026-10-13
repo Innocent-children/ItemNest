@@ -1,6 +1,5 @@
-import { LocationInput } from '../components/LocationInput';
+import { ItemLocationEditor } from '../components/ItemLocationEditor';
 import { QuantityInput } from '../components/QuantityInput';
-import { LocationRecord } from '../model/Location';
 import { notificationManager } from '@kit.NotificationKit';
 import { ReminderRecordStatus } from '../model/ReminderRecord';
 import { Batch, ConsumptionReceipt } from '../model/Batch';
@@ -41,13 +40,6 @@ interface DetailIdentityParams {
   path: string;
 }
 
-interface ManagementEntryParams {
-  title: string;
-  description: string;
-  route: RouteName;
-  itemId: string;
-}
-
 @Component
 export struct ItemDetailPage {
   @State private heroPreview: ItemSummary | undefined = undefined;
@@ -59,6 +51,7 @@ export struct ItemDetailPage {
   private pageScroller: Scroller = new Scroller();
   @State private viewportWidth: number = 360;
   @State private showActionSheet: boolean = false;
+  @State private locationSaving: boolean = false;
   @State private actionSheetMode: string = 'consume';
   @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @State private focusedField: string = '';
@@ -91,12 +84,9 @@ export struct ItemDetailPage {
   @State private allBatches: Batch[] = [];
   @State private selectedStockId: string = '';
   @State private stockQuantityText: string = '';
-  @State private stockLocationPath: string = '';
   @State private actionUnit: ItemUnit = ItemUnit.PIECE;
   @State private operationQuantityError: string = '';
   @State private stockSaving: boolean = false;
-  @State private managedLocations: LocationRecord[] = [];
-  @State private locationLoadError: string = '';
   @State private lastConsumption: ConsumptionReceipt | undefined = undefined;
   @State private consumptionMessage: string = '';
   @State private consumeBatchId: string = '';
@@ -268,15 +258,22 @@ export struct ItemDetailPage {
     .height('100%').backgroundColor($r('app.color.surface_app'))
     .onAreaChange((_old: Area, area: Area) => this.viewportWidth = Number(area.width))
     .bindSheet($$this.showActionSheet, this.actionSheet(), nativeSheetOptions({
-      height: SheetSize.MEDIUM, detents: [SheetSize.MEDIUM, SheetSize.LARGE], dragBar: true, showClose: true,
-      keyboardAvoidMode: SheetKeyboardAvoidMode.TRANSLATE_AND_RESIZE,
-      title: { title: this.actionSheetMode === 'consume' ? '记录这次用量' : this.actionSheetMode === 'move' ? '换个存放位置' : this.actionSheetMode === 'adjust' ? '调整数量' : '补货提醒' },
+      height: SheetSize.LARGE, dragBar: true, showClose: true,
+      title: { title: this.actionSheetMode === 'move' ? '换个存放位置' : this.actionSheetMode === 'consume' ? '用掉一些' : this.actionSheetMode === 'adjust' ? '调整数量' : '补货提醒' },
       backgroundColor: $r('app.color.surface_app'), preferType: this.viewportWidth >= 700 ? SheetType.CENTER : SheetType.BOTTOM,
       width: this.viewportWidth >= 700 ? 560 : undefined,
       onWillDismiss: (action: DismissSheetAction) => {
-        if (!this.consuming && !this.thresholdSaving && !this.stockSaving) { action.dismiss(); }
+        if (!this.consuming && !this.thresholdSaving && !this.stockSaving && !this.locationSaving) { action.dismiss(); }
       }
     }, this.reduceAnimation))
+  }
+
+  @Builder
+  private locationEditor() {
+    ItemLocationEditor({ itemId: this.itemId, saving: $locationSaving, onSaved: (message: string) => {
+      this.showActionSheet = false;
+      this.showToast(message);
+    } })
   }
 
   @Builder
@@ -307,9 +304,11 @@ export struct ItemDetailPage {
         .accessibilityText($$.path.length > 0 ? '查看物品照片' : '物品图标')
       Column({ space: 10 }) {
         Text($$.category).fontSize(12).fontColor($r('app.color.text_secondary'))
-        Text($$.name).fontSize(27).fontWeight(FontWeight.Bold)
+        Text($$.name).fontSize(23).fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.text_primary')).width('100%')
-        ExpiryStatusTag({ status: this.expiryStatus, expirationDate: this.item?.expirationDate ?? '' })
+        if (this.item?.expirationDate !== undefined) {
+          ExpiryStatusTag({ status: this.expiryStatus, expirationDate: this.item?.expirationDate ?? '' })
+        }
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
     }.width('100%')
       .gesture(PanGesture({ direction: PanDirection.Right, distance: 16 })
@@ -332,11 +331,6 @@ export struct ItemDetailPage {
             Text(this.activeLocationText($$.item)).fontSize(17).fontWeight(FontWeight.Medium)
               .fontColor($r('app.color.text_primary')).layoutWeight(1)
           }.width('100%')
-          if (($$.item.activeLocationPaths?.length ?? 0) === 0 && $$.item.quantity > 0) {
-            Button('补充存放位置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-              .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
-              .onClick(() => this.openStockAction('move'))
-          }
           Divider().color($r('app.color.border_subtle'))
           if (this.borrowedQuantity > 0) {
           InventoryMetrics({ total: $$.item.quantity, unit: $$.item.unit,
@@ -383,7 +377,13 @@ export struct ItemDetailPage {
         Button('使用记录').attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).width('100%')
           .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_card'))
           .onClick(() => NavigationHelper.pushUrl({ url: RouteName.ITEM_HISTORY, params: { itemId: $$.item.id } }))
-        this.expirySection({ item: $$.item })
+        if ($$.item.expirationDate !== undefined || this.reminderIssue) {
+          this.expirySection({ item: $$.item })
+        } else {
+          Button('设置到期日期与提醒').attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).width('100%')
+            .fontSize(14).fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_card'))
+            .onClick(() => this.openExpiryEditor())
+        }
         if ($$.item.notes !== undefined || $$.item.barcode !== undefined) {
           this.notesSection({ item: $$.item })
         }
@@ -431,36 +431,40 @@ export struct ItemDetailPage {
 
   @Builder
   private actionSheet() {
-    Column() {
-      Scroll() {
-        Column({ space: 16 }) {
-          if (this.sheetError.length > 0) { this.actionErrorPanel(this.sheetError, true) }
-          if (this.item !== undefined) {
-            if (this.actionSheetMode === 'consume') { this.consumptionSection({ item: this.item }) }
-            else if (this.actionSheetMode === 'stock') { this.lowStockSection({ item: this.item }) }
-            else { this.stockChangeSection() }
-          }
-        }.width('100%').padding({ left: 24, right: 24, bottom: 16 })
-      }.width('100%').layoutWeight(1).align(Alignment.TopStart)
+    if (this.actionSheetMode === 'move') {
+      this.locationEditor()
+    } else {
       Column() {
-        if (this.item !== undefined) {
-          Button(this.consuming || this.stockSaving || this.thresholdSaving ? '正在保存…' :
-            this.actionSheetMode === 'consume' ? '确认用量' : this.actionSheetMode === 'move' ? '确认换位置' :
-            this.actionSheetMode === 'adjust' ? '保存数量' : '保存补货设置')
-            .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-            .width('100%').height(48).fontColor($r('app.color.brand_on_primary'))
-            .backgroundColor($r('app.color.brand_primary'))
-            .enabled(!this.consuming && !this.deleting && !this.thresholdSaving && !this.stockSaving &&
-              (this.actionSheetMode !== 'consume' || (this.managementReady && this.availableQuantity > 0)))
-            .onClick(() => {
-              if (this.actionSheetMode === 'consume') { this.consume(); }
-              else if (this.actionSheetMode === 'stock' && this.item !== undefined) { this.saveLowStockThreshold(this.item); }
-              else { this.saveStockChange(); }
-            })
-        }
-      }.width('100%').padding({ left: 24, right: 24, top: 12, bottom: 24 })
-        .backgroundColor($r('app.color.surface_card'))
-    }.width('100%').height('100%')
+        Scroll() {
+          Column({ space: 16 }) {
+            if (this.sheetError.length > 0) { this.actionErrorPanel(this.sheetError, true) }
+            if (this.item !== undefined) {
+              if (this.actionSheetMode === 'consume') { this.consumptionSection({ item: this.item }) }
+              else if (this.actionSheetMode === 'stock') { this.lowStockSection({ item: this.item }) }
+              else { this.stockChangeSection() }
+            }
+          }.width('100%').padding({ left: 24, right: 24, bottom: 16 })
+        }.width('100%').layoutWeight(1).align(Alignment.TopStart)
+        Column() {
+          if (this.item !== undefined) {
+            Button(this.consuming || this.stockSaving || this.thresholdSaving ? '正在保存…' :
+              this.actionSheetMode === 'consume' ? '确认用量' :
+              this.actionSheetMode === 'adjust' ? '保存数量' : '保存补货设置')
+              .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+              .width('100%').height(48).fontColor($r('app.color.brand_on_primary'))
+              .backgroundColor($r('app.color.brand_primary'))
+              .enabled(!this.consuming && !this.deleting && !this.thresholdSaving && !this.stockSaving &&
+                (this.actionSheetMode !== 'consume' || (this.managementReady && this.availableQuantity > 0)))
+              .onClick(() => {
+                if (this.actionSheetMode === 'consume') { this.consume(); }
+                else if (this.actionSheetMode === 'stock' && this.item !== undefined) { this.saveLowStockThreshold(this.item); }
+                else { this.saveStockChange(); }
+              })
+          }
+        }.width('100%').padding({ left: 24, right: 24, top: 12, bottom: 24 })
+          .backgroundColor($r('app.color.surface_card'))
+      }.width('100%').height('100%')
+    }
   }
 
   @Builder
@@ -911,14 +915,15 @@ export struct ItemDetailPage {
 
   private consumptionPreview(): string {
     const quantity = Number(this.consumeQuantityText);
-    if (this.consumeQuantityText.trim().length === 0 || !Number.isFinite(quantity) || quantity <= 0 || quantity > this.availableQuantity) {
+    if (this.consumeQuantityText.trim().length === 0 || !Number.isFinite(quantity) || quantity <= 0) {
       return '请输入这次用掉的数量。';
     }
+    if (quantity > this.availableQuantity) { return `目前只有 ${this.availableQuantity}${this.item?.unit ?? ''} 可用，请调整本次用量。`; }
     return `记录后可用 ${Number((this.availableQuantity - quantity).toFixed(2))}${this.item?.unit ?? ''}`;
   }
 
   private activeLocationText(item: Item): string {
-    return activeLocationText(item.activeLocationPaths, item.locationPath, item.quantity);
+    return activeLocationText(item.activeLocationPaths, item.locationPath, item.quantity, item.borrowedQuantity ?? 0);
   }
 
   private consumptionOptions(item: Item): SelectOption[] {
@@ -937,6 +942,10 @@ export struct ItemDetailPage {
     const quantity = Number(value);
     if (value.length === 0 || !Number.isFinite(quantity) || quantity <= 0) {
       this.sheetError = '请输入这次用掉的数量，必须大于 0';
+      return;
+    }
+    if (quantity > this.availableQuantity) {
+      this.sheetError = `目前只有 ${this.availableQuantity}${this.item?.unit ?? ''} 可用，请调整本次用量。`;
       return;
     }
     this.consuming = true;
@@ -971,15 +980,15 @@ export struct ItemDetailPage {
 
   private openStockAction(mode: string, showSheet: boolean = true): void {
     if (!this.managementReady || this.item === undefined) { return; }
+    if (mode === 'move') { this.actionSheetMode = mode; this.showActionSheet = true; return; }
     this.sheetError = '';
     this.operationQuantityError = '';
     this.actionUnit = this.item.unit;
     this.actionSheetMode = mode;
-    const candidates = mode === 'move' ? this.stockBatches : this.allBatches;
+    const candidates = this.allBatches;
     this.selectedStockId = candidates.length === 1 ? candidates[0].id : '';
     this.selectStock(this.selectedStockId);
     if (mode === 'consume') { this.consumeBatchId = ''; this.consumeQuantityText = '1'; }
-    if (mode === 'move') { this.loadLocations(); }
     this.showActionSheet = showSheet;
   }
 
@@ -987,25 +996,16 @@ export struct ItemDetailPage {
     this.selectedStockId = batchId;
     const batch = this.allBatches.find((value: Batch) => value.id === batchId);
     this.stockQuantityText = batch?.quantity.toString() ?? '';
-    this.stockLocationPath = batch?.locationPath ?? this.item?.locationPath ?? '';
     this.operationQuantityError = '';
-  }
-
-  private async loadLocations(): Promise<void> {
-    try {
-      const result = await AppServices.get().locations.list();
-      if (result.ok) { this.managedLocations = result.getData(); this.locationLoadError = ''; }
-      else { this.locationLoadError = '暂时无法读取历史位置，可以手动填写。'; }
-    } catch (_) { this.locationLoadError = '暂时无法读取历史位置，可以手动填写。'; }
   }
 
   @Builder
   private stockChangeSection() {
     Column({ space: 16 }) {
       Text(this.item?.name ?? '').fontSize(20).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
-      if ((this.actionSheetMode === 'move' ? this.stockBatches : this.allBatches).length > 1) {
-        Text('选择要修改的库存').fontSize(14).fontColor($r('app.color.text_primary'))
-        ForEach(this.actionSheetMode === 'move' ? this.stockBatches : this.allBatches, (batch: Batch) => {
+      if (this.allBatches.length > 1) {
+        Text('要修改哪一份？').fontSize(14).fontColor($r('app.color.text_primary'))
+        ForEach(this.allBatches, (batch: Batch) => {
           Button(`${this.selectedStockId === batch.id ? '✓ ' : ''}${batch.locationPath ?? this.item?.locationPath ?? '未设置位置'} · 总量 ${batch.quantity}${batch.unit} · ${batch.expirationDate ?? '无到期日'}`)
             .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).width('100%').height('auto').padding(12)
             .fontColor($r('app.color.brand_primary'))
@@ -1014,16 +1014,9 @@ export struct ItemDetailPage {
         }, (batch: Batch) => batch.id)
       }
       if (this.selectedStockId.length > 0) {
-        if (this.actionSheetMode === 'move') {
-          Text('新的存放位置').fontSize(14).fontColor($r('app.color.text_primary'))
-          LocationInput({ locationPath: $stockLocationPath, locations: this.managedLocations, inputEnabled: !this.stockSaving,
-            loadError: this.locationLoadError, onRetry: () => this.loadLocations() })
-          Text('修改所选库存的存放位置，数量和到期日保持不变。').fontSize(12).fontColor($r('app.color.text_secondary'))
-        } else {
           QuantityInput({ quantityText: $stockQuantityText, unit: $actionUnit, errorMessage: $operationQuantityError,
             title: '核对后的总量', description: '总量包含借出部分；不能减少到借出未还的数量以下。',
             unitEditable: false, inputEnabled: !this.stockSaving })
-        }
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -1038,15 +1031,13 @@ export struct ItemDetailPage {
     this.stockSaving = true;
     this.sheetError = '';
     try {
-      const result = this.actionSheetMode === 'move' ?
-        await AppServices.get().batches.move(this.selectedStockId, this.stockLocationPath) :
-        await AppServices.get().batches.adjustQuantity(this.selectedStockId, Number(this.stockQuantityText), this.actionUnit);
+      const result = await AppServices.get().batches.adjustQuantity(this.selectedStockId, Number(this.stockQuantityText), this.actionUnit);
       if (!result.ok) { this.sheetError = result.getError().message; return; }
       this.showActionSheet = false;
       this.lastConsumption = undefined;
       this.consumptionMessage = '';
       await this.refreshAfterStockChange();
-      this.showToast(this.actionSheetMode === 'move' ? '存放位置已更新' : '数量已更新');
+      this.showToast(`数量已更新为 ${this.stockQuantityText}${this.actionUnit}`);
     } catch (_) { this.sheetError = '保存失败，请重试'; }
     finally { this.stockSaving = false; }
   }
@@ -1121,27 +1112,31 @@ export struct ItemDetailPage {
   private managementSection($$: ItemDetailParams) {
     Column({ space: 12 }) {
       Row({ space: 10 }) {
-        Button({ type: ButtonType.Normal }) {
-          Column({ space: 12 }) {
-            Image($r('app.media.ui_minus')).width(22).height(22).fillColor($r('app.color.brand_on_primary'))
-            Text('记录用量').fontSize(13).fontWeight(FontWeight.Medium).fontColor($r('app.color.brand_on_primary'))
-          }.width('100%')
-        }
-          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1).padding(18).borderRadius(18).backgroundColor($r('app.color.brand_primary'))
-          .enabled(this.managementReady && this.availableQuantity > 0 && !this.consuming && !this.deleting && !this.stockSaving)
-          .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-          .onClick(() => this.openStockAction('consume'))
-        this.managementEntry({ title: '补入物品', description: '记录这次补入的数量',
-          route: RouteName.BATCH_FORM, itemId: $$.item.id })
-        this.managementEntry({ title: '借出归还', description: '查看借还记录', route: RouteName.LENDING, itemId: $$.item.id })
-      }.width('100%')
-      Row({ space: 10 }) {
-        Button('换位置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1)
-          .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+        Button('换位置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1).height(52)
+          .fontSize(14).fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
           .enabled(this.managementReady && this.stockBatches.length > 0 && !this.consuming && !this.stockSaving && !this.deleting)
           .onClick(() => this.openStockAction('move'))
+        Button('用掉一些').attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1).height(52)
+          .fontSize(14).fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+          .enabled(this.managementReady && this.availableQuantity > 0 && !this.consuming && !this.deleting && !this.stockSaving)
+          .onClick(() => this.openStockAction('consume'))
+        Button('借给别人').attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1).height(52)
+          .fontSize(14).fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+          .enabled(this.managementReady && this.availableQuantity > 0 && !this.consuming && !this.stockSaving && !this.deleting)
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.LENDING, params: { itemId: $$.item.id, section: 'borrow' } }))
+      }.width('100%')
+      if (this.borrowedQuantity > 0) {
+        Button(`收回物品 · ${this.borrowedQuantity}${$$.item.unit} 未归还`)
+          .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).width('100%')
+          .fontColor($r('app.color.brand_on_primary')).backgroundColor($r('app.color.brand_primary'))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.LENDING, params: { itemId: $$.item.id, section: 'return' } }))
+      }
+      Row({ space: 10 }) {
+        Button('补入物品').attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1)
+          .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_card'))
+          .onClick(() => NavigationHelper.pushUrl({ url: RouteName.BATCH_FORM, params: { itemId: $$.item.id, mode: 'create' } }))
         Button('调整数量').attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1)
-          .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+          .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_card'))
           .enabled(this.managementReady && this.allBatches.length > 0 && !this.consuming && !this.stockSaving && !this.deleting)
           .onClick(() => this.openStockAction('adjust'))
       }.width('100%')
@@ -1151,21 +1146,6 @@ export struct ItemDetailPage {
     }.width('100%')
   }
 
-
-  @Builder
-  private managementEntry($$: ManagementEntryParams) {
-    Button({ type: ButtonType.Normal }) {
-      Column({ space: 12 }) {
-        Image($$.route === RouteName.BATCH_FORM ? $r('app.media.ui_box') : $r('app.media.ui_lend'))
-          .width(22).height(22).fillColor($r('app.color.brand_primary')).accessibilityLevel('no')
-        Text($$.title).fontSize(13).fontWeight(FontWeight.Medium).fontColor($r('app.color.brand_primary'))
-      }.width('100%')
-    }
-      .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).layoutWeight(1).padding(18).borderRadius(18).backgroundColor($r('app.color.surface_card'))
-      .accessibilityText($$.title + '，' + $$.description)
-      .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-      .onClick(() => NavigationHelper.pushUrl({ url: $$.route, params: { itemId: $$.itemId, mode: $$.route === RouteName.BATCH_FORM ? 'create' : undefined } }))
-  }
 
   private async loadManagementState(item: Item, requestId?: number): Promise<void> {
     if (!this.canApplyLoadResult(requestId)) {

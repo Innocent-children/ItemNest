@@ -7,10 +7,11 @@ import { OptionalDateField } from '../components/OptionalDateField';
 import { notificationManager } from '@kit.NotificationKit';
 import { ManagementRouteParams } from '../navigation/RouteContract';
 import { PageHeader } from '../components/PageHeader';
-import { RoundedButtonStyle, uiSpring, nativeTitleOptions } from '../ui/VisualStyle';
+import { RoundedButtonStyle, uiSpring, nativeTitleOptions, nativeSheetOptions } from '../ui/VisualStyle';
 import { NavigationHelper } from '../navigation/NavigationHelper';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { LocationInput } from '../components/LocationInput';
+import { ItemLocationEditor } from '../components/ItemLocationEditor';
 import { LoadingState } from '../components/LoadingState';
 import { QuantityInput } from '../components/QuantityInput';
 import { ITEM_UNIT_OPTIONS, Item, ItemDraft, ItemUnit } from '../model/Item';
@@ -21,7 +22,7 @@ import { ItemFormRouteParams, requireItemId } from '../navigation/RouteContract'
 import { RouteName } from '../navigation/RouteName';
 import { AppEventBus } from '../common/AppEventBus';
 import { AppServices } from '../service/AppServices';
-import { activeCategoryNames, refreshedUnit } from '../service/ItemFlowPresentation';
+import { activeCategoryNames, activeLocationText, refreshedUnit } from '../service/ItemFlowPresentation';
 
 @Component
 export struct ItemFormPage {
@@ -36,6 +37,12 @@ export struct ItemFormPage {
   @StorageLink('itemnest.reduceAnimation') private reduceAnimation: boolean = false;
   @State private focusedField: string = '';
   @State private name: string = '';
+  @State private nameError: string = '';
+  @State private showMoreFields: boolean = false;
+  @State private showLocationEditor: boolean = false;
+  @State private locationSaving: boolean = false;
+  @State private openingBatchEditor: boolean = false;
+  @State private activeLocations: string[] = [];
   @State private savedWithoutPhoto: boolean = false;
   @State private quantityText: string = '1';
   @State private unit: ItemUnit = ItemUnit.PIECE;
@@ -52,7 +59,6 @@ export struct ItemFormPage {
   @State private loading: boolean = false;
   @State private saving: boolean = false;
   @State private savePressed: boolean = false;
-  @State private batchManagePressed: boolean = false;
   @State private editMode: boolean = false;
   @State private itemId: string = '';
   @State private pendingPhotoUri: string = '';
@@ -158,11 +164,13 @@ export struct ItemFormPage {
     if (this.quickEntryHandled || this.editMode) { return; }
     this.quickEntryHandled = true;
     const params = NavigationHelper.getParams() as ItemFormRouteParams | undefined;
-    if (this.pendingPhotoUri.length > 0) { this.showPhotoSection = true; return; }
+    if (this.pendingPhotoUri.length > 0) { this.showMoreFields = true; this.showPhotoSection = true; return; }
     if (params?.source === 'scan') {
+      this.showMoreFields = true;
       this.showNotesSection = true;
       this.scanBarcode();
     } else if (params?.source === 'camera') {
+      this.showMoreFields = true;
       this.showPhotoSection = true;
       this.capturePhoto();
     }
@@ -171,9 +179,9 @@ export struct ItemFormPage {
   @Builder
   private pageHeader() {
     PageHeader({ title: this.editMode ? '编辑物品' : '记录新物品', showBack: true,
-          subtitle: this.editMode ? '更新名称、分类和物品资料。' : '填写名称和位置；扫码与拍照用于补充资料。',
+          subtitle: this.editMode ? '名称、位置和物品资料。' : '记下是什么、放在哪，就可以保存。',
           actionText: '扫码', actionIcon: $r('app.media.ui_scan'), actionEnabled: !this.saving && !this.scanning,
-          onBack: () => this.requestClose(), onAction: () => { this.showNotesSection = true; this.scanBarcode(); } })
+          onBack: () => this.requestClose(), onAction: () => { this.showMoreFields = true; this.showNotesSection = true; this.scanBarcode(); } })
   }
 
   @Builder
@@ -198,28 +206,34 @@ export struct ItemFormPage {
                 }, (item: Item) => item.id)
               }
               this.coreSection()
-              this.sectionToggle('物品照片', this.hasPhoto() ? '当前物品已有照片' : '拍照识别或补充物品照片', 'photo')
-              if (this.showPhotoSection) { this.photoSection() }
+              Button(this.showMoreFields ? '收起选填资料' : '更多资料 · 照片、分类、到期与备注')
+                .attributeModifier(new RoundedButtonStyle(this.reduceAnimation)).width('100%').height(48)
+                .fontSize(14).fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_card'))
+                .onClick(() => this.showMoreFields = !this.showMoreFields)
+              if (this.showMoreFields) {
+                if (this.editMode) { this.unitSection() }
+                this.sectionToggle('物品照片', this.hasPhoto() ? '当前物品已有照片' : '拍照识别或补充物品照片', 'photo')
+                if (this.showPhotoSection) { this.photoSection() }
 
-              this.sectionToggle('分类', this.categoryValue.length > 0 ? this.categoryValue : '让物品更好整理', 'category')
-              if (this.showCategorySection) {
-                this.categorySection()
+                this.sectionToggle('分类', this.categoryValue.length > 0 ? this.categoryValue : '让物品更好整理', 'category')
+                if (this.showCategorySection) {
+                  this.categorySection()
+                }
+
+                this.sectionToggle(
+                  '到期与提醒',
+                  this.editMode ? '各份库存的到期日可在存放明细修改' : '设置保质期和提前提醒',
+                  'expiry'
+                )
+                if (this.showExpirySection) {
+                  this.expirySection()
+                }
+
+                this.sectionToggle('备注与条码', '补充注意事项和条码', 'notes')
+                if (this.showNotesSection) {
+                  this.notesSection()
+                }
               }
-
-              this.sectionToggle(
-                '到期与提醒',
-                this.editMode ? '各份库存的到期日可在存放明细修改' : '设置保质期和提前提醒',
-                'expiry'
-              )
-              if (this.showExpirySection) {
-                this.expirySection()
-              }
-
-              this.sectionToggle('备注与条码', '补充注意事项和条码', 'notes')
-              if (this.showNotesSection) {
-                this.notesSection()
-              }
-
 
             }
             .width('100%')
@@ -246,13 +260,26 @@ export struct ItemFormPage {
     }
     .width('100%')
     .height('100%')
+    .bindSheet($$this.showLocationEditor, this.locationEditor(), nativeSheetOptions({
+      height: SheetSize.LARGE, dragBar: true, showClose: true, title: { title: '换个存放位置' },
+      onWillDismiss: (action: DismissSheetAction) => { if (!this.locationSaving) { action.dismiss(); } }
+    }, this.reduceAnimation))
+  }
+
+  @Builder
+  private locationEditor() {
+    ItemLocationEditor({ itemId: this.itemId, saving: $locationSaving, onSaved: (message: string) => {
+      this.showLocationEditor = false;
+      this.refreshManagedBatchFields();
+      this.showToast(message);
+    } })
   }
 
   @Builder
   private coreSection() {
     Column({ space: 12 }) {
       Text('物品名称').fontSize(14).fontWeight(FontWeight.Medium).fontColor($r('app.color.text_primary'))
-      TextInput({ text: this.name, placeholder: '例如：感冒药' })
+      TextInput({ text: this.name, placeholder: '例如：充电器、感冒药' })
         .id('itemnest-item-name').enabled(!this.saving).height(48)
         .borderWidth(1)
         .onFocus(() => this.getUIContext().animateTo(uiSpring(this.reduceAnimation, 0.32, 0.62), () => this.focusedField = 'name'))
@@ -265,21 +292,18 @@ export struct ItemFormPage {
         .borderRadius($r('app.float.radius_control'))
         .borderColor(this.focusedField === 'name' ? $r('app.color.brand_primary') : $r('app.color.border_subtle'))
         .animation(uiSpring(this.reduceAnimation, 0.32, 0.62))
-        .onChange((value: string) => this.name = value)
+        .onChange((value: string) => { this.name = value; this.nameError = ''; })
+      if (this.nameError.length > 0) {
+        Text(this.nameError).fontSize(13).fontColor($r('app.color.status_danger'))
+      }
       if (this.editMode) {
-        Text(`总量 ${this.quantityText}${this.unit}（包含借出）`)
-          .fontSize($r('app.float.font_body'))
-          .fontColor($r('app.color.text_primary'))
-        Text('统一修改单位')
-          .fontSize($r('app.float.font_body'))
-          .fontColor($r('app.color.text_primary'))
-        Select(ITEM_UNIT_OPTIONS.map((option: ItemUnit): SelectOption => ({ value: option })))
-          .selected(ITEM_UNIT_OPTIONS.indexOf(this.unit)).value(this.unit).width('100%')
-          .fontColor($r('app.color.text_primary')).backgroundColor($r('app.color.surface_input'))
-          .enabled(!this.saving).onSelect((index: number) => this.unit = ITEM_UNIT_OPTIONS[index])
-        Text('修改后所有批次和借还数量使用新单位，数值不会自动换算。')
-          .fontSize($r('app.float.font_caption'))
-          .fontColor($r('app.color.text_secondary'))
+        Text('存放位置').fontSize(14).fontColor($r('app.color.text_secondary'))
+        Text(activeLocationText(this.activeLocations, this.locationPath, Number(this.quantityText)))
+          .fontSize(17).fontWeight(FontWeight.Medium).fontColor($r('app.color.text_primary')).width('100%')
+        Button('换位置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .width('100%').fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
+          .enabled(!this.saving && Number(this.quantityText) > 0)
+          .onClick(() => this.showLocationEditor = true)
         this.batchSourceNotice()
       } else {
         this.locationSection()
@@ -296,34 +320,35 @@ export struct ItemFormPage {
 
   @Builder
   private batchSourceNotice() {
-    Column({ space: $r('app.float.space_3') }) {
-      Text('数量、位置和到期日统一在存放明细中修改。')
-        .fontSize($r('app.float.font_body'))
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.text_primary'))
-      Button('按位置修改库存与到期日')
+    Column({ space: 8 }) {
+      Text(`拥有 ${this.quantityText}${this.loadedUnit}`).fontSize(14).fontColor($r('app.color.text_secondary'))
+      Button(this.openingBatchEditor ? '正在读取…' : '修改数量或到期日')
         .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
         .width('100%')
         .fontColor($r('app.color.brand_primary'))
         .backgroundColor($r('app.color.surface_app'))
         .border({ width: 1, color: $r('app.color.border_subtle') })
         .borderRadius($r('app.float.radius_control'))
-        .enabled(!this.saving && this.itemId.length > 0)
-        .scale({ x: this.batchManagePressed && !this.reduceAnimation ? 0.96 : 1, y: this.batchManagePressed && !this.reduceAnimation ? 0.96 : 1 })
-        .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
-        .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down) {
-            this.batchManagePressed = true;
-          } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-            this.batchManagePressed = false;
-          }
-        })
+        .enabled(!this.saving && !this.openingBatchEditor && this.itemId.length > 0)
         .onClick(() => this.openBatchManagement())
     }
     .width('100%')
-    .padding($r('app.float.space_3'))
-    .borderRadius($r('app.float.radius_control'))
-    .backgroundColor($r('app.color.surface_accent'))
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private unitSection() {
+    Column({ space: 8 }) {
+      Text('单位').fontSize(14).fontColor($r('app.color.text_primary'))
+      Select(ITEM_UNIT_OPTIONS.map((option: ItemUnit): SelectOption => ({ value: option })))
+        .selected(ITEM_UNIT_OPTIONS.indexOf(this.unit)).value(this.unit).width('100%')
+        .fontColor($r('app.color.text_primary')).backgroundColor($r('app.color.surface_input'))
+        .enabled(!this.saving).onSelect((index: number) => this.unit = ITEM_UNIT_OPTIONS[index])
+      if (this.unit !== this.loadedUnit) {
+        Text('保存后，存放明细和借还记录都使用新单位，数值不会自动换算。')
+          .fontSize(13).fontColor($r('app.color.text_secondary'))
+      }
+    }.width('100%').padding(16).borderRadius(16).backgroundColor($r('app.color.surface_card'))
   }
 
   @Builder
@@ -336,7 +361,7 @@ export struct ItemFormPage {
           .fontSize(13).height(44).padding({ left: 8, right: 0 })
           .fontColor($r('app.color.brand_primary')).backgroundColor(Color.Transparent)
           .enabled(!this.saving).onClick(() => NavigationHelper.pushUrl({ url: RouteName.LOCATION_MANAGEMENT,
-            params: { selectionMode: true } }))
+            params: { selectionMode: true, selectedLocation: this.locationPath } }))
       }.width('100%')
       LocationInput({ locationPath: $locationPath, locations: this.managedLocations, inputEnabled: !this.saving, compact: true,
         loadError: this.locationLoadError, onRetry: () => this.loadManagedLocations() })
@@ -747,6 +772,7 @@ export struct ItemFormPage {
     this.quantityText = item.quantity.toString();
     this.unit = this.loadedUnit;
     this.locationPath = item.locationPath ?? '';
+    this.activeLocations = item.activeLocationPaths ?? [];
     this.categoryValue = item.category ?? '';
     this.expirationDate = item.expirationDate ?? '';
     this.reminderDaysText = item.reminderDays === undefined ? '' : item.reminderDays.toString();
@@ -754,13 +780,20 @@ export struct ItemFormPage {
     this.scanText = item.barcode ?? '';
     this.existingPhotoLocalId = item.photoLocalId ?? '';
     this.showCategorySection = this.categoryValue.length > 0;
-    this.showExpirySection = this.expirationDate.length > 0 || this.reminderDaysText.length > 0;
+    this.showExpirySection = this.expirationDate.length > 0;
     this.showNotesSection = this.notes.length > 0 || this.scanText.length > 0;
     this.showPhotoSection = this.existingPhotoLocalId.length > 0;
   }
 
   private async save(continueAdding: boolean = false): Promise<void> {
     if (this.saving || this.loading) { return; }
+    if (this.name.trim().length === 0) {
+      this.nameError = '先写下物品名称，例如“充电器”';
+      this.pageScroller.scrollEdge(Edge.Top);
+      try { this.getUIContext().getFocusController().requestFocus('itemnest-item-name'); } catch (_) {}
+      return;
+    }
+    this.nameError = '';
     this.continueAfterSave = continueAdding || (this.savedWithoutPhoto && this.continueAfterSave);
     this.savePressed = false;
     this.errorMessage = '';
@@ -804,13 +837,20 @@ export struct ItemFormPage {
   }
 
   private async openBatchManagement(): Promise<void> {
-    if (this.itemId.length === 0 || this.saving) {
+    if (this.itemId.length === 0 || this.saving || this.openingBatchEditor) {
       return;
     }
-    const opened = await NavigationHelper.pushUrl({ url: RouteName.BATCH_LIST, params: { itemId: this.itemId } });
-    if (!opened) {
-      this.errorMessage = '批次管理暂时无法打开，请重试';
-    }
+    this.openingBatchEditor = true;
+    try {
+      const result = await AppServices.get().batches.listByItemId(this.itemId);
+      if (!NavigationHelper.isCurrentBackHandler(this.backHandler)) { return; }
+      if (!result.ok) { this.errorMessage = result.getError().message; return; }
+      const batch = result.getData().length === 1 ? result.getData()[0] : undefined;
+      const opened = await NavigationHelper.pushUrl({ url: batch === undefined ? RouteName.BATCH_LIST : RouteName.BATCH_FORM,
+        params: { itemId: this.itemId, batchId: batch?.id, mode: batch === undefined ? undefined : 'edit' } });
+      if (!opened) { this.errorMessage = '存放明细暂时无法打开，请重试'; }
+    } catch (_) { this.errorMessage = '读取存放明细失败，请重试'; }
+    finally { this.openingBatchEditor = false; }
   }
 
   private async refreshManagedBatchFields(): Promise<void> {
@@ -835,6 +875,8 @@ export struct ItemFormPage {
   private applyManagedBatchFields(item: Item): void {
     const nextUnit = refreshedUnit(this.unit, this.loadedUnit, item.unit);
     this.quantityText = item.quantity.toString();
+    this.locationPath = item.locationPath ?? '';
+    this.activeLocations = item.activeLocationPaths ?? [];
     this.expirationDate = item.expirationDate ?? '';
     this.loadedUnit = item.unit;
     this.unit = nextUnit;

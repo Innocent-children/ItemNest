@@ -28,7 +28,8 @@ export struct ItemCard {
   }
 
   private locationText(): string {
-    return activeLocationText(this.item.activeLocationPaths, this.item.locationPath, this.item.quantity);
+    return activeLocationText(this.item.activeLocationPaths, this.item.locationPath, this.item.quantity,
+      this.item.borrowedQuantity ?? 0);
   }
 
   build() {
@@ -55,8 +56,8 @@ export struct ItemCard {
           Row({ space: 4 }) {
             Image($r('app.media.ui_location')).width(12).height(12)
               .fillColor($r('app.color.text_secondary')).accessibilityLevel('no')
-            Text(this.locationText()).fontSize(12).fontColor($r('app.color.text_secondary'))
-              .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+            Text(this.locationText()).fontSize(14).fontWeight(FontWeight.Medium).fontColor($r('app.color.text_primary'))
+              .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
           }.width('100%')
           if (this.item.expiryStatus === ExpiryStatus.EXPIRED || this.item.expiryStatus === ExpiryStatus.DUE_SOON) {
             ExpiryStatusTag({ status: this.item.expiryStatus, expirationDate: this.item.expirationDate ?? '' })

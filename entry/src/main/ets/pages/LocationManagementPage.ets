@@ -8,6 +8,8 @@ import { LoadingState } from '../components/LoadingState';
 import { AppEventBus } from '../common/AppEventBus';
 import { LocationRecord } from '../model/Location';
 import { AppServices } from '../service/AppServices';
+import { LocationInput } from '../components/LocationInput';
+import { ItemValidator } from '../common/ItemValidator';
 
 @Component
 export struct LocationManagementPage {
@@ -15,6 +17,7 @@ export struct LocationManagementPage {
   @State private showCreateSheet: boolean = false;
   @State private editingId: string = '';
   @State private selectionMode: boolean = false;
+  @State private selectedPath: string = '';
   @State private viewportWidth: number = 360;
   @StorageLink('itemnest.dataRevision') @Watch('onDataRevisionChanged') private dataRevision: number = 0;
   @StorageLink('itemnest.safeAreaTop') private safeAreaTop: number = 0;
@@ -36,6 +39,7 @@ export struct LocationManagementPage {
 
   aboutToAppear(): void {
     this.selectionMode = (NavigationHelper.getParams() as ManagementRouteParams | undefined)?.selectionMode === true;
+    this.selectedPath = (NavigationHelper.getParams() as ManagementRouteParams | undefined)?.selectedLocation ?? '';
     this.loadLocationsForCurrentRevision(true);
   }
 
@@ -74,8 +78,10 @@ export struct LocationManagementPage {
 
   @Builder
   private pageHeader() {
-    PageHeader({ title: this.selectionMode ? '选择位置' : '存放位置', subtitle: '给每个角落一个名字。', showBack: true,
-        actionText: '新增位置', actionIcon: $r('app.media.dock_add'), actionEnabled: !this.operating && !this.loading,
+    PageHeader({ title: this.selectionMode ? '选择位置' : '存放位置',
+        subtitle: this.selectionMode ? '选择已有位置，也可直接输入。' : '给每个角落一个名字。', showBack: true,
+        actionText: this.selectionMode ? '' : '新增位置', actionIcon: this.selectionMode ? undefined : $r('app.media.dock_add'),
+        actionEnabled: this.selectionMode || (!this.operating && !this.loading),
         onAction: () => { this.actionError = ''; this.editingId = ''; this.name = ''; this.showCreateSheet = true; } })
   }
 
@@ -83,7 +89,9 @@ export struct LocationManagementPage {
   private pageContent() {
     Column() {
 
-      if (this.loading) {
+      if (this.selectionMode) {
+        this.selectionContent()
+      } else if (this.loading) {
         LoadingState({ text: '正在读取位置…' })
       } else {
         Scroll(this.pageScroller) {
@@ -118,12 +126,7 @@ export struct LocationManagementPage {
                     .fontColor($r('app.color.text_secondary'))
                 }
                 .layoutWeight(1).alignItems(HorizontalAlign.Start)
-                if (this.selectionMode && location.active) {
-                  Button('选择').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
-                    .fontColor($r('app.color.brand_primary')).backgroundColor($r('app.color.surface_accent'))
-                    .enabled(!this.operating).onClick(() => this.selectEntry(location.path))
-                }
-                if (!this.selectionMode && location.active) {
+                if (location.active) {
                   Button('标签').fontSize(13).onClick(() => NavigationHelper.pushUrl({ url: RouteName.LOCATION_LABEL, params: { locationId: location.id } }))
                   Button('分享').fontSize(13).onClick(() => NavigationHelper.pushUrl({ url: RouteName.SHARE_PREVIEW, params: { locationId: location.id } }))
                 }
@@ -132,7 +135,6 @@ export struct LocationManagementPage {
                   .enabled(!this.operating).onClick(() => {
                     this.editingId = location.id; this.name = location.name; this.actionError = ''; this.showCreateSheet = true;
                   })
-                if (!this.selectionMode) {
                   Button(location.active ? '停用' : '启用')
                     .attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
                     .fontColor($r('app.color.brand_primary'))
@@ -146,7 +148,6 @@ export struct LocationManagementPage {
                     .animation(uiSpring(this.reduceAnimation, 0.3, 0.68))
                     .onTouch((event: TouchEvent) => this.updatePressedAction(event, `toggle:${location.id}`))
                     .onClick(() => this.toggleLocation(location))
-                }
               }
               .width('100%')
               .padding($r('app.float.space_3'))
@@ -179,7 +180,6 @@ export struct LocationManagementPage {
     const records = new Map<string, LocationRecord>();
     this.locations.forEach((location: LocationRecord) => records.set(location.id, location));
     return this.locations.filter((location: LocationRecord) => {
-      if (this.selectionMode && !location.active) { return false; }
       let parentId = location.parentId;
       while (parentId !== undefined && parentId.length > 0) {
         if (this.collapsedLocations.indexOf(parentId) >= 0) { return false; }
@@ -187,6 +187,39 @@ export struct LocationManagementPage {
       }
       return true;
     });
+  }
+
+  @Builder
+  private selectionContent() {
+    Column() {
+      Scroll() {
+        Column({ space: 16 }) {
+          Text('放在哪里？').fontSize(18).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
+          Text('可以写到具体抽屉，例如“书房 / 书桌 / 左侧抽屉”。')
+            .fontSize(14).fontColor($r('app.color.text_secondary'))
+          LocationInput({ locationPath: $selectedPath, locations: this.locations, loadError: this.loadError,
+            onRetry: () => this.loadLocations() })
+          if (this.loading) { Text('正在读取已有位置…').fontSize(13).fontColor($r('app.color.text_secondary')) }
+        }.width('100%').padding(24).alignItems(HorizontalAlign.Start)
+      }.align(Alignment.TopStart).width('100%').layoutWeight(1)
+      Column({ space: 8 }) {
+        if (this.actionError.length > 0) {
+          Text(this.actionError).fontSize(13).fontColor($r('app.color.status_danger')).width('100%')
+        }
+        Button('使用这个位置').attributeModifier(new RoundedButtonStyle(this.reduceAnimation))
+          .width('100%').height(48).fontColor($r('app.color.brand_on_primary'))
+          .backgroundColor($r('app.color.brand_primary')).onClick(() => this.useSelectedPath())
+      }.width('100%').padding({ left: 24, right: 24, top: 12, bottom: 16 })
+        .backgroundColor($r('app.color.surface_card'))
+    }.width('100%').height('100%')
+  }
+
+  private useSelectedPath(): void {
+    const result = new ItemValidator().validateLocationPath(this.selectedPath);
+    if (!result.ok) { this.actionError = result.getError().message; return; }
+    const path = result.getData();
+    if (path === undefined) { this.actionError = '请填写或选择一个位置'; return; }
+    this.selectEntry(path);
   }
 
   private toggleChildren(locationId: string): void {
@@ -279,10 +312,6 @@ export struct LocationManagementPage {
       this.showCreateSheet = false;
       this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadLocations(false);
-      if (this.selectionMode) {
-        const selected = this.locations.find((value: LocationRecord) => value.id === this.editingId);
-        if (selected !== undefined) { this.selectEntry(selected.path); }
-      }
       this.showToast('位置名称已更新，已有物品已同步');
     } catch (_) { this.actionError = '改名失败，请重试'; }
     finally { this.operating = false; }
@@ -325,11 +354,6 @@ export struct LocationManagementPage {
         return;
       }
       this.showCreateSheet = false;
-      if (this.selectionMode) {
-        AppEventBus.notifyDataChanged();
-        this.selectEntry(result.getData().path);
-        return;
-      }
       this.name = '';
       this.lastHandledDataRevision = AppEventBus.notifyDataChanged();
       await this.loadLocations(false);

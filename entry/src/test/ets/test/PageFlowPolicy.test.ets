@@ -55,5 +55,12 @@ export default function pageFlowPolicyTest() {
       expect(activeLocationText([], '旧位置', 3)).assertEqual('还没填写存放位置');
       expect(activeLocationText(undefined, '旧位置', 3)).assertEqual('旧位置');
     });
+
+    it('全部借出时明确标注原位置，部分借出和归还后仍能直接看到存放位置', 0, () => {
+      expect(activeLocationText(['书桌 / 抽屉'], '旧位置', 1, 1)).assertEqual('已全部借出 · 原位置：书桌 / 抽屉');
+      expect(activeLocationText([], undefined, 1, 1)).assertEqual('已全部借出，等待归还');
+      expect(activeLocationText(['书桌 / 抽屉'], '旧位置', 3, 1)).assertEqual('书桌 / 抽屉');
+      expect(activeLocationText(['书桌 / 抽屉'], '旧位置', 1, 0)).assertEqual('书桌 / 抽屉');
+    });
   });
 }
