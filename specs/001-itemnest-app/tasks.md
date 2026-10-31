@@ -2,7 +2,7 @@
 
 **Input**: 本目录 spec、plan、research、data-model、contracts、platform-readiness。
 
-**Status**: 仅为未来实施清单；本次全部未执行。取得新的开发指令后才开始。新项目工程从零创建；官方系统能力正常接入，提醒按一次提醒、同日合并实现。设备与平台条件按各任务核验。
+**Status**: 当前为未执行的应用任务。本轮只按最新决定修订文档，不开发代码；恢复实施后从零补齐工程，完整执行 T001–T147 的非企业范围，不自行延期原 P1/P2。官方系统能力正常接入，提醒按一次提醒、同日合并，增强能力按实际支持自动降级。
 
 **Tests**: 源需求明确要求 R1–R40 单测、设备验证、视觉和 T1–T15 走查，因此每个故事有针对性验证任务；不为文档本身创建应用测试。
 
@@ -10,17 +10,21 @@
 
 任务使用连续 T 编号。企业受限能力仅在文末 Phase 12 / US10，逐项标记“可选，默认不执行”，可全部不做；不纳入核心故事或首发必需项。无 `[P]` 标记的任务默认按依赖顺序进行；本套多处共享 schema、module 与资源文件，避免错误标记可并行。每个故事先建立必要测试/夹具，再实现，最后独立验收。
 
+工程师自主查询官方资料并做技术选择；已确认身份、图标及产品规则不再提问。所有高版本 API、组件与资源使用均受 `capability-compatibility.md` 约束，包括本清单中直接点名的 Tabs/HDS/材质等接口；最低版本无法使用时采用文档规定的基础实现。任务完成必须覆盖支持与降级路径，隐藏未实现入口不等于实现完成。当前不要求先取得所有平台和设备结果，企业任务不进入当前检查表。
+
 ## Phase 1: Setup（工程与规范基线）
 
-完成条件：按官方模板建立可复现最小工程，核对平台和素材；未授权时不执行。
+完成条件：按官方模板建立可复现最小工程，指定身份与图标正确接入；版本与签名方式由工程师锁定。平台能力在接入时核验，不等待全部权益或真机验收才开始创建工程。
 
-- [ ] T001 核定 API 26 SDK、DevEco/Hvigor/ArkTS 配套版本、目标设备与签名方式，在 docs/engineering-baseline.md 记录实际工具路径和版本；落实 FR-015/FR-016。
+T007 的平台接入核验随提醒及 A2A 任务完成，不属于最小工程或基础阶段的前置验收；其余工程基线完成后直接继续。
+
+- [ ] T001 核定 API 26 编译 SDK、DevEco/Hvigor/ArkTS 配套版本、Mate 80 Pro Max 实际系统与签名方式；按 capability-compatibility.md 优先评估 API 20 起的兼容方案，核对核心依赖和模块装载后分别锁定 targetSdkVersion、compatibleSdkVersion 与编译模式，在 docs/engineering-baseline.md 记录依据、工具路径及版本，不把候选版本写成已支持；落实 FR-015/FR-016/SC-009。
 - [ ] T002 按同版官方 Stage 模板补根 build-profile.json5、hvigorfile.ts、hvigor/hvigor-config.json5、oh-package.json5 和锁文件；模板若有 wrapper 则完整保留；修改 .gitignore 以跟踪公共构建配置并单独忽略私有签名/本机路径；落实 FR-015。
 - [ ] T003 创建 entry/build-profile.json5、entry/hvigorfile.ts、entry/oh-package.json5、entry/src/main/module.json5 与 entry/src/main/ets/entryability/EntryAbility.ets；包名设置为 com.imotong.itemnest，应用名我的家当，声明 phone/tablet，建立默认产品/模块和首页；落实 FR-015。
 - [ ] T004 补 entry/src/main/resources/base/profile/main_pages.json、base/element、dark/element、启动窗资源及 entry/src/test、entry/src/ohosTest 的官方测试入口；依赖版本使用配套模板且提交锁文件；落实 FR-015/FR-016。
-- [ ] T005 使用官方 Image Asset 验收 AppScope/resources/base/media/ 的两份分层图标和三张 PNG；要求 1024×1024、背景完全不透明、无预裁圆角和不当内边距，核对桌面遮罩与启动窗；将素材来源、使用权和必要重导出记录写入 docs/asset-manifest.md；保留原素材源；落实 FR-016。
-- [ ] T006 建立 docs/platform-config-manifest.md 并按实际已实现能力补 entry/src/main/module.json5 的 URI/share/NDEF skills、扩展、最小权限、材质元数据和对应 profile 资源；不先声明空扩展或 P2 权限，不申请网络权限；落实 FR-016。
-- [ ] T007 在 docs/platform-entitlements.md 核对核心版本的代理提醒权益、签名与设备条件，以及 SYS-06 端 A2A 的具体主体/平台条件；记录证据，不能凭 SDK 声明认定已开通。代理提醒的现行指南未列企业主体限制，不一并后置；Intents、localChatModel、LV1–LV3 的资格、申请和集成全部留至可选 US10，不作为本任务完成条件。官方系统备份和换机正常接入；落实 FR-016。
+- [ ] T005 直接接入用户指定的 AppScope/resources/base/media/ 两份分层图标及三张 PNG，保留原文件；在 docs/asset-manifest.md 记录文件用途与资源引用，随 T008 核对安装后的指定图标、启动窗显示。用户已确认图标合法，不重复要求权属、合法性或像素合规证明，不重制图标；落实 FR-016。
+- [ ] T006 建立 docs/platform-config-manifest.md 并按实际已实现能力补 entry/src/main/module.json5 的 URI/share/NDEF skills、扩展、最小权限、材质元数据和 profile；原 P2 已纳入，随对应功能实现声明权限，不预声明空扩展，不申请网络权限；落实 FR-016。
+- [ ] T007 在 docs/platform-entitlements.md 主动查证代理提醒及 SYS-06 端 A2A 的接入条件，在各自接入阶段核对账号、签名与设备；需要账号持有人操作时只提出具体步骤。此任务不阻塞 T008 或独立业务，未获准记录平台阻塞并完成对应基础流程，不能伪报增强接入完成。企业材料不在当前核验范围，官方备份和换机正常接入；落实 FR-016。
 - [ ] T008 在 docs/engineering-baseline.md 记录实际可用构建与 Hypium/设备测试命令、输出位置、安装及本机签名步骤；完成工程基线后构建并安装最小 HAP，只验证可启动和名称图标正确；落实 FR-015/FR-016。
 
 ## Phase 2: Foundational（共用基础）
@@ -33,7 +37,7 @@
 - [ ] T012 在 entry/src/main/ets/domain/CommandReceipt.ets、UndoService.ets 定义前后值、版本、来源合并及连带归还范围，新增 loan_return.version，拒绝覆盖后续修改；设计五秒提示与历史纠正的不同可用期；落实 R12/R15/R16。
 - [ ] T013 在 entry/src/main/ets/domain/Quantity.ets、LocalDate.ets、TodoCalculator.ets 定义百分之一整数、日期/时区、R20/R22/R23 的统一计算与确定性排序；加入边界夹具 entry/src/test/DomainFixtures.ets；落实 DATA-01。
 - [ ] T014 在 entry/src/main/ets/data/PhotoStore.ets、CaptureDraftStore.ets、SettingsStore.ets 定义照片代际/暂存、被打断草稿、多会话与隐私偏好，保护有效文件不被清理；照片“每件 9 张”“单张原图导入后不超过 10 MiB”；落实 DATA-06/CAP-08。
-- [ ] T015 在 entry/src/main/ets/platform/CapabilityService.ets、EntryRouter.ets 建立能力/授权/资格分别检查和外部确认路由，默认不接云端替代；落实 AI-10/SYS-01/R34。
+- [ ] T015 在 entry/src/main/ets/platform/CapabilityService.ets、EntryRouter.ets 按 capability-compatibility.md 建立版本、SysCap、专用检测、资源、权限与偏好判断和外部确认路由；覆盖组件创建及初始化，隔离低版本不可装载接口，状态改变后重新判断；不按芯片分档推定支持，不默认上云。在 entry/src/test/CapabilityCompatibility.test.ets 建立能力快照分支夹具；落实 AI-10/SYS-01/R34/SC-009。
 - [ ] T016 在 entry/src/main/ets/domain/QueryService.ets、DomainChanged.ets 统一物品、位置、搜索、待办和共享快照，提交后用数据版本刷新投影，不在入口重复计算数量；落实 DATA-01/TODO-02。
 - [ ] T017 在 entry/src/main/ets/components/OperationSheet.ets、AppShell.ets、MaterialStyle.ets 建立面板、通用底栏、深浅色资源接入和无障碍基础；先完成静态回退，具体动效随对应功能接入；落实 NAV-01/NAV-02/VIS-01/VIS-05。
 
@@ -52,7 +56,7 @@
 - [ ] T026 [US1] 在 entry/src/main/ets/components/SearchEmptyState.ets 实现 FIND-05「无结果」（P0，FR-003）：没有结果时显示"记下'关键词'"，点击打开预填名称的记下面板；有带照片的物品且外观搜索可用时，同时提供"按外观找"（AI-04）。 验收按 QV-01 及 docs/request.md 的同编号要求。
 - [ ] T027 [US1] 在 entry/src/main/ets/data/SearchHistoryStore.ets 实现 FIND-07「最近搜索」（P1，FR-003）：搜索框为空且获得焦点时显示最近搜索（R33），可以一键清空。 验收按 QV-01 及 docs/request.md 的同编号要求。
 - [ ] T028 [US1] 在 entry/src/main/ets/components/BrowseFilterBar.ets 实现 FIND-08「浏览筛选与排序」（P1，FR-003）：浏览状态提供筛选"全部、消耗品、借出中、有到期日、分类"，排序"最近动过、最近记下、名称、到期日"；选择自动记住。 验收按 QV-01 及 docs/request.md 的同编号要求。
-- [ ] T029 [US1] 在 entry/src/main/ets/components/AnswerCard.ets 实现 FIND-09「答案卡」（P1，FR-003）：唯一结果且名称完全相同时显示答案卡，突出封面与位置；普通物品操作为移动/借出，消耗品为用掉 1/补货。这是 S-11 的规划建议，若用户不同意先调整。 验收按 QV-01 及 docs/request.md 的同编号要求。
+- [ ] T029 [US1] 在 entry/src/main/ets/components/AnswerCard.ets 实现 FIND-09「答案卡」（P1，FR-003）：唯一结果且名称完全相同时显示答案卡，突出封面与位置；普通物品操作为移动/借出，消耗品为用掉 1/补货；按 S-11 的交互选择直接落实，不另设确认门槛。验收按 QV-01 及 docs/request.md 的同编号要求。
 - [ ] T030 [US1] 在 entry/src/main/ets/components/CaptureSheet.ets 实现 CAP-01「记下面板」（P0，FR-004）：记下面板打开即聚焦名称并弹出键盘。名称是唯一必填项；位置为空时保存为"未放位置"；输入名称、点一个最近位置、点"记下"，3 次点击完成（T2）；保存后回到原处，提示条显示"已记下'名称'"和"查看""撤销"（动效 M18）；名称为空时"记下"不可点；在名称框按回车等同点"记下"。 验收按 QV-01 及 docs/request.md 的同编号要求。
 - [ ] T031 [US1] 在 entry/src/main/ets/components/CapturePlaceField.ets 实现 CAP-02「位置默认值与候选」（P0，FR-004）：连续记下时继续选择上一件的位置；其他情况不预选，最近用过的位置排在候选第一个（R31）；候选显示最近用过的 5 个位置和"选择…"，后者在面板内打开位置选择器（PLACE-03）；在位置框输入时同时按名称和拼音搜索已建立位置；没有匹配时可以新建，并选择它的上级，默认顶层。用户不需要输入任何路径分隔符。 验收按 QV-01 及 docs/request.md 的同编号要求。
 - [ ] T032 [US1] 在 entry/src/main/ets/components/CaptureOptionalFields.ets 实现 CAP-03「选填项按需展开」（P0，FR-004）：照片、数量、到期、分类、备注、条码、别名排成一行，点哪项展开哪项。物品是消耗品时数量项默认展开；只填名称和位置时，面板上没有其他输入框；到期项下方显示"到期前 N 天提醒｜改"。 验收按 QV-01 及 docs/request.md 的同编号要求。
@@ -169,21 +173,21 @@
 - [ ] T101 [US7] 在 entry/src/main/ets/platform/DocumentScanAdapter.ets 实现 AI-06「扫描说明书」（P1，FR-010）：物品页和记下面板的照片区提供"扫描说明书"，用文档扫描控件拍摄并矫正，保存为扫描件照片（`DOCUMENT`）。 验收按 QV-07 及 docs/request.md 的同编号要求。
 - [ ] T102 [US7] 在 entry/src/main/ets/platform/SpeechAdapter.ets 实现 AI-07「语音记下与语音操作」（P1，FR-010）：长按＋选"语音"、搜索框的麦克风、记下面板的麦克风都可以说话（端侧中文识别，使用时申请麦克风权限，动效 M23）：；记下："充电器放书房抽屉""两盒牛奶放冰箱，下周五到期"，解析为名称、数量、位置、到期日，预填记下面板（T12）；查找："护照在哪"，进入搜索并显示结果；操作："用掉一包纸巾""电钻借给小王""小王把电钻还了"，打开对应物品上预填的面板；解析方式见 harmonyos.md"本地 AI"；位置按名称和拼音匹配已建立位置，匹配不到时作为新位置候选。 验收按 QV-07 及 docs/request.md 的同编号要求。
 - [ ] T103 [US7] 在 entry/src/main/ets/domain/LocalQuestionService.ets 与 entry/src/main/ets/components/AnswerCard.ets 实现 AI-09「问问家当」的本地查询结果部分（原 P1，FR-010）：识别搜索框输入或语音中的位置、余量、到期、借出及位置清单问题，调用 QueryService 查询物品、数量、位置、日期，直接显示结果卡片与依据（R36、T13 查询部分）。多物品、多位置有歧义时展示候选；不导入 localChatModel，不播放生成流光或 M24，不显示模型准备提示。模型生成在 T152 可选实施；SYS-06 入口仅在其独立资格核验并接入后展示。验收按 QV-07。
-- [ ] T104 [US7] 在 entry/src/main/ets/platform/CapabilityService.ets 实现 AI-10「可用性检测与降级」（P0，FR-010）：每项 AI 能力在使用前检查设备支持，不支持时隐藏对应入口，不报错；"我的 › 系统能力与隐私"列出各项 AI 能力在本机是否可用。 验收按 QV-07 及 docs/request.md 的同编号要求。
+- [ ] T104 [US7] 在 entry/src/main/ets/platform/CapabilityService.ets 实现 AI-10「可用性检测与降级」（P0，FR-010）：逐项接入 T015 判断及 capability-compatibility.md 降级矩阵，区分版本不足、设备不支持、未授权、用户关闭、资源未就绪和暂时失败。不可用时保留照片、原文与草稿，提供手工或基础查询，其他可用能力不受影响；可恢复状态重新检测，不自动反复请求权限或下载模型。隐私页用产品语言说明实际原因，不展示未实施企业功能。按 QV-07 验证增强、降级与恢复；落实 SC-009。
 - [ ] T105 [US7] 在 entry/src/main/ets/platform/EntryRouter.ets 实现 SYS-01「链接」（P0，FR-011）：按 data.md"链接"处理 `itemnest://item`、`location`、`function`。来自链接、NFC、通知的改动请求按 R34 先打开预填面板。 验收按 QV-07 及 docs/request.md 的同编号要求。
 - [ ] T106 [US7] 在 entry/src/main/ets/pages/SharePreview.ets 实现 SYS-02「分享预览」（P0，FR-011）：分享物品、位置清单、借出清单（按人）、购物清单、提醒对方的文字时，先在分享预览里确认内容和可选项（位置、备注、借用人、照片），再调起系统分享。格式见 data.md"分享文本"；物品分享生成带抠图封面的图片卡片。 验收按 QV-07 及 docs/request.md 的同编号要求。
 - [ ] T107 [US7] 在 entry/src/main/ets/platform/ShareAdapter.ets 实现 SYS-03「碰一碰分享」（P1，FR-011）：分享预览、物品页、位置页、购物清单打开时，与另一台设备碰一碰，即把当前内容（图片卡片和文字）分享过去（`harmonyShare`）；碰一碰同样遵守分享预览选项，不直接发送未确认隐私字段。 验收按 QV-07 及 docs/request.md 的同编号要求。
-- [ ] T108 [US7] 在 entry/src/main/ets/platform/AgentAdapter.ets 实现 SYS-06「智能体」（P1，FR-011）：先按 T007 核对个人账号具体可用的端 A2A/FunctionComponent 入口和当前官方接入方式，不沿用 Intents Kit 企业资格作为判断。满足条件后在小艺开放平台创建并关联应用，提供查询、待确认改动和待办摘要；确认后共用 CommandService；答案卡提供“在小艺里继续问”。资格不明、未获准或设备不支持时不显示可操作入口，记录核验结果及是否延期；不自动引入云服务、不作为本地问答前置条件。验收按 QV-07 及 SYS-06。
+- [ ] T108 [US7] 在 entry/src/main/ets/platform/AgentAdapter.ets 实现 SYS-06「智能体」（P1，FR-011）：按 T007 主动核对个人账号可用的端 A2A/FunctionComponent 入口和当前接入方式。满足条件后创建并关联应用，提供查询、待确认改动和待办摘要；用户确认后共用 CommandService，答案卡提供“在小艺里继续问”。设备不支持时按兼容矩阵回到本地查询；未获准或资料不足时记录具体平台阻塞，需要账号持有人操作才提出具体步骤，不能自行延期或以隐藏入口算完成。不引入云服务、不阻塞本地问答；按 QV-07 及 SYS-06 验收。
 - [ ] T109 [US7] 在 entry/src/main/ets/extensions/ItemNestFormExtension.ets 实现 SYS-07「桌面卡片」（P0，FR-011）：实现 harmonyos.md 的六种卡片 W1 至 W6；W1 至 W3 为 P0，W4 至 W6 为 P1；卡片数据与待办同一口径，数据变化后主动刷新，每天 00:01 申请定点刷新，跨天获得运行机会时对账；支持浅色、深色和单色主题模式；W6 的"用掉 1"直接记一笔，卡片上 5 秒内可撤销（R34 例外），播放越界动效 M32；W4 至 W6 提供卡片编辑页，选择位置、物品或消耗品；后台卡片按 research.md 的同版本同口径和系统调度限制验收，不承诺精确同时刷新。 验收按 QV-07 及 docs/request.md 的同编号要求。
 - [ ] T110 [US7] 在 entry/src/main/ets/platform/IncomingShareAdapter.ets 实现 SYS-09「接收分享」（P0，FR-011）：从系统分享收到的一张图片或一段文字，打开预填的记下面板；正在记下时先保存当前草稿再切换（CAP-08）。 验收按 QV-07 及 docs/request.md 的同编号要求。
 
-**Checkpoint**：QV-07 中本阶段已选能力和核心回退通过后才算 US7 完成；US10 不参与本检查点，未选 P1 明确记录延期；文档生成不算完成。
+**Checkpoint**：QV-07 中本阶段全部非企业功能的实现、增强与降级验收完成后才算 US7 完成；US10 不参与，平台阻塞与未验证单列，不自行延期 P1，也不以隐藏入口冒充完成。
 
 ## Phase 10: User Story 8 - 原生体验、设置与多设备适配（US8）
 
 目标：完成 spec.md 的 US8；独立验收按 quickstart.md 的 QV-08，使用预置数据即可验证，不要求其他故事的全部界面先完成。
 
-- [ ] T111 [US8] 在 entry/src/test/Story8.test.ets 与 entry/src/ohosTest/ets/test/Story8.test.ets 建立 QV-08 的规则、边界和适用设备验证；先覆盖本故事需求与 data-model.md 规则，再实现并记录实际结果。
+- [ ] T111 [US8] 在 entry/src/test/Story8.test.ets 与 entry/src/ohosTest/ets/test/Story8.test.ets 建立 QV-08 与兼容矩阵验证；覆盖支持、不支持、未授权、资源未就绪、调用失败、恢复可用，以及最低版本冷启动、模块装载与基础页面。纯分支可用 T015 能力快照模拟；真实低版本、硬件与多设备结果分别记录，不能用关闭权限代替；落实 SC-009。
 - [ ] T112 [US8] 在 entry/src/main/ets/components/WideLayout.ets 实现 NAV-05「宽屏布局与拖放」（P1，FR-001）：平板和展开的折叠屏上，物品栏目显示"列表｜物品页"两栏，位置栏目显示"位置树｜位置页"两栏，侧栏使用 `HdsSideBar`；在列表里点另一件物品，右栏切换，左栏的滚动位置和筛选不变；可以把物品拖到左侧位置树的某个位置上完成移动（动效 M28），提示条可撤销。 验收按 QV-08 及 docs/request.md 的同编号要求。
 - [ ] T113 [US8] 在 entry/src/main/ets/pages/Onboarding.ets 实现 NAV-06「首次使用」（P1，FR-001）：首次启动依次显示欢迎、选房间、记下第一件三屏，每屏可以跳过，内容见 experience.md"首次使用"；欢迎屏提供"从备份恢复"；引导期间不请求任何权限。 验收按 QV-08 及 docs/request.md 的同编号要求。
 - [ ] T114 [US8] 在 entry/src/main/ets/platform/NavigationStateAdapter.ets 实现 NAV-07「状态保存与恢复」（P1，FR-001）：应用在后台被系统回收后再打开，回到原来的栏目、页面、滚动位置和未保存的输入（用 `NavDestination.onSaveState`、`onRestoreState`；记下面板另有草稿，见 CAP-08）。 验收按 QV-08 及 docs/request.md 的同编号要求。
@@ -194,8 +198,8 @@
 - [ ] T119 [US8] 在 entry/src/main/ets/components/MotionCatalog.ets 实现 VIS-03「动效」（P0，FR-002）：实现 design.md 中已选功能对应的 M01 至 M33，弹簧参数用 S1 至 S5；M24 的生成式问答效果只随 T152 可选接入，未选功能不要求空动效；M01 至 M20、M25、M27 随首个里程碑实现，其余随对应功能实现；动效可以被新操作打断；有手势的动效全程跟手。 验收按 QV-08 及 docs/request.md 的同编号要求。
 - [ ] T120 [US8] 在 entry/src/main/ets/platform/HapticAdapter.ets 实现 VIS-04「触感」（P1，FR-002）：按 design.md 的 H1 至 H7 在对应时刻触发系统振动预设，跟随系统触感开关。 验收按 QV-08 及 docs/request.md 的同编号要求。
 - [ ] T121 [US8] 在 entry/src/main/ets/platform/AccessibilityAdapter.ets 实现 VIS-05「减少动画与无障碍」（P0，FR-002）：系统"减少动画"开启时，按动效目录"减少动画时"一列表现；读屏、大字号、状态表达按 design.md"无障碍"一节；所有可操作元素有读屏文字；触控区域不小于 44vp × 44vp。 验收按 QV-08 及 docs/request.md 的同编号要求。
-- [ ] T122 [US8] 在 entry/src/main/ets/platform/CapabilityService.ets 实现 VIS-06「设备分级」（P0，FR-002）：按 `uiMaterial.getGlobalMaterialLevel()` 和 `isImmersiveMaterialSupported()` 区分精致、柔和、流畅三档，按 design.md"设备分级"开关效果。 验收按 QV-08 及 docs/request.md 的同编号要求。
-- [ ] T123 [US8] 在 entry/src/main/ets/components/CharacterView.ets 实现 VIS-07「形象动画」（P1，FR-002）：两位整理小伙伴的动画用于启动（M01）、引导、空状态、AI 思考中、全部完成（M26），随用户选择的形象切换；素材制作、动画源文件和许可记录纳入 docs/asset-manifest.md，每段不超过 3 秒并有静态回退。 验收按 QV-08 及 docs/request.md 的同编号要求。
+- [ ] T122 [US8] 在 entry/src/main/ets/platform/CapabilityService.ets 实现 VIS-06「设备分级」（P0，FR-002）：先核对接口版本与支持，再用 `uiMaterial.getGlobalMaterialLevel()`、`isImmersiveMaterialSupported()` 分别选择可用材质和效果，不按芯片或机型固定分档；低版本接口缺失时直接使用基础 ArkUI、纯色和静态反馈，保留完整操作；跟随减少动画，能力变化时更新，按 QV-08 与兼容矩阵验收。
+- [ ] T123 [US8] 在 entry/src/main/ets/components/CharacterView.ets 实现 VIS-07「形象动画」（P1，FR-002）：两位整理小伙伴用于启动（M01）、引导、空状态、当前识别处理中、全部完成（M26），随形象选择切换；工程师选择动画实现方式，记录制作与文件用途，不重复索要用户素材许可证明；每段不超过 3 秒并提供静态及减少动画回退。验收按 QV-08。
 - [ ] T124 [US8] 在 entry/src/main/resources/base/element/color.json 实现 VIS-08「颜色与深浅色」（P0，FR-002）：所有颜色使用 design.md 的令牌，浅色、深色两套；主题可以跟随系统或手动选择（SET-05）。 验收按 QV-08 及 docs/request.md 的同编号要求。
 - [ ] T125 [US8] 在 entry/src/main/ets/pages/Me.ets 实现 SET-01「"我的"页面」（P0，FR-013）："我的"分为提醒、数据、整理、系统入口、外观、关于六组，结构见 experience.md"我的"。 验收按 QV-08 及 docs/request.md 的同编号要求。
 - [ ] T126 [US8] 在 entry/src/main/ets/pages/CategoryManager.ets 实现 SET-03「分类管理」（P0，FR-013）：分类可以新增、改名（同步到已记录物品）、停用和启用、调整顺序、设置"新物品默认是消耗品"。预设分类可以改名和停用，不能删除。 验收按 QV-08 及 docs/request.md 的同编号要求。
@@ -207,7 +211,7 @@
 
 **Checkpoint**：QV-08 和本阶段逐条验收通过后才算 US8 完成；文档生成不算完成。
 
-## Phase 11: User Story 9 - 后续版本 P2（US9）
+## Phase 11: User Story 9 - 原 P2 功能（US9，纳入完整交付）
 
 目标：完成 spec.md 的 US9；独立验收按 quickstart.md 的 QV-09，使用预置数据即可验证，不要求其他故事的全部界面先完成。
 
@@ -227,17 +231,17 @@
 
 ## 核心发布阶段：发布前交叉核验
 
-US9 为后续范围，文末 US10 为可选企业扩展，两者均不阻塞首发。本阶段依赖排除 SYS-04 后的 65 条核心 P0 和选定非企业扩展 P1；不能因可选未实施而判定发布失败。
+本阶段依赖 US1–US9 全部非企业功能，不以最低 P0 集合代替完整交付。US10 不在当前范围；设备不支持按兼容矩阵验证降级，实际平台阻塞和未验证结果单独列明，不能冒充已完成。
 
 - [ ] T143 在 entry/src/ohosTest/ets/test/CrossEntryConcurrency.test.ets 验证页面/W6 并发、重复 operationId、跨扩展回执和后台回收，确认 R14/R16/R34 不被绕过；落实 DATA-01/SYS-07。
-- [ ] T144 在 docs/acceptance-results.md 为 requirements-map.md 的 119 条原需求、R1–R40、T1–T15、设计目录和平台矩阵逐条记录实际结果。SYS-04、SYS-05、SYS-08 和 AI-09 模型生成部分分别记为可选未实施或选做后的真实结果；T13 拆查询与生成，T14 留 US10；其他未运行项保持未验证，P2 与延期 P1 分列，不把范围排除写成测试通过；落实 FR-001–FR-016/SC-001–SC-008。
+- [ ] T144 在 docs/acceptance-results.md 为 requirements-map.md 的 119 条原需求、R1–R40、T1–T15、设计目录和兼容/平台矩阵逐条记录结果；US1–US9 全部纳入，分别记录增强、降级、平台阻塞和未验证，不自行延期 P1/P2。US10 范围记可选未实施，T13 拆查询与生成，T14 留 US10；文档检查、模拟分支与真实系统结果不能混记；落实 FR-001–FR-016/SC-001–SC-009。
 - [ ] T145 在 docs/asset-manifest.md、docs/platform-config-manifest.md 核对核心版已实现功能的图标、启动窗、形象动画、资源引用、权限理由、资格和签名包 UX 结果，发布前替换 AppScope/app.json5 的 vendor 模板值；未选企业扩展不声明空扩展、不要求其资格或引导素材；落实 FR-016。
 - [ ] T146 在 docs/performance-samples.md 记录典型小/中/大本机样本下启动、搜索、列表、照片和备份的真机数据；发现体验问题后定位优化，不将无证据的数值写成已通过指标；落实 SC-001/SC-003/SC-008。
-- [ ] T147 在 docs/release-checklist.md 核对 65 条核心 P0、选定非企业扩展 P1、一次提醒同日合并、按选定范围完成的官方系统备份与换机、离线与隐私、备份安全和工程复现。SYS-04 原 P0 按用户决定转为 US10 可选，连同其他未选企业扩展记录“可选未实施”，不阻塞核心发布；其他必需平台能力仍须解决。更新 SpecKit 状态，不自动提交/推送/发布；落实 SC-007/FR-015/FR-016。
+- [ ] T147 在 docs/release-checklist.md 核对完整 US1–US9、一次提醒同日合并、官方备份与换机、离线隐私、备份安全、工程复现及兼容矩阵。65 条核心 P0 是底线；平台阻塞和未验证如实列明，不能将降级冒充增强能力已开通。US10 只记录范围排除，不运行企业检查或准备材料。更新 SpecKit 状态，不自动提交/推送/发布；落实 SC-007/SC-009/FR-015/FR-016。
 
 ## Dependencies & Execution Order
 
-- Setup T001–T008 → Foundational T009–T017 → US1–US8 → 核心发布核验；US9 单独选择。文末 US10 在上述任务之后且默认不执行，不作为任何核心任务的前置条件。
+- 工程基线 T001–T006/T008 → Foundational T009–T017 → US1–US9 → 完整交付核验。T007 在提醒及 A2A 接入前完成对应部分，不阻塞 T008 或其他独立任务。文末 US10 本次不执行，不作为任何当前任务的前置条件。
 - 基础阶段包含数据结构和共享查询，因此 US2–US8 可用预置数据独立验证；完整用户流程仍要最后串联。
 - US2 标签需要 SYS-01/Scan/NFC 适配；可先实现相应适配再做页面，不因 UI 故事排序误用未实现能力。
 - US3–US7 共用数量服务；US4 借还事实供 US5 借出待办；US6 备份必须覆盖全部已定义业务表和照片。
@@ -251,9 +255,9 @@ US9 为后续范围，文末 US10 为可选企业扩展，两者均不阻塞首�
 
 ## Implementation Strategy
 
-先完成 US1 手工记下与查找，联合 US2/US3 形成可演示本机闭环；再补借还、待办和便携备份。系统能力和外观按本次范围收敛，65 条核心 P0 和选定非企业扩展 P1 验收后构成核心正式版；企业可选项不阻塞。实施时完成一项才勾选一项；本次只交付计划，所有任务保持未勾选。
+先完成 US1 手工记下与查找，联合 US2/US3 形成可演示本机闭环；再完成借还、待办、备份、系统能力、外观和 US9。最终按完整非企业范围及兼容矩阵交付，不在最低 P0 集合完成后停止。实施完成一项才勾选一项；本轮只修改计划，应用任务全部保持未勾选。
 
-任务总数：154；Setup 8、Foundational 9、各故事 US1 22、US2 9、US3 15、US4 6、US5 13、US6 8、US7 20、US8 21、US9 11、核心发布核验 5、文末 US10 可选扩展 7。前 147 项仍含选定 P1 与后续 P2，不等于 147 项全部首发必做。
+任务总数：154；Setup 8、Foundational 9、各故事 US1 22、US2 9、US3 15、US4 6、US5 13、US6 8、US7 20、US8 21、US9 11、完整交付核验 5、文末 US10 可选扩展 7。按用户最新目标，T001–T147 均纳入当前非企业交付，T148–T154 本次不执行。
 
 ## Phase 12: User Story 10 - 企业受限能力扩展（US10，可选，默认不执行）
 
