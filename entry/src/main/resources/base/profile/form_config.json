@@ -1,0 +1,40 @@
+{
+  "forms": [
+    {
+      "name": "NestCompact",
+      "displayName": "我的家当",
+      "description": "随手记下，快速找到",
+      "src": "./ets/cards/NestCard.ets",
+      "uiSyntax": "arkts",
+      "isDynamic": true,
+      "isDefault": true,
+      "updateEnabled": true,
+      "updateDuration": 1,
+      "scheduledUpdateTime": "00:01",
+      "defaultDimension": "2*2",
+      "supportDimensions": [
+        "2*2"
+      ],
+      "colorMode": "auto",
+      "fontScaleFollowSystem": true
+    },
+    {
+      "name": "NestWide",
+      "displayName": "我的家当",
+      "description": "随手记下，快速找到",
+      "src": "./ets/cards/NestCard.ets",
+      "uiSyntax": "arkts",
+      "isDynamic": true,
+      "isDefault": false,
+      "updateEnabled": true,
+      "updateDuration": 1,
+      "scheduledUpdateTime": "00:01",
+      "defaultDimension": "2*4",
+      "supportDimensions": [
+        "2*4"
+      ],
+      "colorMode": "auto",
+      "fontScaleFollowSystem": true
+    }
+  ]
+}

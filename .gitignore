@@ -1,3 +1,14 @@
+.DS_Store
+.idea/
+.hvigor/
+oh_modules/
+**/build/
+local.properties
+/build-profile.json5
+*.p12
+*.p7b
+*.cer
+*.log
 
 # Local research and verification screenshots
 /Docs/Research/native/

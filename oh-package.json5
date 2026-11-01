@@ -1,0 +1,4 @@
+{
+  "modelVersion": "6.0.0", "name": "itemnest", "version": "1.0.0",
+  "description": "我的家当", "dependencies": {}, "devDependencies": {}
+}

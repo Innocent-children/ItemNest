@@ -1,0 +1,32 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "记住放哪，用好已有"
+    },
+    {
+      "name": "calendar_reason",
+      "value": "将到期日期写入系统日历，用于当天提醒"
+    },
+    {
+      "name": "microphone_reason",
+      "value": "将你说的名称、说明或搜索词转为可确认的文字"
+    },
+    {
+      "name": "shortcut_0",
+      "value": "记一件"
+    },
+    {
+      "name": "shortcut_1",
+      "value": "找东西"
+    },
+    {
+      "name": "shortcut_2",
+      "value": "看临期"
+    },
+    {
+      "name": "shortcut_3",
+      "value": "扫一扫"
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "shortcuts": [
+    {
+      "shortcutId": "capture",
+      "label": "$string:shortcut_0",
+      "icon": "$media:foreground",
+      "wants": [
+        {
+          "bundleName": "com.imotong.itemnest",
+          "moduleName": "entry",
+          "abilityName": "EntryAbility",
+          "parameters": {
+            "action": "capture"
+          }
+        }
+      ]
+    },
+    {
+      "shortcutId": "search",
+      "label": "$string:shortcut_1",
+      "icon": "$media:foreground",
+      "wants": [
+        {
+          "bundleName": "com.imotong.itemnest",
+          "moduleName": "entry",
+          "abilityName": "EntryAbility",
+          "parameters": {
+            "action": "search"
+          }
+        }
+      ]
+    },
+    {
+      "shortcutId": "dates",
+      "label": "$string:shortcut_2",
+      "icon": "$media:foreground",
+      "wants": [
+        {
+          "bundleName": "com.imotong.itemnest",
+          "moduleName": "entry",
+          "abilityName": "EntryAbility",
+          "parameters": {
+            "action": "dates"
+          }
+        }
+      ]
+    },
+    {
+      "shortcutId": "scan",
+      "label": "$string:shortcut_3",
+      "icon": "$media:foreground",
+      "wants": [
+        {
+          "bundleName": "com.imotong.itemnest",
+          "moduleName": "entry",
+          "abilityName": "EntryAbility",
+          "parameters": {
+            "action": "scan"
+          }
+        }
+      ]
+    }
+  ]
+}
