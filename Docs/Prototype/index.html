@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#F4F5F1">
+  <title>我的家当 · 交互原型</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="studio">
+    <aside class="guide">
+      <div class="eyebrow">ITEMNEST / PRODUCT DESIGN 1.1</div>
+      <img class="brand-art" src="assets/brand.png" alt="抱着家当的女孩">
+      <h1>记住放哪，<br>用好已有。</h1>
+      <p class="guide-intro">自己的物品，值得被好好记住。<br>从一张照片、一个位置开始。</p>
+      <div class="guide-rule"></div>
+      <p class="eyebrow">体验一条完整的路径</p>
+      <ol class="journey"><li>记下一件以后会找的东西</li><li>连续记下同一处的几件物品</li><li>搜出它，确认放在哪</li><li>移到新位置，顺手更新</li></ol>
+      <div class="scene-buttons" id="scenes"></div>
+      <p class="guide-foot">HarmonyOS 7 · com.imotong.itemnest<br>温和 · 清楚 · 随手可用</p>
+    </aside>
+    <section class="stage" aria-label="手机交互原型">
+      <div class="prototype-bar"><span>交互原型 · 浏览器演示</span><div class="prototype-actions"><button id="scenes-switch">场景</button><button id="mode-switch">空白开始</button></div></div>
+      <div class="phone" id="phone">
+        <main id="app" aria-live="off"></main>
+        <div id="layers"></div>
+        <div class="toast" id="toast" role="status"></div>
+      </div>
+      <div class="stage-caption"><span id="page-code">P01 · 家当</span><span>系统能力在原生真机验收</span></div>
+    </section>
+    <aside class="annotation">
+      <span class="small-label">设计的核心</span>
+      <h2>每一次记录，<br>都有一点用处。</h2>
+      <div class="annotation-item"><span>01</span><div><b>随手就能成立</b><p>名称或照片，就能记下一件。更多信息在需要时补充。</p></div></div>
+      <div class="annotation-item"><span>02</span><div><b>按自己的节奏整理</b><p>一件，或一整组。同一个位置的物品可以连续记下。</p></div></div>
+      <div class="annotation-item"><span>03</span><div><b>找得到，才值得记</b><p>名称、别称、说明和位置，都可以成为寻找的线索。</p></div></div>
+      <div class="annotation-item"><span>04</span><div><b>日期记下，到期提醒</b><p>填到期日，或用生产日期和保质期计算。保存后到期提醒一次。</p></div></div>
+      <div class="annotation-note">网页呈现布局、交互和动效意图。通知、扫码和语音使用明确标记的示意场景，原生接入条件见配套文档。</div>
+    </aside>
+  </div>
+  <input id="photo-input" type="file" accept="image/*" multiple hidden>
+  <input id="camera-input" type="file" accept="image/*" capture="environment" hidden>
+  <script src="app.js"></script>
+</body>
+</html>
