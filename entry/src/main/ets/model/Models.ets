@@ -1,4 +1,5 @@
 import { util } from '@kit.ArkTS';
+import { i18n } from '@kit.LocalizationKit';
 
 export function uuid(): string { return util.generateRandomUUID(); }
 export function normalize(value: string): string { return value.normalize('NFKC').toLowerCase().trim().replace(/\s+/g, ' '); }
@@ -128,9 +129,47 @@ export class Snapshot {
 }
 export function displayName(item: Item): string {
   if (item.title) return item.title;
+  if (!item.photoIds.length) return '未命名记录';
   const date = new Date(item.createdAt);
-  return `照片记录 · ${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  return `照片记录 · ${date.getMonth() + 1}月${date.getDate()}日 ${clockTime(item.createdAt)}`;
 }
+export function daysUntil(value: string): number {
+  if (!validDate(value)) return 0;
+  const target = new Date(value + 'T12:00:00').getTime();
+  const today = new Date(localDate() + 'T12:00:00').getTime();
+  return Math.round((target - today) / 86400000);
+}
+export function shortDate(value: string): string {
+  if (!validDate(value)) return value;
+  const parts = value.split('-').map((part: string) => Number(part));
+  return (parts[0] === new Date().getFullYear() ? '' : parts[0] + '年') + parts[1] + '月' + parts[2] + '日';
+}
+export function dateTypeName(type: string): string { return type === 'RETURN' ? '归还' : type === 'WARRANTY' ? '保修' : '到期'; }
+export function relativeDue(value: string, type: string = 'EXPIRY'): string {
+  const days = daysUntil(value);
+  const verb = type === 'RETURN' ? '归还' : type === 'WARRANTY' ? '保修到期' : '到期';
+  if (days < 0) return type === 'RETURN' ? `已超过归还日 ${-days} 天` : type === 'WARRANTY' ? `保修已过期 ${-days} 天` : `已过期 ${-days} 天`;
+  if (days === 0) return '今天' + verb;
+  if (days === 1) return '明天' + verb;
+  if (days === 2) return '后天' + verb;
+  if (days <= 60) return `${days} 天后${verb}`;
+  return shortDate(value) + verb;
+}
+export function uses24Hour(): boolean { try { return i18n.System.is24HourClock(); } catch (_) { return true; } }
+export function clockTime(time: number): string {
+  const date = new Date(time); const hour = date.getHours(); const minute = String(date.getMinutes()).padStart(2, '0');
+  if (uses24Hour()) return `${String(hour).padStart(2, '0')}:${minute}`;
+  const period = hour < 6 ? '凌晨' : hour < 12 ? '上午' : hour < 13 ? '中午' : hour < 18 ? '下午' : '晚上';
+  return `${period}${hour % 12 || 12}:${minute}`;
+}
+export function reminderClock(): string { const date = new Date(); date.setHours(9, 0, 0, 0); return clockTime(date.getTime()); }
+export function friendlyTime(time: number): string {
+  if (!time) return '';
+  const day = localDate(new Date(time)); const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const prefix = day === localDate() ? '今天' : day === localDate(yesterday) ? '昨天' : shortDate(day);
+  return prefix + ' ' + clockTime(time);
+}
+export function firstGlyph(item: Item): string { const text = Array.from(item.title.trim()); return text.length ? text[0].toUpperCase() : (item.kind === 'GROUP' ? '组' : '物'); }
 export function statusText(item: Item): string {
   if (item.deletedAt) return '回收站';
   if (item.status === 'LENT') return `借给${item.borrower} · ${item.kind === 'GROUP' ? '整组记录' : item.quantity + ' 件'}`;

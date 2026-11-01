@@ -2,8 +2,10 @@
 export struct ActionButton {
   @Prop label:string='';
   @Prop primary:boolean=false;
+  @Prop tonal:boolean=false;
+  @Prop danger:boolean=false;
   run:()=>void=()=>{};
-  build(){Button(this.label).constraintSize({minHeight:44}).fontSize(15).fontColor(this.primary?$r('app.color.onPrimary'):$r('app.color.primary')).backgroundColor(this.primary?$r('app.color.primary'):Color.Transparent).onClick(()=>this.run())}
+  build(){Button(this.label).constraintSize({minHeight:44}).fontSize(15).padding({left:16,right:16}).fontColor(this.primary?$r('app.color.onPrimary'):this.danger?$r('app.color.danger'):$r('app.color.primary')).backgroundColor(this.primary?$r('app.color.primary'):this.tonal?$r('app.color.subtle'):Color.Transparent).onClick(()=>this.run())}
 }
 @Component
 export struct SectionHeading {

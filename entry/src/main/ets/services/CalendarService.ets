@@ -2,7 +2,7 @@ import { common, abilityAccessCtrl } from '@kit.AbilityKit';
 import { calendarManager } from '@kit.CalendarKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { Repository } from '../data/Repository';
-import { Item, ItemDate, displayName, copy } from '../model/Models';
+import { Item, ItemDate, displayName, copy, reminderClock } from '../model/Models';
 
 export class ReminderResult {
   day: string = '';
@@ -90,7 +90,7 @@ export class CalendarService {
               if (old?.id !== undefined) { event.id = old.id; if (old.title !== event.title || old.description !== event.description || old.startTime !== event.startTime) await calendar.updateEvent(event); result.eventId = old.id; }
               else result.eventId = await calendar.addEvent(event);
               if (result.eventId < 0) throw new Error('日历尚未完成登记');
-              result.state = 'REGISTERED'; result.message = `${plan.day} 09:00 已安排系统日历提醒`;
+              result.state = 'REGISTERED'; result.message = `当天 ${reminderClock()} 提醒已写入系统日历`;
               result.versions = plan.versions; result.scheduledAt = start;
             } catch (error) { result.state = 'PENDING'; result.message = '日期已保存，日历待安排：' + (error as Error).message; }
           }

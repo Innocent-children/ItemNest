@@ -2,12 +2,38 @@ import { relationalStore } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
 import { Snapshot, Item, Location, Asset, Draft, ChangeEvent, Preference, copy, normalize, length, uuid, displayName, expiryDate, setDate, CATEGORY_CODES, statusText } from '../model/Models';
 import { fileIo as fs } from '@kit.CoreFileKit';
+import { i18n } from '@kit.LocalizationKit';
+
+// 常见家用物品的叫法差异，用于搜索兜底；命中后排在名称和说明命中之后
+const SYNONYMS: string[][] = [
+  ['外套', '大衣', '羽绒服', '夹克', '风衣', '棉服'], ['充电器', '充电头', '适配器', '电源适配器'], ['数据线', '充电线', '线材'],
+  ['证件', '护照', '身份证', '户口本', '驾驶证', '港澳通行证'], ['药', '药品', '药物', '药箱'], ['钥匙', '备用钥匙'],
+  ['电池', '干电池', '纽扣电池', '充电电池'], ['伞', '雨伞', '雨具'], ['耳机', '耳麦'], ['票据', '发票', '保修卡', '说明书', '收据'],
+  ['工具', '螺丝刀', '扳手', '锤子', '钳子'], ['被子', '被褥', '棉被', '床品'], ['鞋', '鞋子', '运动鞋', '靴子'], ['化妆品', '护肤品', '面霜', '口红']
+];
+let latinTransliterator: i18n.Transliterator | undefined = undefined;
+let simplifiedTransliterator: i18n.Transliterator | undefined = undefined;
+function latin(value: string): string {
+  try {
+    if (!latinTransliterator) latinTransliterator = i18n.Transliterator.getInstance('Han-Latin');
+    return latinTransliterator.transform(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  } catch (_) { return ''; }
+}
+function simplified(value: string): string {
+  try {
+    if (!simplifiedTransliterator) simplifiedTransliterator = i18n.Transliterator.getInstance('Hant-Hans');
+    return simplifiedTransliterator.transform(value);
+  } catch (_) { return value; }
+}
+function hasHan(value: string): boolean { return /[\u4e00-\u9fff]/.test(value); }
 
 class SearchDocument {
   names: string[] = [];
   nameText: string = '';
   tagText: string = '';
   fullText: string = '';
+  pinyin: string = '';
+  initials: string = '';
 }
 export class Repository {
   private store?: relationalStore.RdbStore;
@@ -141,9 +167,18 @@ export class Repository {
     item.revision = (before?.revision ?? 0) + 1; item.updatedAt = Date.now();
     if (item.locationId !== before?.locationId || type === '已归还') item.locationConfirmedAt = item.locationId ? Date.now() : 0;
     const event = new ChangeEvent(); event.itemId = item.id; event.type = type; event.operationId = operation;
-    const describe = (value: Item): string => [displayName(value), statusText(value), this.path(value.locationId) || '位置待补充', value.dates.map((date) => (date.type === 'EXPIRY' ? '到期' : date.type === 'RETURN' ? '归还' : '保修') + ' ' + date.date + (date.handledAt ? ' 已处理' : '')).join('；'), before?.notes !== item.notes ? '说明：' + value.notes : '', JSON.stringify(before?.tags) !== JSON.stringify(item.tags) ? '标签：' + value.tags.join('、') : '', JSON.stringify(before?.aliases) !== JSON.stringify(item.aliases) ? '别名：' + value.aliases.join('、') : ''].filter((text: string) => !!text).join(' · ');
-    event.before = before ? describe(before) : '';
-    event.after = describe(item);
+    // 变化记录只保存发生变化的字段，每行一个“字段：值”，原来与现在按行对应
+    const fields = (value: Item): string[] => [
+      '名称：' + displayName(value), '状态：' + statusText(value), '位置：' + (this.path(value.locationId) || '位置待补充'),
+      '日期：' + (value.dates.map((date) => (date.type === 'EXPIRY' ? '到期' : date.type === 'RETURN' ? '归还' : '保修') + ' ' + date.date + (date.handledAt ? ' 已处理' : '') + (date.remindEnabled ? '' : ' 不提醒')).join('；') || '无'),
+      '说明：' + (value.notes || '无'), '标签：' + (value.tags.join('、') || '无'), '别名：' + (value.aliases.join('、') || '无'),
+      '照片：' + value.photoIds.length + ' 张', '常用：' + (value.favorite ? '是' : '否')
+    ];
+    const now = fields(item);
+    if (before) {
+      const old = fields(before); const changed = now.map((_: string, index: number) => index).filter((index: number) => old[index] !== now[index]);
+      event.before = changed.map((index: number) => old[index]).join('\n'); event.after = changed.map((index: number) => now[index]).join('\n');
+    } else { event.before = ''; event.after = now.filter((line: string) => !line.endsWith('：无') && !line.endsWith('：0 张') && !line.endsWith('：否')).join('\n'); }
     this.put('item', item.id, item); this.put('event', event.id, event);
   }
   saveItem(input: Item, draftId: string = '', operationId: string = uuid(), force: boolean = false): string {
@@ -229,6 +264,9 @@ export class Repository {
   maintain(context: common.Context): void {
     const expired=this.data.items.filter((item:Item)=>item.deletedAt && item.purgeAt<=Date.now()).map((item:Item)=>item.id);
     if(expired.length)this.purge(expired);
+    // 清理旧版本误存的空草稿：新建草稿里既没有名称、照片，也没有任何填写内容
+    const empty=this.data.drafts.filter((draft:Draft)=>{const item=draft.payload;return draft.mode==='CREATE' && !item.title.trim() && !item.photoIds.length && !draft.assetIds.length && !item.notes.trim() && !item.expiryInput.directDate && !item.expiryInput.producedOn && !item.expiryInput.value && !item.aliases.length && !item.tags.length && !item.category && !item.barcodeValue && !item.dates.length && !draft.candidates;}).map((draft:Draft)=>draft.id);
+    if(empty.length){this.transaction(()=>empty.forEach((id:string)=>this.remove('draft',id)));this.data.drafts=this.data.drafts.filter((draft:Draft)=>!empty.includes(draft.id));}
     const refs=new Set<string>();
     this.data.items.forEach((item:Item)=>item.photoIds.forEach((id:string)=>refs.add(id)));
     this.data.locations.forEach((node:Location)=>{if(node.photoAssetId)refs.add(node.photoAssetId);});
@@ -249,23 +287,33 @@ export class Repository {
     document.nameText = normalize([displayName(item), ...item.aliases].join(' '));
     document.tagText = normalize(document.nameText + ' ' + item.tags.join(' '));
     document.fullText = normalize([document.tagText, item.notes, this.path(item.locationId)].join(' '));
+    // 名称、别名和位置的拼音，支持 huzhao、hz 这样的输入
+    const spoken = [item.title, ...item.aliases, this.path(item.locationId)].filter((value: string) => hasHan(value)).map((value: string) => latin(value));
+    document.pinyin = spoken.map((value: string) => value.replace(/[^a-z0-9]/g, '')).join(' ');
+    document.initials = spoken.map((value: string) => value.split(/[^a-z0-9]+/).filter((part: string) => !!part).map((part: string) => part[0]).join('')).join(' ');
     this.searchDocuments.set(item.id, document); return document;
   }
+  private fuzzy(document: SearchDocument, word: string): boolean {
+    if (/^[a-z0-9]+$/.test(word) && /[a-z]/.test(word) && (document.pinyin.includes(word) || document.initials.includes(word))) return true;
+    const group = SYNONYMS.find((values: string[]) => values.some((value: string) => value === word || (word.length >= 2 && value.includes(word))));
+    return !!group && group.some((value: string) => document.fullText.includes(value));
+  }
   search(query: string, scope: string = 'CURRENT', filter: string = '', category: string = '', location: string = '', children: boolean = true): Item[] {
-    const text = Array.from(normalize(query)).slice(0, 100).join(''); const words = text.split(' ').filter((word: string) => !!word).slice(0, 10);
+    const text = Array.from(normalize(hasHan(query) ? simplified(query) : query)).slice(0, 100).join(''); const words = text.split(' ').filter((word: string) => !!word).slice(0, 10);
     const allowed = location ? (children ? this.descendants(location) : [location]) : [];
     const rank = (item: Item): number => {
       const document = this.document(item);
       if (document.names.includes(text)) return 0;
       if (words.every((word: string) => document.nameText.includes(word))) return 1;
       if (words.every((word: string) => document.tagText.includes(word))) return 2;
-      return 3;
+      if (words.every((word: string) => document.fullText.includes(word))) return 3;
+      return 4;
     };
     return this.data.items.filter((item: Item) => {
       if (scope === 'TRASH' ? !item.deletedAt : item.deletedAt || (scope === 'ARCHIVED' ? item.status !== 'ARCHIVED' : item.status === 'ARCHIVED')) return false;
       if (filter === '常用' && !item.favorite || filter === '借出' && item.status !== 'LENT' || filter === '整组' && item.kind !== 'GROUP') return false;
       if (category && item.category !== category || location && !allowed.includes(item.locationId)) return false;
-      return !words.length || words.every((word: string) => this.document(item).fullText.includes(word));
+      return !words.length || words.every((word: string) => this.document(item).fullText.includes(word) || this.fuzzy(this.document(item), word));
     }).sort((a: Item, b: Item) => (text ? rank(a) - rank(b) : 0) || b.updatedAt - a.updatedAt || a.id.localeCompare(b.id));
   }
   replaceSnapshot(snapshot: Snapshot): void {
