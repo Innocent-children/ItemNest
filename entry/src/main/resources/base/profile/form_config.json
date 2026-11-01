@@ -2,9 +2,9 @@
   "forms": [
     {
       "name": "NestCompact",
-      "displayName": "我的家当",
-      "description": "随手记下，快速找到",
-      "src": "./ets/cards/NestCard.ets",
+      "displayName": "$string:card_quick_title",
+      "description": "$string:card_quick_description",
+      "src": "./ets/cards/NestCompact.ets",
       "uiSyntax": "arkts",
       "isDynamic": true,
       "isDefault": true,
@@ -20,9 +20,45 @@
     },
     {
       "name": "NestWide",
-      "displayName": "我的家当",
-      "description": "随手记下，快速找到",
-      "src": "./ets/cards/NestCard.ets",
+      "displayName": "$string:card_common_title",
+      "description": "$string:card_common_description",
+      "src": "./ets/cards/NestWide.ets",
+      "uiSyntax": "arkts",
+      "isDynamic": true,
+      "isDefault": false,
+      "updateEnabled": true,
+      "updateDuration": 1,
+      "scheduledUpdateTime": "00:01",
+      "defaultDimension": "2*4",
+      "supportDimensions": [
+        "2*4"
+      ],
+      "colorMode": "auto",
+      "fontScaleFollowSystem": true
+    },
+    {
+      "name": "NestDates",
+      "displayName": "$string:card_dates_title",
+      "description": "$string:card_dates_description",
+      "src": "./ets/cards/NestDates.ets",
+      "uiSyntax": "arkts",
+      "isDynamic": true,
+      "isDefault": false,
+      "updateEnabled": true,
+      "updateDuration": 1,
+      "scheduledUpdateTime": "00:01",
+      "defaultDimension": "2*2",
+      "supportDimensions": [
+        "2*2"
+      ],
+      "colorMode": "auto",
+      "fontScaleFollowSystem": true
+    },
+    {
+      "name": "NestDatesWide",
+      "displayName": "$string:card_dates_title",
+      "description": "$string:card_dates_description",
+      "src": "./ets/cards/NestDatesWide.ets",
       "uiSyntax": "arkts",
       "isDynamic": true,
       "isDefault": false,

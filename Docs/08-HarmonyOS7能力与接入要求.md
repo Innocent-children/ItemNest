@@ -63,13 +63,15 @@ UI Design Kit 当前官方说明的服务区域为中国大陆，相关沉浸表
 
 ## 6. H06：桌面卡片
 
-配置 2×2、2×4 FormExtensionAbility 卡片。卡片路由携带动作 `search`、`capture` 或受控的物品标识；UIAbility 统一解析，冷启动和热启动读取当前正式数据。
+配置 2×2 与系统 2×4（横向宽×高为 4×2）FormExtensionAbility 卡片。保留 NestCompact、NestWide 名称兼容已添加实例，新增 NestDates、NestDatesWide。各入口使用独立 LocalStorage 初值，复用 NestCard 布局，保证选择页未读取业务数据时仍展示正确用途。路由使用 search、capture、dates、item、cardSettings；EntryAbility 统一接收，Index 根据动作打开目标页面。
 
 卡片点击路由按卡片类型采用 `postCardAction` 或 `FormLink`。Form Kit 官方区分 router、message 与 call 等事件，本产品的用户操作以打开对应应用页面为主。[卡片事件说明](https://developer.huawei.com/consumer/cn/doc/doccenter-capabilities/arkts-ui-widget-event-overview?docScope=all)
 
 首次添加展示通用入口。用户开启摘要后展示所选的最多 3 条常用记录；每次正式保存、状态变化或隐私开关变化后更新卡片数据。记录进入归档或回收站时清理对应摘要；旧入口打开时展示最新状态。卡片刷新受系统调度影响，应用页面以本地正式数据为准。
 
-2×4 卡片可选择日期摘要模式，展示最多 3 条待关注日期、更新时间与“查看日期”入口。摘要排序与 P12 一致，刷新发生在应用数据提交及系统允许的卡片更新时机；跨日打开应用后重新计算。系统定时通知由 H07、H11 承接，卡片负责看一眼和直达。
+日期关注作为独立卡片提供小尺寸与横向尺寸，分别展示一条或三条待处理日期；按日期升序、稳定标识排序。通过 RunningFormInfo.formName 和 dimension 生成各实例的数据，常用位置与日期关注可共存。业务提交后刷新，系统定时更新与跨日打开应用时重新计算相对日期。关闭摘要时向每个实例发送空列表；刷新受系统调度影响。系统通知继续由 H07、H11 承接。
+
+2026-11-01：接口依据为 DevEco Studio 随附 API 26 声明 @ohos.app.form.formInfo.d.ts（FormParam.NAME_KEY、DIMENSION_KEY 与 RunningFormInfo.formName）、@ohos.app.form.formProvider.d.ts，以及现有官方卡片事件文档。此次不增加权限或个人开发者受控权益。网络检索仅返回旧版参考和社区文章，具体实现以本地当前 SDK 声明和编译结果核对。
 
 ## 7. H07：日历提醒
 
@@ -127,6 +129,14 @@ API 26 单应用有效提醒上限为 64，API 25 及以前为 30，已弹出且
 
 ## 13. H14：静态快捷方式
 
-在模块 profile 的 shortcuts_config 中定义四项：capture、search、dates、scan。通过 UIAbility metadata 的 `ohos.ability.shortcuts` 关联配置，各 wants 指向 EntryAbility，参数 `action` 使用上述固定枚举。onCreate、onNewWant 与卡片入口共用解析和导航。桌面最多展示四项，图标与标题使用系统符号及应用资源。[创建静态快捷方式](https://developer.huawei.com/consumer/cn/doc/doccenter-getting-started/typical-scenario-configuration)
+在模块 profile 的 shortcuts_config 中定义四项：capture、search、dates、scan。通过 UIAbility metadata 的 `ohos.ability.shortcuts` 关联配置，各 wants 指向 EntryAbility，参数 `action` 使用上述固定枚举。onCreate、onNewWant 与卡片入口共用解析和导航。桌面最多展示四项，图标引用应用 media 资源，标题引用 string 资源；当前图形为参照系统菜单统一绘制的线性 SVG。[创建静态快捷方式](https://developer.huawei.com/consumer/cn/doc/doccenter-getting-started/typical-scenario-configuration)
+
+2026-11-01 真机核查：当前桌面 `com.ohos.sceneboard` 为四项快捷方式的 Image 节点设置 `#0D000001` 背景，而“卡片、添加应用锁、移除”三个系统项使用透明背景。透明 SVG、透明 PNG 和透明分层方案均未去掉圆底。当前公开 schema 未提供控制该组件背景色的字段，不能承诺应用资源可达到系统固定菜单项的无底色效果。详细观察与待解决事项见 Docs/19。
 
 四项依次进入 P03、P02、P12、P22，当前草稿遵循既有继续规则。应用所有入口读取当前数据；扫码和语音的设备可用性在进入任务时检查。个人账号与资格清单见 `16`，原生验证见 A32。
+
+## 14. 应用图标切换
+
+用户从 P11 的“应用图标”选择男生版或女生版。`AppScope/app.json5` 已配置 `moving_buddy` 与 `moving_girl` 两个分层备用图标。通过 `@kit.AbilityKit` 的 `bundleManager.setAlternateIcon(name)` 设置，再调用 `bundleManager.getAlternateIcons()` 读取 `enabled` 状态；默认图标对应女生版。应用内人物插图随读取结果更新。
+
+此能力从 API 26.0.0 提供，适用于 `bundleType=app`，分身应用不支持。当前 SDK 声明无需额外运行时权限；状态读取或设置失败时保留现状并提供重试。图标选择由系统管理，不写入物品数据或完整备份。依据：[华为配置应用图标和名称](https://developer.huawei.com/consumer/cn/doc/doccenter-getting-started/layered-image?docScope=all)，查阅日期 2026-11-01，并核对本机 API 26 的 `@ohos.bundle.bundleManager.d.ts`。真机实际结果见 19 的 1.6 节。

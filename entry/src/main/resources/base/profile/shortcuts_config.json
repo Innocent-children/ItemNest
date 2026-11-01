@@ -3,7 +3,7 @@
     {
       "shortcutId": "capture",
       "label": "$string:shortcut_0",
-      "icon": "$media:foreground",
+      "icon": "$media:shortcut_add",
       "wants": [
         {
           "bundleName": "com.imotong.itemnest",
@@ -18,7 +18,7 @@
     {
       "shortcutId": "search",
       "label": "$string:shortcut_1",
-      "icon": "$media:foreground",
+      "icon": "$media:shortcut_search_filled",
       "wants": [
         {
           "bundleName": "com.imotong.itemnest",
@@ -33,7 +33,7 @@
     {
       "shortcutId": "dates",
       "label": "$string:shortcut_2",
-      "icon": "$media:foreground",
+      "icon": "$media:shortcut_clock",
       "wants": [
         {
           "bundleName": "com.imotong.itemnest",
@@ -48,7 +48,7 @@
     {
       "shortcutId": "scan",
       "label": "$string:shortcut_3",
-      "icon": "$media:foreground",
+      "icon": "$media:shortcut_scan",
       "wants": [
         {
           "bundleName": "com.imotong.itemnest",

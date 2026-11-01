@@ -22,7 +22,7 @@ export struct ActionButton {
         Text(this.label).fontSize(15).fontColor(this.foreground()).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.padding({ left: this.icon ? 14 : 16, right: 16 })
     }
-    .constraintSize({ minHeight: 44 })
+    .constraintSize({ minHeight: 48 })
     .backgroundColor(this.primary ? $r('app.color.primary') : this.danger && this.tonal ? $r('app.color.dangerSubtle') : this.tonal ? $r('app.color.subtle') : Color.Transparent)
     .accessibilityText(this.label)
     .onClick(() => this.run())

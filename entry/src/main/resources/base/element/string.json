@@ -27,6 +27,30 @@
     {
       "name": "shortcut_3",
       "value": "扫一扫"
+    },
+    {
+      "name": "card_quick_title",
+      "value": "随手记"
+    },
+    {
+      "name": "card_quick_description",
+      "value": "找东西、记一件，桌面一步直达"
+    },
+    {
+      "name": "card_common_title",
+      "value": "常用位置"
+    },
+    {
+      "name": "card_common_description",
+      "value": "常用物品放在哪里，抬眼就能找到"
+    },
+    {
+      "name": "card_dates_title",
+      "value": "日期关注"
+    },
+    {
+      "name": "card_dates_description",
+      "value": "关注到期、归还与保修日期"
     }
   ]
 }

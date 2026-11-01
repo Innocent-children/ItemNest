@@ -312,6 +312,7 @@ export class Repository {
     return this.data.items.filter((item: Item) => {
       if (scope === 'TRASH' ? !item.deletedAt : item.deletedAt || (scope === 'ARCHIVED' ? item.status !== 'ARCHIVED' : item.status === 'ARCHIVED')) return false;
       if (filter === '常用' && !item.favorite || filter === '借出' && item.status !== 'LENT' || filter === '整组' && item.kind !== 'GROUP') return false;
+      if (filter === '待补位置' && item.locationId) return false;
       if (category && item.category !== category || location && !allowed.includes(item.locationId)) return false;
       return !words.length || words.every((word: string) => this.document(item).fullText.includes(word) || this.fuzzy(this.document(item), word));
     }).sort((a: Item, b: Item) => (text ? rank(a) - rank(b) : 0) || b.updatedAt - a.updatedAt || a.id.localeCompare(b.id));
