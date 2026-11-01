@@ -1,5 +1,5 @@
 import { HdsTabs, HdsTabsController, hdsMaterial } from '@kit.UIDesignKit';
-import { ActionButton, SectionHeading, MenuRow } from '../components/Common';
+import { ActionButton, SectionHeading, MenuRow, GroupCard, QuickAction, StatTile, Segmented, StatusTag } from '../components/Common';
 import { common, ConfigurationConstant, abilityAccessCtrl } from '@kit.AbilityKit';
 import { Item, Draft, ItemDate, Location, Snapshot, Preference, ChangeEvent, copy, uuid, displayName, statusText, localDate, setDate, shortDate, relativeDue, daysUntil, friendlyTime, firstGlyph, dateTypeName, reminderClock, CATEGORY_CODES, CATEGORY_NAMES } from '../model/Models';
 import { LengthMetrics } from '@kit.ArkUI';
@@ -141,7 +141,7 @@ struct Index {
       Text('只清理“我的家当”尚未到时的提醒日程，物品日期会保留。').fontColor($r('app.color.secondary'))
       ActionButton({ label: '允许访问并清理提醒日程', run: ()=>{this.calendar?.enable().then(()=>{this.preference((pref:Preference)=>pref.reminderEnabled=false);this.calendar?.sync();}).catch((error:Error)=>this.notify(error.message));} })
     }
-    Row() { Text('外部提醒显示物品名称').layoutWeight(1).fontColor($r('app.color.text')); Toggle({ type: ToggleType.Switch, isOn: this.data.preference.externalDetails }).onChange((value: boolean) => this.preference((pref: Preference) => pref.externalDetails = value)); }.width('100%')
+    Row() { Text('外部提醒显示物品名称').layoutWeight(1).fontColor($r('app.color.text')); Toggle({ type: ToggleType.Switch, isOn: this.data.preference.externalDetails }).selectedColor($r('app.color.primary')).onChange((value: boolean) => this.preference((pref: Preference) => pref.externalDetails = value)); }.width('100%')
     ForEach(this.reminderResults,(result:ReminderResult)=>{Text(result.message).fontSize(15).fontColor($r('app.color.secondary'));},(result:ReminderResult)=>result.day+result.state+result.message)
   }
   @Builder voice() { VoicePanel({target:'搜索词',currentValue:this.query,maxLength:100,onAdopt:(value:string)=>{this.query=value;this.voiceOpen=false;this.submitSearch();},onCancel:()=>this.voiceOpen=false}) }
@@ -291,20 +291,53 @@ struct Index {
   @Builder empty(title: string, subtitle: string) {
     Column({ space: 14 }) { Image($r('app.media.foreground')).width(150).height(150).objectFit(ImageFit.Contain); Text(title).fontSize(23).fontColor($r('app.color.text')); Text(subtitle).fontSize(15).fontColor($r('app.color.secondary')).textAlign(TextAlign.Center) }.width('100%').padding({ top: 28, bottom: 24 })
   }
+  // 整组和已选分类用系统图标表示，其余记录用名称首字，让没有照片的记录也容易分辨。
+  private kindIcon(item: Item): Resource | undefined {
+    if (item.kind === 'GROUP') return $r('sys.symbol.square_stack_3d');
+    if (item.category === 'DIGITAL') return $r('sys.symbol.headphones');
+    if (item.category === 'CLOTHING') return $r('sys.symbol.shirt');
+    if (item.category === 'HOME') return $r('sys.symbol.sofa_fill');
+    if (item.category === 'FOOD') return $r('sys.symbol.fork_knife');
+    if (item.category === 'TOOLS') return $r('sys.symbol.wrench_and_screwdriver');
+    if (item.category === 'DOCUMENTS') return $r('sys.symbol.doc_text');
+    return undefined;
+  }
+  @Builder glyphMark(item: Item, size: number) {
+    if (this.kindIcon(item)) { SymbolGlyph(this.kindIcon(item)).fontSize(size * 0.44).fontColor([$r('app.color.primary')]) }
+    else { Text(firstGlyph(item)).fontSize(size * 0.4).fontWeight(FontWeight.Medium).fontColor($r('app.color.primary')) }
+  }
   @Builder glyph(item: Item, size: number) {
-    Text(firstGlyph(item)).fontSize(size * 0.42).fontWeight(FontWeight.Medium).fontColor($r('app.color.primary')).width(size).height(size).textAlign(TextAlign.Center).backgroundColor($r('app.color.subtle')).borderRadius(14)
+    Stack() { this.glyphMark(item, size) }.width(size).height(size).backgroundColor($r('app.color.subtle')).borderRadius(Math.min(18, size * 0.28))
+  }
+  // 最近一个未处理日期距今的天数；没有日期时返回一个很大的数
+  private dueDays(item: Item): number {
+    const days = item.dates.filter((date: ItemDate) => !date.handledAt).map((date: ItemDate) => daysUntil(date.date));
+    return days.length ? Math.min(...days) : 9999;
+  }
+  // 列表与网格共用的状态标签：只显示和“在手 1 件”不同的情况，减少每张卡片上的重复文字
+  @Builder statusTags(item: Item) {
+    Flex({ wrap: FlexWrap.Wrap, space: { main: LengthMetrics.vp(6), cross: LengthMetrics.vp(4) } }) {
+      if (item.deletedAt) { StatusTag({ label: '回收站', warning: true }) }
+      else if (item.status === 'LENT') { StatusTag({ label: '借给' + item.borrower }) }
+      else if (item.status === 'ARCHIVED') { StatusTag({ label: statusText(item) }) }
+      if (item.kind === 'GROUP') { StatusTag({ label: '整组' }) }
+      else if ((item.quantity ?? 0) > 1 && item.status !== 'ARCHIVED') { StatusTag({ label: `${item.quantity} 件` }) }
+      if (this.dueBadge(item)) { StatusTag({ label: this.dueBadge(item), warning: this.dueDays(item) <= 7 }) }
+    }.width('100%')
   }
   @Builder itemRow(item: Item, here: string) {
     Row({ space: 12 }) {
       if (this.selecting) { Checkbox({ name: item.id }).select(this.selected.includes(item.id)).accessibilityText('选择' + displayName(item)).onChange((selected: boolean) => { this.selected = selected ? Array.from(new Set([...this.selected, item.id])) : this.selected.filter((id: string) => id !== item.id); }) }
-      if (item.photoIds.length) { Image(this.media().uri(item.photoIds[0], true)).width(64).height(64).objectFit(ImageFit.Cover).borderRadius(14).accessibilityText(displayName(item) + '主图') }
-      else { this.glyph(item, 64) }
-      Column({ space: 4 }) {
-        Text(displayName(item)).fontSize(17).fontWeight(FontWeight.Medium).fontColor($r('app.color.text')).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-        if (!here || item.locationId !== here) { Text(this.repository.path(item.locationId) || '位置待补充').fontSize(13).fontColor($r('app.color.secondary')).maxLines(2) }
-        Text(statusText(item) + (item.favorite ? ' · 常用' : '')).fontSize(12).fontColor($r('app.color.primary'))
+      if (item.photoIds.length) { Image(this.media().uri(item.photoIds[0], true)).width(60).height(60).objectFit(ImageFit.Cover).borderRadius(16).accessibilityText(displayName(item) + '主图') }
+      else { this.glyph(item, 60) }
+      Column({ space: 5 }) {
+        Row({ space: 6 }) {
+          Text(displayName(item)).fontSize(17).fontWeight(FontWeight.Medium).fontColor($r('app.color.text')).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).flexShrink(1)
+          if (item.favorite) { SymbolGlyph($r('sys.symbol.star_fill')).fontSize(14).fontColor([$r('app.color.star')]) }
+        }
+        if (!here || item.locationId !== here) { Text(this.repository.path(item.locationId) || '位置待补充').fontSize(13).fontColor($r('app.color.secondary')).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }) }
         if (this.matchText(item)) { Text(this.matchText(item)).fontSize(13).fontColor($r('app.color.secondary')).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }) }
-        if (item.dates.some((date: ItemDate) => !date.handledAt)) { Text(item.dates.filter((date: ItemDate) => !date.handledAt).map((date: ItemDate) => daysUntil(date.date) <= 60 ? relativeDue(date.date, date.type) : dateTypeName(date.type) + ' ' + shortDate(date.date)).join(' · ')).fontSize(12).fontColor(item.dates.some((date: ItemDate) => !date.handledAt && daysUntil(date.date) <= 7) ? $r('app.color.warning') : $r('app.color.secondary')).maxLines(3) }
+        this.statusTags(item)
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
     }.width('100%').padding(12).backgroundColor($r('app.color.surface')).borderRadius(20).onClick(() => this.selecting ? this.toggle(item.id) : this.detail(item.id)).gesture(LongPressGesture().onAction(() => { this.selecting = true; this.selected = [item.id]; }))
   }
@@ -332,48 +365,72 @@ struct Index {
   }
   @Builder home() {
     Row() {
-      Text('我的家当').fontSize(28).fontWeight(FontWeight.Medium).fontColor($r('app.color.text'))
+      Column({ space: 2 }) {
+        Text('我的家当').fontSize(28).fontWeight(FontWeight.Medium).fontColor($r('app.color.text'))
+        if (this.data.items.some((item: Item) => !item.deletedAt && item.status !== 'ARCHIVED')) { Text(`${this.data.items.filter((item: Item) => !item.deletedAt && item.status !== 'ARCHIVED').length} 条记录`).fontSize(13).fontColor($r('app.color.secondary')) }
+      }.alignItems(HorizontalAlign.Start)
       Blank()
-      if (this.data.items.some((item: Item) => !item.deletedAt && item.status !== 'ARCHIVED')) { Text(`${this.data.items.filter((item: Item) => !item.deletedAt && item.status !== 'ARCHIVED').length} 条记录`).fontSize(14).fontColor($r('app.color.secondary')) }
     }.width('100%').padding({ top: 12 })
-    Row({ space: 10 }) { Text('⌕').fontSize(20).fontColor($r('app.color.secondary')); Text('找东西：名称、拼音、说明或位置').fontSize(16).fontColor($r('app.color.secondary')) }
-      .width('100%').height(50).padding({ left: 18, right: 18 }).backgroundColor($r('app.color.surface')).borderRadius(25).accessibilityText('找东西').accessibilityLevel('yes')
+    Row({ space: 10 }) {
+      SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(20).fontColor([$r('app.color.secondary')])
+      Text('找东西：名称、拼音、说明或位置').fontSize(16).fontColor($r('app.color.secondary')).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      Stack() { SymbolGlyph($r('sys.symbol.barcode_viewfinder')).fontSize(22).fontColor([$r('app.color.primary')]) }
+        .width(44).height(44).borderRadius(22).accessibilityText('扫一扫，看看是否记过').accessibilityLevel('yes')
+        .onClick(() => this.navigate('扫码查同款'))
+    }
+      .width('100%').height(52).padding({ left: 18, right: 4 }).backgroundColor($r('app.color.surface')).borderRadius(26).accessibilityText('找东西').accessibilityLevel('yes')
       .onClick(() => { this.scope = 'CURRENT'; this.query = ''; this.search(); this.navigate('搜索'); })
     if (this.upcoming().length) {
-      Column({ space: 6 }) {
-        Row() { Text(this.upcoming().some((row: DateRow) => daysUntil(row.date.date) < 0) ? '有日期需要处理' : '快到期了').fontSize(16).fontWeight(FontWeight.Medium).fontColor($r('app.color.warning')); Blank(); Text(`${this.upcoming().length} 项 ›`).fontSize(14).fontColor($r('app.color.secondary')) }.width('100%')
+      Column({ space: 8 }) {
+        Row({ space: 8 }) {
+          SymbolGlyph($r('sys.symbol.bell')).fontSize(18).fontColor([$r('app.color.warning')])
+          Text(this.upcoming().some((row: DateRow) => daysUntil(row.date.date) < 0) ? '有日期需要处理' : '快到期了').fontSize(16).fontWeight(FontWeight.Medium).fontColor($r('app.color.warning'))
+          Blank()
+          Text(`${this.upcoming().length} 项`).fontSize(14).fontColor($r('app.color.secondary'))
+          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([$r('app.color.tertiary')])
+        }.width('100%')
         ForEach(this.upcoming().slice(0, 3), (row: DateRow) => {
-          Row() { Text(displayName(row.item)).fontSize(15).fontColor($r('app.color.text')).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }); Text(relativeDue(row.date.date, row.date.type)).fontSize(14).fontColor(daysUntil(row.date.date) <= 2 ? $r('app.color.warning') : $r('app.color.secondary')) }.width('100%')
+          Row() { Text(displayName(row.item)).fontSize(15).fontColor($r('app.color.text')).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }); Text(relativeDue(row.date.date, row.date.type)).fontSize(14).fontColor(daysUntil(row.date.date) <= 2 ? $r('app.color.warning') : $r('app.color.secondary')) }.width('100%').padding({ left: 26 })
         }, (row: DateRow) => row.date.id + ':' + row.date.date)
       }.width('100%').padding(16).backgroundColor($r('app.color.surface')).borderRadius(20).onClick(() => this.navigate('提醒')).accessibilityLevel('yes')
     }
     if (this.latestDraft()) {
-      Row({ space: 8 }) {
+      Row({ space: 10 }) {
+        SymbolGlyph($r('sys.symbol.square_and_pencil')).fontSize(18).fontColor([$r('app.color.primary')])
         Text('继续刚才的记录：' + displayName((this.latestDraft() ?? new Draft()).payload)).fontSize(15).fontColor($r('app.color.text')).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text('›').fontSize(22).fontColor($r('app.color.secondary'))
-      }.width('100%').padding({ left: 16, right: 16, top: 12, bottom: 12 }).backgroundColor($r('app.color.subtle')).borderRadius(16).onClick(() => { const draft = this.latestDraft(); if (draft) this.resume(draft); })
+        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([$r('app.color.tertiary')])
+      }.width('100%').padding({ left: 16, right: 14, top: 13, bottom: 13 }).backgroundColor($r('app.color.subtle')).borderRadius(16).onClick(() => { const draft = this.latestDraft(); if (draft) this.resume(draft); })
     }
     if (this.data.items.some((item: Item) => !item.deletedAt && item.status !== 'ARCHIVED')) { this.filters(); this.batch() }
     if (!this.results.length) {
       this.empty(this.data.items.length ? '这里还没有对应记录' : '记住放哪，用好已有', '先记一件你以后会找的东西')
-      ActionButton({ label: '记下一件', run: () => this.newItem(), primary: true })
+      ActionButton({ label: '记下一件', icon: $r('sys.symbol.plus'), run: () => this.newItem(), primary: true })
       ActionButton({ label: '看看示例', run: () => { this.example = true; this.navigate('示例家当'); } })
     } else { this.homeGrid() }
+  }
+  @Builder gridCard(item: Item) {
+    Column() {
+      Stack({ alignContent: Alignment.TopEnd }) {
+        if (item.photoIds.length) { Image(this.media().uri(item.photoIds[0], true)).width('100%').height('100%').objectFit(ImageFit.Cover).accessibilityText(displayName(item) + '主图') }
+        else { Stack() { this.glyphMark(item, 64) }.width('100%').height('100%').backgroundColor($r('app.color.subtle')) }
+        if (this.selecting) { Checkbox({ name: 'grid' + item.id }).select(this.selected.includes(item.id)).hitTestBehavior(HitTestMode.None).margin(8) }
+        else if (item.favorite) { Stack() { SymbolGlyph($r('sys.symbol.star_fill')).fontSize(14).fontColor([$r('app.color.star')]) }.width(28).height(28).borderRadius(14).backgroundColor($r('app.color.surface')).margin(8) }
+      }.width('100%').aspectRatio(1.5).clip(true)
+      Column({ space: 4 }) {
+        Text(displayName(item)).fontSize(16).fontWeight(FontWeight.Medium).fontColor($r('app.color.text')).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+        Text(this.repository.path(item.locationId) || '位置待补充').fontSize(12).fontColor($r('app.color.secondary')).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+        this.statusTags(item)
+      }.alignItems(HorizontalAlign.Start).padding({ left: 12, right: 12, top: 10, bottom: 12 }).width('100%').constraintSize({ minHeight: 96 })
+    }.width('100%').backgroundColor($r('app.color.surface')).borderRadius(20).clip(true)
+    .accessibilityGroup(true).accessibilityText(displayName(item) + '，' + (this.repository.path(item.locationId) || '位置待补充') + '，' + statusText(item))
+    .onClick(() => this.selecting ? this.toggle(item.id) : this.detail(item.id)).gesture(LongPressGesture().onAction(() => { this.selecting = true; this.selected = [item.id]; }))
   }
   @Builder homeGrid(){
     if(this.contentWidth<360 || this.fontScale>1.3){this.items({ values: this.results })}else{
       GridRow({columns:this.contentWidth>=600?3:2,gutter:12}){
         ForEach(this.results.slice(0,this.pageSize),(item:Item)=>{
-          GridCol(){
-            Column({space:8}){
-              if(item.photoIds.length){Image(this.media().uri(item.photoIds[0],true)).width('100%').aspectRatio(1.1).objectFit(ImageFit.Cover).borderRadius(14)}else{this.glyph(item,44)}
-              Text((this.selecting?(this.selected.includes(item.id)?'☑ ':'☐ '):'')+displayName(item)).fontSize(16).fontColor($r('app.color.text')).maxLines(2).textOverflow({overflow:TextOverflow.Ellipsis}).width('100%')
-              Text(this.repository.path(item.locationId)||'位置待补充').fontSize(12).fontColor($r('app.color.secondary')).maxLines(2).width('100%')
-              Text(statusText(item)+(item.favorite?' · 常用':'')).fontSize(12).fontColor($r('app.color.primary')).width('100%')
-              if (this.dueBadge(item)) { Text(this.dueBadge(item)).fontSize(12).fontColor($r('app.color.warning')).width('100%') }
-            }.alignItems(HorizontalAlign.Start).padding(12).width('100%').backgroundColor($r('app.color.surface')).borderRadius(20).onClick(()=>this.selecting?this.toggle(item.id):this.detail(item.id)).gesture(LongPressGesture().onAction(()=>{this.selecting=true;this.selected=[item.id];}))
-          }
-        },(item:Item)=>item.id+':'+item.revision)
+          GridCol(){ this.gridCard(item) }
+        },(item:Item)=>item.id+':'+item.revision+':'+this.selecting)
       }.width('100%')
       if(this.results.length>this.pageSize){ActionButton({label:'继续显示更多',run:()=>this.pageSize+=60})}
     }
@@ -382,7 +439,7 @@ struct Index {
     if (this.voiceOpen) { this.voice() }
     Search({ value: this.query, placeholder: '名称、拼音、说明、位置' }).id('searchInput').height(52).maxLength(100).defaultFocus(true)
       .onAppear(() => setTimeout(() => { try { this.getUIContext().getFocusController().requestFocus('searchInput'); } catch (_) {} }, 350)).onChange((value: string, preview: PreviewText) => { this.query = value; clearTimeout(this.queryTimer); if (!preview.value) this.queryTimer = setTimeout(() => this.search(), 200); }).onSubmit(() => this.submitSearch())
-    Row({space:8}) {ActionButton({ label: '扫一扫', run: ()=>this.navigate('扫码查同款') });ActionButton({ label: '语音查找', run: ()=>this.voiceOpen=true });ActionButton({label: this.searchFilters ? '收起筛选' : (this.category || this.filter !== '全部' || this.scope !== 'CURRENT' ? '筛选 · 已选' : '筛选'), run:()=>this.searchFilters=!this.searchFilters});}
+    Row({space:8}) {ActionButton({ label: '扫一扫', icon: $r('sys.symbol.barcode_viewfinder'), tonal: true, run: ()=>this.navigate('扫码查同款') });ActionButton({ label: '语音', icon: $r('sys.symbol.mic'), tonal: true, run: ()=>this.voiceOpen=true });ActionButton({label: this.searchFilters ? '收起筛选' : (this.category || this.filter !== '全部' || this.scope !== 'CURRENT' ? '筛选 · 已选' : '筛选'), tonal: this.searchFilters, run:()=>this.searchFilters=!this.searchFilters});}
     if (this.searchFilters) {
     Row({ space: 8 }) { ActionButton({ label: this.scope === 'CURRENT' ? '✓ 在手与借出' : '在手与借出', run: () => { this.scope = 'CURRENT'; this.search(); } }); ActionButton({ label: this.scope === 'ARCHIVED' ? '✓ 归档' : '归档', run: () => { this.scope = 'ARCHIVED'; this.search(); } }) }
     this.filters()
@@ -408,78 +465,128 @@ struct Index {
       }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 24 })
     }
   }
+  private childLocations(parentId: string): Location[] { return this.data.locations.filter((location: Location) => location.parentId === parentId).sort((a: Location, b: Location) => a.sortOrder - b.sortOrder); }
   @Builder locations(root: boolean = false) {
     if (root) SectionHeading({ title: '位置', subtitle: '从最容易想到的地方开始' })
-    ForEach(this.data.locations.filter((location: Location) => location.parentId === (root ? '' : this.focusedLocation)).sort((a: Location, b: Location) => a.sortOrder - b.sortOrder), (location: Location) => {
-      MenuRow({ title: location.name, subtitle: `${this.repository.search('', 'CURRENT', '', '', location.id).length} 条记录` + (this.data.locations.some((node: Location) => node.parentId === location.id) ? ` · ${this.data.locations.filter((node: Location) => node.parentId === location.id).length} 个子位置` : ''), action: () => { this.focusedLocation = location.id; this.navigate('位置详情'); } })
-    }, (location: Location) => location.id + ':' + location.revision)
-    ActionButton({ label: root ? '新建位置' : '在这里新建子位置', tonal: true, run: () => { if (root) this.focusedLocation = ''; this.openLocationForm(); } })
+    if (this.childLocations(root ? '' : this.focusedLocation).length) {
+      GroupCard({ header: root ? '' : '里面的位置' }) {
+        ForEach(this.childLocations(root ? '' : this.focusedLocation), (location: Location, index: number) => {
+          MenuRow({ plain: true, first: index === 0, icon: root ? $r('sys.symbol.house') : $r('sys.symbol.folder'), title: location.name, subtitle: `${this.repository.search('', 'CURRENT', '', '', location.id).length} 条记录` + (this.data.locations.some((node: Location) => node.parentId === location.id) ? ` · ${this.data.locations.filter((node: Location) => node.parentId === location.id).length} 个子位置` : ''), action: () => { this.focusedLocation = location.id; this.navigate('位置详情'); } })
+        }, (location: Location) => location.id + ':' + location.revision)
+      }
+    } else if (root) {
+      Text('先建一个最常放东西的地方，比如“书桌抽屉”“玄关柜”。记录时也可以随手新建。').fontSize(15).fontColor($r('app.color.secondary'))
+    }
+    ActionButton({ label: root ? '新建位置' : '新建子位置', icon: $r('sys.symbol.plus'), tonal: true, run: () => { if (root) this.focusedLocation = ''; this.openLocationForm(); } })
   }
   @Builder locationDetail() {
     SectionHeading({ title: this.location().name, subtitle: this.location().parentId ? '在 ' + this.repository.path(this.location().parentId) : '' })
     if(this.location().photoAssetId){Image(this.media().uri(this.location().photoAssetId)).width('100%').aspectRatio(1.5).objectFit(ImageFit.Cover).borderRadius(20).onClick(()=>this.openPhoto([this.location().photoAssetId],this.location().photoAssetId))}
     if (this.location().notes) { Text(this.location().notes).fontColor($r('app.color.secondary')) }
-    Row({ space: 8 }) { ActionButton({ label: '在这里记下', run: () => this.newItem(this.focusedLocation), primary: true }); ActionButton({ label: '编辑位置', tonal: true, run: () => this.openLocationForm(true) }); }
+    Row({ space: 8 }) { ActionButton({ label: '在这里记下', icon: $r('sys.symbol.plus'), run: () => this.newItem(this.focusedLocation), primary: true }); ActionButton({ label: '编辑位置', icon: $r('sys.symbol.square_and_pencil'), tonal: true, run: () => this.openLocationForm(true) }); }
     this.locations()
     if (this.data.locations.some((node: Location) => node.parentId === this.focusedLocation)) {
-      Row({ space: 6 }) { ActionButton({ label: '包含子位置', tonal: this.includeChildren, run: () => this.includeChildren = true }); ActionButton({ label: '只看这一层', tonal: !this.includeChildren, run: () => this.includeChildren = false }); }
+      Segmented({ options: ['包含子位置', '只看这一层'], selected: this.includeChildren ? 0 : 1, onSelect: (index: number) => this.includeChildren = index === 0 })
     }
     this.items({ values: this.repository.search('', 'CURRENT', '', '', this.focusedLocation, this.includeChildren), here: this.focusedLocation })
-    ActionButton({ label: '移除这个位置', danger: true, run: () => this.openPanel('移除位置') })
+    ActionButton({ label: '移除这个位置', icon: $r('sys.symbol.trash'), danger: true, run: () => this.openPanel('移除位置') })
+  }
+  private confirmFound(): void { this.act(() => this.repository.mutate([this.focusedId], '确认位置', (item: Item) => item.locationConfirmedAt = Date.now()), '位置已确认'); }
+  private toggleFavorite(): void { const on = !this.current().favorite; this.act(() => this.repository.mutate([this.focusedId], '修改常用', (item: Item) => item.favorite = on), on ? '已设为常用' : '已取消常用'); }
+  private locationSubtitle(item: Item): string {
+    const path = this.repository.path(item.locationId) || '位置待补充';
+    if (item.status !== 'ACTIVE' || item.deletedAt || !item.locationId) return path;
+    return path + '\n' + (item.locationConfirmedAt ? '上次确认在这里：' + friendlyTime(item.locationConfirmedAt) : '找到实物后点“找到了”，下次更放心');
   }
   @Builder details() {
     if (!this.data.items.some((item: Item) => item.id === this.focusedId)) { this.empty('这条记录已移除', '返回家当查看其他记录') }
     else {
       if (this.current().photoIds.length) {
-        Swiper() { ForEach(this.current().photoIds, (id: string) => { Image(this.media().uri(id)).width('100%').aspectRatio(4 / 3).objectFit(ImageFit.Cover).borderRadius(20).onClick(() => this.openPhoto(this.current().photoIds, id)) }) }.width('100%').aspectRatio(4 / 3)
+        Swiper() { ForEach(this.current().photoIds, (id: string) => { Image(this.media().uri(id)).width('100%').height('100%').objectFit(ImageFit.Cover).onClick(() => this.openPhoto(this.current().photoIds, id)) }, (id: string) => id) }
+          .width('100%').aspectRatio(4 / 3).borderRadius(24).clip(true).loop(false).indicator(this.current().photoIds.length > 1)
       }
-      SectionHeading({ title: displayName(this.current()), subtitle: statusText(this.current()) })
-      MenuRow({ title: this.current().status === 'LENT' ? '归还时放回' : '放在这里', subtitle: this.repository.path(this.current().locationId) || '位置待补充', action: () => this.openPanel('改位置') })
-      if (this.current().status === 'ACTIVE' && !this.current().deletedAt && this.current().locationId) { Text(this.current().locationConfirmedAt ? '上次确认在这里：' + friendlyTime(this.current().locationConfirmedAt) : '找到实物后，可以确认位置').fontSize(13).fontColor($r('app.color.secondary')) }
-      if (!this.current().deletedAt && this.current().status === 'LENT') { ActionButton({label:'已归还', primary:true, run:()=>this.openPanel('已归还')}) }
-      if (!this.current().deletedAt && this.current().status === 'ACTIVE') {
-        Row({ space: 8 }) { if (this.current().locationId) { ActionButton({ label: '在这里找到了', tonal: true, run: () => this.act(() => this.repository.mutate([this.focusedId], '确认位置', (item: Item) => item.locationConfirmedAt = Date.now()), '位置已确认') }) } ActionButton({ label: this.current().locationId ? '改位置' : '补上位置', tonal: true, run: () => this.openPanel('改位置') }); }
+      Row({ space: 14 }) {
+        if (!this.current().photoIds.length) { this.glyph(this.current(), 60) }
+        Column({ space: 8 }) {
+          Text(displayName(this.current())).fontSize(26).fontWeight(FontWeight.Medium).fontColor($r('app.color.text')).maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Flex({ wrap: FlexWrap.Wrap, space: { main: LengthMetrics.vp(6), cross: LengthMetrics.vp(4) } }) {
+            StatusTag({ label: statusText(this.current()), warning: !!this.current().deletedAt })
+            if (this.dueBadge(this.current())) { StatusTag({ label: this.dueBadge(this.current()), warning: this.dueDays(this.current()) <= 7 }) }
+          }
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        if (!this.current().deletedAt && this.current().status !== 'ARCHIVED') {
+          Stack() { SymbolGlyph(this.current().favorite ? $r('sys.symbol.star_fill') : $r('sys.symbol.star')).fontSize(24).fontColor([this.current().favorite ? $r('app.color.star') : $r('app.color.secondary')]) }
+            .width(48).height(48).borderRadius(24).onClick(() => this.toggleFavorite())
+            .accessibilityText(this.current().favorite ? '取消常用' : '设为常用').accessibilityLevel('yes')
+        }
+      }.width('100%').alignItems(VerticalAlign.Top).padding({ top: 4 })
+      if (!this.current().deletedAt && this.current().status !== 'ARCHIVED') {
+        Row() {
+          if (this.current().status === 'ACTIVE' && this.current().locationId) { QuickAction({ label: '找到了', icon: $r('sys.symbol.checkmark_circle'), run: () => this.confirmFound() }) }
+          QuickAction({ label: this.current().locationId ? '改位置' : '补位置', icon: this.current().locationId ? $r('sys.symbol.arrow_left_arrow_right') : $r('sys.symbol.mappin_and_rectangle'), accent: !this.current().locationId && this.current().status === 'ACTIVE', run: () => this.openPanel('改位置') })
+          if (this.current().status === 'LENT') { QuickAction({ label: '已归还', icon: $r('sys.symbol.arrowshape_turn_up_left'), accent: true, run: () => this.openPanel('已归还') }) }
+          else { QuickAction({ label: '借出', icon: $r('sys.symbol.arrowshape_turn_up_right'), run: () => this.openPanel('借出') }) }
+          QuickAction({ label: '编辑', icon: $r('sys.symbol.square_and_pencil'), run: () => this.edit(this.current()) })
+        }.width('100%')
       }
-      if(this.current().missingPhotoCount){Text(`${this.current().missingPhotoCount} 张原照片待补充，可在编辑中重新添加`).fontColor($r('app.color.warning'))}
-      if (this.current().sourceItemId) { MenuRow({ title: '从原记录拆出', subtitle: this.data.items.find((item: Item) => item.id === this.current().sourceItemId)?.title || '查看来源记录', action: () => { const source = this.data.items.find((item: Item) => item.id === this.current().sourceItemId); if (source) this.detail(source.id); else this.notify('来源记录已移除，拆分历史仍保留'); } }) }
-      if (this.current().deletedAt && this.current().previousLocationPath) { Text('回收时位置：' + this.current().previousLocationPath).fontColor($r('app.color.secondary')) }
-      if (this.current().notes) { Text(this.current().notes).fontSize(17).fontColor($r('app.color.text')).copyOption(CopyOptions.InApp) }
-      if (this.current().aliases.length) { Text('别名：' + this.current().aliases.join('、')).fontColor($r('app.color.secondary')) }
-      if (this.current().tags.length) { Text('标签：' + this.current().tags.join('、')).fontColor($r('app.color.secondary')) }
-      ForEach(this.current().dates, (date: ItemDate) => { MenuRow({ title: date.handledAt ? dateTypeName(date.type) + ' · ' + shortDate(date.date) : relativeDue(date.date, date.type) + '（' + shortDate(date.date) + '）', subtitle: date.handledAt ? '已处理' : this.dateArrangement(date), action: () => this.navigate('提醒') }) }, (date: ItemDate) => date.id + ':' + date.dateVersion + ':' + date.handledAt)
+      GroupCard() {
+        MenuRow({ plain: true, first: true, icon: $r('sys.symbol.mappin_and_rectangle'), title: this.current().status === 'LENT' ? '归还时放回' : this.current().deletedAt ? '回收时的位置' : '放在这里', subtitle: this.current().deletedAt ? (this.current().previousLocationPath || '位置待补充') : this.locationSubtitle(this.current()), chevron: !this.current().deletedAt, action: () => { if (!this.current().deletedAt) this.openPanel('改位置'); } })
+        ForEach(this.current().dates, (date: ItemDate) => { MenuRow({ plain: true, icon: date.type === 'RETURN' ? $r('sys.symbol.arrowshape_turn_up_left') : $r('sys.symbol.calendar'), title: date.handledAt ? dateTypeName(date.type) + ' · ' + shortDate(date.date) : relativeDue(date.date, date.type) + '（' + shortDate(date.date) + '）', subtitle: date.handledAt ? '已处理' : this.dateArrangement(date), action: () => this.navigate('提醒') }) }, (date: ItemDate) => date.id + ':' + date.dateVersion + ':' + date.handledAt)
+        if (this.current().sourceItemId) { MenuRow({ plain: true, icon: $r('sys.symbol.rectangle_on_rectangle'), title: '从原记录拆出', subtitle: this.data.items.find((item: Item) => item.id === this.current().sourceItemId)?.title || '查看来源记录', action: () => { const source = this.data.items.find((item: Item) => item.id === this.current().sourceItemId); if (source) this.detail(source.id); else this.notify('来源记录已移除，拆分历史仍保留'); } }) }
+        if (this.current().missingPhotoCount) { MenuRow({ plain: true, icon: $r('sys.symbol.picture'), title: `${this.current().missingPhotoCount} 张原照片待补充`, subtitle: '可在编辑中重新添加', action: () => this.edit(this.current()) }) }
+      }
+      if (this.current().notes || this.current().aliases.length || this.current().tags.length || this.current().barcodeValue) {
+        Column({ space: 8 }) {
+          if (this.current().notes) { Text(this.current().notes).fontSize(16).fontColor($r('app.color.text')).copyOption(CopyOptions.InApp).width('100%') }
+          if (this.current().aliases.length) { Text('也叫：' + this.current().aliases.join('、')).fontSize(14).fontColor($r('app.color.secondary')) }
+          if (this.current().tags.length) { Flex({ wrap: FlexWrap.Wrap, space: { main: LengthMetrics.vp(6), cross: LengthMetrics.vp(6) } }) { ForEach(this.current().tags, (tag: string) => { StatusTag({ label: '# ' + tag }) }, (tag: string) => tag) } }
+          if (this.current().barcodeValue) { Text('商品条码：' + this.current().barcodeValue).fontSize(13).fontColor($r('app.color.secondary')) }
+        }.width('100%').alignItems(HorizontalAlign.Start).padding(16).backgroundColor($r('app.color.surface')).borderRadius(20)
+      }
       if (this.current().deletedAt) {
         Text('保留至 ' + friendlyTime(this.current().purgeAt)).fontColor($r('app.color.warning'))
-        ActionButton({ label: '恢复记录', run: () => this.openPanel('恢复记录'), primary: true })
-        ActionButton({ label: '永久删除', danger: true, run: () => this.confirm('永久删除', `删除“${displayName(this.current())}”及 ${this.repository.unreferencedPhotoCount(this.focusedId)} 张不再被其他记录引用的照片。此操作无法撤销。`, () => { this.repository.purge([this.focusedId]); this.stack.pop(); }) })
-      } else if (this.current().status === 'ARCHIVED') { ActionButton({ label: '恢复到家当', run: () => this.openPanel('恢复到家当'), primary: true }) }
+        ActionButton({ label: '恢复记录', icon: $r('sys.symbol.arrow_counterclockwise'), run: () => this.openPanel('恢复记录'), primary: true })
+        ActionButton({ label: '永久删除', icon: $r('sys.symbol.trash'), danger: true, run: () => this.confirm('永久删除', `删除“${displayName(this.current())}”及 ${this.repository.unreferencedPhotoCount(this.focusedId)} 张不再被其他记录引用的照片。此操作无法撤销。`, () => { this.repository.purge([this.focusedId]); this.stack.pop(); }) })
+      } else if (this.current().status === 'ARCHIVED') { ActionButton({ label: '恢复到家当', icon: $r('sys.symbol.arrow_counterclockwise'), run: () => this.openPanel('恢复到家当'), primary: true }) }
       else {
-        ActionButton({ label: '编辑', run: () => this.edit(this.current()), primary: this.current().status === 'ACTIVE' })
-        Row({ space: 8 }) { ActionButton({ label: this.current().favorite ? '取消常用' : '设为常用', tonal: true, run: () => this.act(() => this.repository.mutate([this.focusedId], '修改常用', (item: Item) => item.favorite = !item.favorite)) }); if (this.current().status === 'ACTIVE') { ActionButton({ label: '借出', tonal: true, run: () => this.openPanel('借出') }); } }
-        ActionButton({label:this.moreActions?'收起更多操作':'更多操作',run:()=>this.moreActions=!this.moreActions})
-        if (this.moreActions) {
-        if (this.current().kind === 'SINGLE') { Row({ space: 8 }) { ActionButton({ label: '调整数量', tonal: true, run: () => this.openPanel('调整数量') }); if ((this.current().quantity ?? 0) > 1 && this.current().status === 'ACTIVE') { ActionButton({ label: '拆分数量', tonal: true, run: () => this.openPanel('拆分数量') }) } } }
-        ActionButton({ label: '在此位置记一件', tonal: true, run: () => this.newItem(this.current().locationId) })
-        Row({ space: 8 }) { ActionButton({ label: '归档（用完、送出等）', run: () => this.openPanel('归档') }); ActionButton({ label: '移入回收站', danger: true, run: () => this.confirm('移入回收站', '记录与照片保留 30 天，可从“我的 → 归档与回收站”恢复。', () => { this.repository.recycle([this.focusedId]); this.stack.pop(); }) }); }
+        GroupCard({ header: '更多操作' }) {
+          if (this.current().kind === 'SINGLE') { MenuRow({ plain: true, first: true, icon: $r('sys.symbol.list_number'), title: '调整数量', subtitle: '用掉一些，或又买了几件', value: `${this.current().quantity ?? 0} 件`, action: () => this.openPanel('调整数量') }) }
+          if (this.current().kind === 'SINGLE' && (this.current().quantity ?? 0) > 1 && this.current().status === 'ACTIVE') { MenuRow({ plain: true, icon: $r('sys.symbol.rectangle_on_rectangle'), title: '拆分数量', subtitle: '例如只借出其中几件', action: () => this.openPanel('拆分数量') }) }
+          MenuRow({ plain: true, first: this.current().kind !== 'SINGLE', icon: $r('sys.symbol.plus_circle'), title: '在这里再记一件', subtitle: this.repository.path(this.current().locationId) || '同样先不选位置', action: () => this.newItem(this.current().locationId) })
+          MenuRow({ plain: true, icon: $r('sys.symbol.archivebox'), title: '归档', subtitle: '用完、送出、出售或丢弃', action: () => this.openPanel('归档') })
+          MenuRow({ plain: true, icon: $r('sys.symbol.trash'), title: '移入回收站', danger: true, chevron: false, action: () => this.confirm('移入回收站', '记录与照片保留 30 天，可从“我的 → 归档与回收站”恢复。', () => { this.repository.recycle([this.focusedId]); this.stack.pop(); }) })
         }
       }
-      ActionButton({label:this.historyOpen?'收起变化记录':'变化记录',run:()=>this.historyOpen=!this.historyOpen})
-      if (this.historyOpen) {
-      ForEach(this.data.events.filter((event: ChangeEvent) => event.itemId === this.focusedId).sort((a: ChangeEvent, b: ChangeEvent) => b.createdAt - a.createdAt), (event: ChangeEvent) => {
-        Column({ space: 4 }) { Text(event.type + ' · ' + friendlyTime(event.createdAt)).fontSize(14).fontColor($r('app.color.text')); ForEach(this.historyLines(event), (line: string) => { Text(line).fontSize(13).fontColor($r('app.color.secondary')) }, (line: string, index: number) => index + line) }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 6, bottom: 6 })
-      }, (event: ChangeEvent) => event.id)
+      GroupCard() {
+        MenuRow({ plain: true, first: true, icon: $r('sys.symbol.clock_arrow_2_circlepath'), title: '变化记录', value: this.historyOpen ? '收起' : `${this.data.events.filter((event: ChangeEvent) => event.itemId === this.focusedId).length} 条`, chevron: !this.historyOpen, action: () => this.historyOpen = !this.historyOpen })
+        if (this.historyOpen) {
+          ForEach(this.data.events.filter((event: ChangeEvent) => event.itemId === this.focusedId).sort((a: ChangeEvent, b: ChangeEvent) => b.createdAt - a.createdAt), (event: ChangeEvent) => {
+            Column({ space: 4 }) { Text(event.type + ' · ' + friendlyTime(event.createdAt)).fontSize(14).fontColor($r('app.color.text')); ForEach(this.historyLines(event), (line: string) => { Text(line).fontSize(13).fontColor($r('app.color.secondary')) }, (line: string, index: number) => index + line) }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 56, right: 16, top: 6, bottom: 10 })
+          }, (event: ChangeEvent) => event.id)
+        }
       }
     }
   }
   @Builder mine() {
-    SectionHeading({ title: '我的', subtitle: `单件记录 ${this.data.items.filter((item: Item) => !item.deletedAt && item.status !== 'ARCHIVED' && item.kind === 'SINGLE').length} 条 · 整组记录 ${this.data.items.filter((item: Item) => !item.deletedAt && item.status !== 'ARCHIVED' && item.kind === 'GROUP').length} 组` })
-    Text(`在手单件数量 ${this.data.items.filter((item: Item) => !item.deletedAt && item.status === 'ACTIVE' && item.kind === 'SINGLE').reduce((sum: number, item: Item) => sum + (item.quantity ?? 0), 0)} 件`).fontSize(20).fontColor($r('app.color.primary'))
-    MenuRow({ title: '常用', subtitle: '常找的物品放在手边', action: () => { this.tab = 0; this.filter = '常用'; this.scope = 'CURRENT'; this.search(); } })
-    MenuRow({ title: '草稿', subtitle: `${this.data.drafts.length} 条未完成记录`, action: () => this.navigate('草稿') })
-    MenuRow({ title: '提醒', subtitle: this.upcoming().length ? `${this.upcoming().length} 项 30 天内到期或已过期` : '到期、保修、归还日期', action: () => this.navigate('提醒') })
-    MenuRow({ title: '归档与回收站', subtitle: '查看历史，恢复记录', action: () => { this.scope = 'ARCHIVED'; this.query = ''; this.search(); this.navigate('归档与回收站'); } })
-    MenuRow({ title: '数据管理', subtitle: this.data.preference.lastBackupAt ? '最近备份：' + friendlyTime(this.data.preference.lastBackupAt) : '制作一份完整备份', action: () => this.navigate('数据管理') })
-    MenuRow({ title: '外观与隐私', subtitle: '主题、动效、卡片与权限', action: () => this.navigate('外观与隐私') })
-    MenuRow({ title: '帮助与关于', subtitle: '怎样记录，怎样长期保存', action: () => this.navigate('帮助与关于') })
+    SectionHeading({ title: '我的', subtitle: '' })
+    Row({ space: 8 }) {
+      StatTile({ value: String(this.data.items.filter((item: Item) => !item.deletedAt && item.status !== 'ARCHIVED' && item.kind === 'SINGLE').length), label: '单件记录（条）' })
+      StatTile({ value: String(this.data.items.filter((item: Item) => !item.deletedAt && item.status !== 'ARCHIVED' && item.kind === 'GROUP').length), label: '整组记录（组）' })
+      StatTile({ value: String(this.data.items.filter((item: Item) => !item.deletedAt && item.status === 'ACTIVE' && item.kind === 'SINGLE').reduce((sum: number, item: Item) => sum + (item.quantity ?? 0), 0)), label: '在手单件（件）' })
+    }.width('100%').padding({ left: 18, right: 18, top: 16, bottom: 16 }).backgroundColor($r('app.color.surface')).borderRadius(20)
+    GroupCard() {
+      MenuRow({ plain: true, first: true, icon: $r('sys.symbol.star'), title: '常用', subtitle: '常找的物品放在手边', value: String(this.data.items.filter((item: Item) => !item.deletedAt && item.status !== 'ARCHIVED' && item.favorite).length), action: () => { this.tab = 0; this.filter = '常用'; this.scope = 'CURRENT'; this.search(); } })
+      MenuRow({ plain: true, icon: $r('sys.symbol.square_and_pencil'), title: '草稿', subtitle: this.data.drafts.length ? '还没保存的记录' : '没有未完成的记录', value: this.data.drafts.length ? String(this.data.drafts.length) : '', action: () => this.navigate('草稿') })
+      MenuRow({ plain: true, icon: $r('sys.symbol.bell'), title: '提醒', subtitle: this.upcoming().length ? `${this.upcoming().length} 项 30 天内到期或已过期` : '到期、保修、归还日期', action: () => this.navigate('提醒') })
+    }
+    GroupCard() {
+      MenuRow({ plain: true, first: true, icon: $r('sys.symbol.archivebox'), title: '归档与回收站', subtitle: '查看历史，恢复记录', action: () => { this.scope = 'ARCHIVED'; this.query = ''; this.search(); this.navigate('归档与回收站'); } })
+      MenuRow({ plain: true, icon: $r('sys.symbol.externaldrive'), title: '数据管理', subtitle: this.data.preference.lastBackupAt ? '最近备份：' + friendlyTime(this.data.preference.lastBackupAt) : '还没有备份，建议做一份完整备份', action: () => this.navigate('数据管理') })
+    }
+    GroupCard() {
+      MenuRow({ plain: true, first: true, icon: $r('sys.symbol.paintpalette'), title: '外观与隐私', subtitle: '主题、动效、卡片与权限', action: () => this.navigate('外观与隐私') })
+      MenuRow({ plain: true, icon: $r('sys.symbol.questionmark_circle'), title: '帮助与关于', subtitle: '怎样记录，怎样长期保存', action: () => this.navigate('帮助与关于') })
+    }
   }
   @Builder drafts() {
     if (!this.data.drafts.length) { this.empty('没有未完成的草稿', '下次输入会自动保留在这里') }
@@ -511,27 +618,40 @@ struct Index {
     Search({ value: this.query, placeholder: '搜索当前历史范围' }).maxLength(100).onChange((value: string, preview: PreviewText) => { this.query = value; clearTimeout(this.queryTimer); if (!preview.value) this.queryTimer = setTimeout(() => this.search(), 200); })
     this.items({ values: this.results })
   }
+  @Builder toggleRow(title: string, subtitle: string, isOn: boolean, first: boolean, change: (value: boolean) => void) {
+    Column() {
+      if (!first) { Divider().strokeWidth(0.5).color($r('app.color.outline')).margin({ left: 16 }) }
+      Row({ space: 12 }) {
+        Column({ space: 4 }) { Text(title).fontSize(17).fontColor($r('app.color.text')); if (subtitle) { Text(subtitle).fontSize(13).fontColor($r('app.color.secondary')) } }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        Toggle({ type: ToggleType.Switch, isOn: isOn }).selectedColor($r('app.color.primary')).onChange((value: boolean) => change(value))
+      }.width('100%').padding({ left: 16, right: 12, top: 12, bottom: 12 }).constraintSize({ minHeight: 56 })
+    }.width('100%')
+  }
   @Builder settings() {
-    Text('主题').fontSize(20).fontColor($r('app.color.text'))
-    Row({ space: 6 }) { ForEach(['SYSTEM', 'LIGHT', 'DARK'], (mode: string, index: number) => { ActionButton({ label: ['跟随系统', '浅色', '深色'][index], tonal: this.data.preference.theme === mode, run: () => this.preference((pref: Preference) => pref.theme = mode) }) }) }
-    MenuRow({ title: '动效表现', subtitle: this.data.preference.motion === 'SIMPLE' ? '简洁' : '跟随系统', action: () => this.preference((pref: Preference) => pref.motion = pref.motion === 'SIMPLE' ? 'SYSTEM' : 'SIMPLE') })
-    Text('字体与字号跟随系统设置。照片、名称和位置均保存在这台设备的应用空间中。').fontColor($r('app.color.secondary')).fontSize(15)
-    ActionButton({ label: '管理日历访问权限', run: () => abilityAccessCtrl.createAtManager().openPermissionOnSetting(this.getUIContext().getHostContext() as common.UIAbilityContext, 'ohos.permission.READ_CALENDAR').catch(() => this.notify('可在系统设置 → 应用 → 我的家当 → 权限中管理')) })
-    ActionButton({ label: '管理麦克风权限', run: () => abilityAccessCtrl.createAtManager().openPermissionOnSetting(this.getUIContext().getHostContext() as common.UIAbilityContext, 'ohos.permission.MICROPHONE').catch(() => this.notify('可在系统设置 → 应用 → 我的家当 → 权限中管理')) })
-    MenuRow({ title: '到期提醒', subtitle: this.data.preference.reminderEnabled ? '已开启' : '未开启', action: () => this.navigate('到期提醒') })
-    Row() { Text('外部提醒显示物品名称').layoutWeight(1).fontColor($r('app.color.text')); Toggle({ type: ToggleType.Switch, isOn: this.data.preference.externalDetails }).onChange((value: boolean) => this.preference((pref: Preference) => pref.externalDetails = value)); }.width('100%')
-    Row() { Text('在卡片展示物品摘要').layoutWeight(1).fontColor($r('app.color.text')); Toggle({ type: ToggleType.Switch, isOn: this.data.preference.cardSummary }).onChange((value: boolean) => this.preference((pref: Preference) => pref.cardSummary = value)); }.width('100%')
+    GroupCard({ header: '主题' }) {
+      Column() { Segmented({ options: ['跟随系统', '浅色', '深色'], selected: ['SYSTEM', 'LIGHT', 'DARK'].indexOf(this.data.preference.theme), onSelect: (index: number) => this.preference((pref: Preference) => pref.theme = ['SYSTEM', 'LIGHT', 'DARK'][index]) }) }.padding(12)
+      MenuRow({ plain: true, title: '动效表现', subtitle: '简洁时减少页面切换动画', value: this.data.preference.motion === 'SIMPLE' ? '简洁' : '跟随系统', action: () => this.preference((pref: Preference) => pref.motion = pref.motion === 'SIMPLE' ? 'SYSTEM' : 'SIMPLE') })
+    }
+    GroupCard({ header: '提醒与卡片' }) {
+      MenuRow({ plain: true, first: true, title: '到期提醒', value: this.data.preference.reminderEnabled ? '已开启' : '未开启', action: () => this.navigate('到期提醒') })
+      this.toggleRow('外部提醒显示物品名称', '关闭时系统日历只显示数量', this.data.preference.externalDetails, false, (value: boolean) => this.preference((pref: Preference) => pref.externalDetails = value))
+      this.toggleRow('在卡片展示物品摘要', '默认只显示入口', this.data.preference.cardSummary, false, (value: boolean) => this.preference((pref: Preference) => pref.cardSummary = value))
+      MenuRow({ plain: true, title: '桌面随手可达', subtitle: '长按应用图标添加卡片，或直接记一件、找东西、看临期、扫一扫', action: ()=>this.navigate('快捷入口') })
+    }
     if(this.data.preference.cardSummary){
       Select([{value:'常用摘要'},{value:'日期摘要'}]).value(this.data.preference.cardMode==='DATES'?'日期摘要':'常用摘要').onSelect((index:number)=>this.preference((pref:Preference)=>pref.cardMode=index?'DATES':'COMMON'))
       if(this.data.preference.cardMode==='COMMON'){
-        Text('选择最多 3 条记录，名称与位置会显示在桌面 2×4 卡片中').fontColor($r('app.color.secondary'))
+        Text('选择最多 3 条常用记录，名称与位置会显示在桌面 2×4 卡片中').fontColor($r('app.color.secondary'))
         ForEach(this.data.items.filter((item:Item)=>!item.deletedAt && item.status!=='ARCHIVED' && item.favorite),(item:Item)=>{
           Row(){Checkbox({name:item.id}).select(this.data.preference.cardIds.includes(item.id)).onChange((selected:boolean)=>{if(selected && this.data.preference.cardIds.length>=3){this.notify('最多选择 3 条');return;}this.preference((pref:Preference)=>pref.cardIds=selected?[...pref.cardIds,item.id]:pref.cardIds.filter((id:string)=>id!==item.id));});Text(displayName(item)).fontColor($r('app.color.text')).layoutWeight(1);}
         },(item:Item)=>item.id)
       }
     }
-    MenuRow({ title: '桌面随手可达', subtitle: '长按应用图标可添加卡片，或直接记一件、找东西、看临期、扫一扫。', action: ()=>this.navigate('快捷入口') })
-    Text('系统日历仅接收提醒日期与数量；开启详情后包含名称。系统备份按系统设置处理应用数据，导出文件保存在你选择的位置。').fontSize(15).fontColor($r('app.color.secondary'))
+    GroupCard({ header: '权限' }) {
+      MenuRow({ plain: true, first: true, icon: $r('sys.symbol.calendar'), title: '日历访问', subtitle: '用于写入到期提醒', action: () => { abilityAccessCtrl.createAtManager().openPermissionOnSetting(this.getUIContext().getHostContext() as common.UIAbilityContext, 'ohos.permission.READ_CALENDAR').catch(() => this.notify('可在系统设置 → 应用 → 我的家当 → 权限中管理')); } })
+      MenuRow({ plain: true, icon: $r('sys.symbol.mic'), title: '麦克风', subtitle: '用于语音填写和语音查找', action: () => { abilityAccessCtrl.createAtManager().openPermissionOnSetting(this.getUIContext().getHostContext() as common.UIAbilityContext, 'ohos.permission.MICROPHONE').catch(() => this.notify('可在系统设置 → 应用 → 我的家当 → 权限中管理')); } })
+    }
+    Text('字体与字号跟随系统设置。照片、名称和位置保存在这台设备的应用空间中；系统日历仅接收提醒日期与数量，开启“显示物品名称”后包含名称。系统备份按系统设置处理应用数据，导出文件保存在你选择的位置。').fontSize(13).fontColor($r('app.color.secondary'))
   }
   @Builder help() {
     this.empty('我的家当', '1.0.0 · 记住放哪，用好已有')
@@ -565,7 +685,7 @@ struct Index {
         if (['调整数量', '拆分数量', '恢复到家当'].includes(this.panel) && this.current().kind==='SINGLE') { TextInput({ text: this.quantity, placeholder: '数量' }).type(InputType.Number).onChange((value: string) => this.quantity = value) }
         if (this.panel === '调整数量' && this.quantity === '0') { Text('将归档为已用完，原数量保留在变化记录中').fontColor($r('app.color.warning')) }
         if (this.panel === '归档' && this.current().status === 'LENT') { Text('本次将结束借给' + this.current().borrower + '的记录，历史保留借出对象和数量').fontColor($r('app.color.warning')) }
-        if (this.panel === '拆分数量') { TextInput({ text: this.value, placeholder: '新记录名称' }).onChange((value: string) => this.value = value); Text(`原数量 ${this.current().quantity}，拆分后剩余 ${(this.current().quantity ?? 0) - Number(this.quantity)}`).fontColor($r('app.color.secondary')); Row() { Text('沿用日期').fontColor($r('app.color.text')); Toggle({ type: ToggleType.Switch, isOn: this.keepDates }).onChange((value: boolean) => this.keepDates = value); } }
+        if (this.panel === '拆分数量') { TextInput({ text: this.value, placeholder: '新记录名称' }).onChange((value: string) => this.value = value); Text(`原数量 ${this.current().quantity}，拆分后剩余 ${(this.current().quantity ?? 0) - Number(this.quantity)}`).fontColor($r('app.color.secondary')); Row() { Text('沿用日期').fontColor($r('app.color.text')); Toggle({ type: ToggleType.Switch, isOn: this.keepDates }).selectedColor($r("app.color.primary")).onChange((value: boolean) => this.keepDates = value); } }
         if (this.panel === '借出') {
           TextInput({ text: this.value, placeholder: '借给谁（称呼）' }).onChange((value: string) => this.value = value)
           MenuRow({title:'归还日期',subtitle:this.returnDate || '选填',action:()=>this.getUIContext().showDatePickerDialog({start:new Date(1900,0,1),end:new Date(2200,11,31),selected:this.returnDate?new Date(this.returnDate+'T12:00:00'):new Date(),onDateAccept:(date:Date)=>this.returnDate=localDate(date)})})
@@ -605,8 +725,15 @@ struct Index {
     }.title(name).onShown(()=>{const index=this.stack.getAllPathName().lastIndexOf(name);const id=this.stack.getParamByIndex(index) as string;if(name==='位置详情' && id)this.focusedLocation=id;if(name==='物品详情' && id)this.focusedId=id;}).backgroundColor($r('app.color.background')).onBackPressed(() => { if (name === '归档与回收站' || name === '搜索') { this.scope = 'CURRENT'; this.query = ''; this.search(); } return false; })
   }
   @Builder editor() { ItemEditor({ repository: this.repository, initial: this.editorDraft, onView:(id:string)=>{this.editorOpen=false;this.refresh();this.detail(id);}, onFind:(name:string)=>{this.editorOpen=false;this.query=name;this.scope='CURRENT';this.filter='全部';this.category='';this.submitSearch();this.navigate('搜索');}, onReminder:()=>{this.editorOpen=false;this.navigate('到期提醒');}, onSaved: (id: string) => { this.focusedId = id; this.refresh(); if (this.editorDraft.mode === 'EDIT' && id === this.editorDraft.itemId) { this.editorOpen = false; this.notify('已保存'); } }, onClose: () => { this.editorOpen = false; this.refresh(); } }) }
-  @Builder tabLabel(label:string,index:number){Text(label).fontSize(15).fontColor(this.tab===index?$r('app.color.primary'):$r('app.color.secondary')).fontWeight(this.tab===index?FontWeight.Medium:FontWeight.Regular).height(48).constraintSize({minWidth:64}).textAlign(TextAlign.Center).backgroundColor(this.tab===index?$r('app.color.subtle'):Color.Transparent).borderRadius(24)}
-  @Builder captureButton(){Button('+').fontSize(30).width(56).height(56).backgroundColor($r('app.color.primary')).fontColor($r('app.color.onPrimary')).accessibilityText('记下一件').onClick(()=>this.newItem())}
+  @Builder tabLabel(label:string,index:number){
+    Column({ space: 2 }) {
+      if (index === 0) { SymbolGlyph($r('sys.symbol.house')).fontSize(20).fontColor([this.tab===index?$r('app.color.primary'):$r('app.color.secondary')]) }
+      else if (index === 1) { SymbolGlyph($r('sys.symbol.map')).fontSize(20).fontColor([this.tab===index?$r('app.color.primary'):$r('app.color.secondary')]) }
+      else { SymbolGlyph($r('sys.symbol.person')).fontSize(20).fontColor([this.tab===index?$r('app.color.primary'):$r('app.color.secondary')]) }
+      Text(label).fontSize(11).fontColor(this.tab===index?$r('app.color.primary'):$r('app.color.secondary')).fontWeight(this.tab===index?FontWeight.Medium:FontWeight.Regular)
+    }.justifyContent(FlexAlign.Center).height(48).constraintSize({minWidth:64}).padding({left:10,right:10}).backgroundColor(this.tab===index?$r('app.color.subtle'):Color.Transparent).borderRadius(24).accessibilityGroup(true).accessibilityText(label)
+  }
+  @Builder captureButton(){Button({type:ButtonType.Circle}){SymbolGlyph($r('sys.symbol.plus')).fontSize(28).fontColor([$r('app.color.onPrimary')])}.width(56).height(56).backgroundColor($r('app.color.primary')).accessibilityText('记下一件').onClick(()=>this.newItem())}
   build() {
     Navigation(this.stack) {
       Column() {

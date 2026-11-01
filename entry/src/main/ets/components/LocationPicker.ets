@@ -50,7 +50,7 @@ export struct LocationPicker {
       if (!this.query && !this.parent && this.recent().length) {
         Text('最近使用').fontColor($r('app.color.secondary'))
         Flex({ wrap: FlexWrap.Wrap, space: { main: LengthMetrics.vp(8), cross: LengthMetrics.vp(8) } }) {
-          ForEach(this.recent(), (id: string) => { ActionButton({ label: this.repository.path(id), tonal: true, run: () => this.onChoose(id) }) }, (id: string) => id)
+          ForEach(this.recent(), (id: string) => { ActionButton({ label: this.repository.path(id), icon: $r('sys.symbol.clock'), tonal: true, run: () => this.onChoose(id) }) }, (id: string) => id)
         }
       }
       if (!this.query && this.parent) {
@@ -60,16 +60,19 @@ export struct LocationPicker {
             ForEach(this.ancestors(), (node: Location) => { Text('/').fontColor($r('app.color.secondary')); ActionButton({ label: node.name, run: () => this.parent = node.id }) }, (node: Location) => node.id)
           }
         }.scrollable(ScrollDirection.Horizontal).width('100%')
-        ActionButton({ label: '放在“' + this.repository.path(this.parent) + '”', tonal: true, run: () => this.onChoose(this.parent) })
+        ActionButton({ label: '放在“' + this.repository.path(this.parent) + '”', icon: $r('sys.symbol.checkmark'), tonal: true, run: () => this.onChoose(this.parent) })
       }
       ForEach(this.visible(), (node: Location) => {
         Row({ space: 8 }) {
           Column({ space: 4 }) {
-            Text((this.selected === node.id ? '✓ ' : '') + (this.query ? this.repository.path(node.id) : node.name)).fontSize(17).fontColor($r('app.color.text')).width('100%')
+            Row({ space: 6 }) {
+              if (this.selected === node.id) { SymbolGlyph($r('sys.symbol.checkmark')).fontSize(16).fontColor([$r('app.color.primary')]) }
+              Text(this.query ? this.repository.path(node.id) : node.name).fontSize(17).fontColor($r('app.color.text')).layoutWeight(1)
+            }.width('100%')
             if (this.children(node.id)) { Text(`${this.children(node.id)} 个子位置`).fontSize(13).fontColor($r('app.color.secondary')) }
           }.layoutWeight(1).alignItems(HorizontalAlign.Start)
           if (this.depth(node.id) < 4) {
-            Button('里面 ›').fontSize(14).height(36).fontColor($r('app.color.primary')).backgroundColor($r('app.color.subtle'))
+            Button({ type: ButtonType.Capsule }) { Row({ space: 2 }) { Text('里面').fontSize(14).fontColor($r('app.color.primary')); SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([$r('app.color.primary')]) }.padding({ left: 12, right: 8 }) }.height(36).backgroundColor($r('app.color.subtle'))
               .accessibilityText('查看或新建' + node.name + '里面的位置')
               .onClick(() => { this.parent = node.id; this.query = ''; this.name = ''; this.error = ''; })
           }
@@ -82,7 +85,7 @@ export struct LocationPicker {
         Row({ space: 8 }) {
           TextInput({ text: this.name, placeholder: this.parent ? '例如：第二层' : '例如：书桌抽屉' }).maxLength(30).layoutWeight(1).enterKeyType(EnterKeyType.Done)
             .onChange((value: string) => { this.name = value; this.error = ''; }).onSubmit(() => { if (this.name.trim()) this.createLocation(); })
-          ActionButton({ label: '新建并选择', primary: true, run: () => { if (this.name.trim()) this.createLocation(); else this.error = '先写下位置名称'; } })
+          ActionButton({ label: '新建并选择', icon: $r('sys.symbol.plus'), primary: true, run: () => { if (this.name.trim()) this.createLocation(); else this.error = '先写下位置名称'; } })
         }.width('100%')
       }
       if (this.error) { Text(this.error).fontColor($r('app.color.danger')) }

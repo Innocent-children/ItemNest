@@ -1,1 +1,68 @@
-{ "color": [{"name":"background","value":"#111813"},{"name":"surface","value":"#1C261F"},{"name":"subtle","value":"#28362C"},{"name":"text","value":"#EFF4ED"},{"name":"secondary","value":"#B4C1B7"},{"name":"primary","value":"#A4D6B4"},{"name":"onPrimary","value":"#123420"},{"name":"outline","value":"#425248"},{"name":"warning","value":"#F1C27E"},{"name":"danger","value":"#FFA59E"}] }
+{
+  "color": [
+    {
+      "name": "background",
+      "value": "#111813"
+    },
+    {
+      "name": "surface",
+      "value": "#1C261F"
+    },
+    {
+      "name": "subtle",
+      "value": "#28362C"
+    },
+    {
+      "name": "text",
+      "value": "#EFF4ED"
+    },
+    {
+      "name": "secondary",
+      "value": "#B4C1B7"
+    },
+    {
+      "name": "primary",
+      "value": "#A4D6B4"
+    },
+    {
+      "name": "onPrimary",
+      "value": "#123420"
+    },
+    {
+      "name": "outline",
+      "value": "#425248"
+    },
+    {
+      "name": "warning",
+      "value": "#F1C27E"
+    },
+    {
+      "name": "danger",
+      "value": "#FFA59E"
+    },
+    {
+      "name": "tertiary",
+      "value": "#7F8C83"
+    },
+    {
+      "name": "dangerSubtle",
+      "value": "#3A2422"
+    },
+    {
+      "name": "subtleStrong",
+      "value": "#34483A"
+    },
+    {
+      "name": "shadow",
+      "value": "#33000000"
+    },
+    {
+      "name": "warningSubtle",
+      "value": "#3A2E1C"
+    },
+    {
+      "name": "star",
+      "value": "#F2C055"
+    }
+  ]
+}

@@ -43,7 +43,7 @@ export struct DataPage {
           Row(){Checkbox({name:'确认照片待补充'}).select(this.acceptMissing).onChange((value:boolean)=>this.acceptMissing=value);Text('确认导入并稍后补充照片').fontColor($r('app.color.text')).layoutWeight(1);}
         }
         Text(`来源版本 ${this.preview.manifest.appVersion}\n生成于 ${new Date(this.preview.manifest.exportedAt).toLocaleString('zh-CN',{hour12:false})}\n${this.preview.snapshot.items.length} 条记录，${this.preview.snapshot.assets.length} 张照片，${this.preview.snapshot.drafts.length} 条草稿\n预计新增 ${this.preview.newItems} 条，已存在 ${this.preview.existingItems} 条，差异 ${this.preview.conflicts.length} 项`).fontColor($r('app.color.text'))
-        Row() { Text('用备份替换当前家当').layoutWeight(1).fontColor($r('app.color.text')); Toggle({ type: ToggleType.Switch, isOn: this.replace }).onChange((value: boolean) => { this.replace = value; this.agreed = false; }) }
+        Row() { Text('用备份替换当前家当').layoutWeight(1).fontColor($r('app.color.text')); Toggle({ type: ToggleType.Switch, isOn: this.replace }).selectedColor($r("app.color.primary")).onChange((value: boolean) => { this.replace = value; this.agreed = false; }) }
         if (this.replace) {
           Text('替换前的数据保留 7 天，可从本页的保护快照恢复。新的替换会更新最近一份保护快照，请先导出需要保留的数据。').fontColor($r('app.color.warning'))
           Row() { Checkbox({ name: '确认替换' }).select(this.agreed).onChange((value: boolean) => this.agreed = value); Text(`确认用备份中的 ${this.preview.snapshot.items.length} 条替换当前 ${this.repository.data.items.length} 条`).fontColor($r('app.color.text')).layoutWeight(1) }
@@ -51,15 +51,15 @@ export struct DataPage {
           Text('合并到当前家当；冲突默认保留当前版本。').fontColor($r('app.color.secondary'))
           if (this.preview.conflicts.length) { this.action('全部保留当前', () => this.chooseAll(false)); this.action('全部采用备份', () => this.chooseAll(true)); }
           ForEach(this.preview.conflicts, (entry: RestoreConflict, index: number) => {
-            Column({ space: 8 }) { Text(entry.title).fontWeight(FontWeight.Medium).fontColor($r('app.color.text')); Text('当前：' + entry.current + '\n备份：' + entry.backup).fontSize(14).fontColor($r('app.color.secondary')); Row() { Text('使用备份版本').fontColor($r('app.color.text')).layoutWeight(1); Toggle({ type: ToggleType.Switch, isOn: entry.useBackup }).onChange((value: boolean) => { if (this.preview) { this.preview.conflicts[index].useBackup = value; } }) } }.padding(16).backgroundColor($r('app.color.surface')).borderRadius(16)
+            Column({ space: 8 }) { Text(entry.title).fontWeight(FontWeight.Medium).fontColor($r('app.color.text')); Text('当前：' + entry.current + '\n备份：' + entry.backup).fontSize(14).fontColor($r('app.color.secondary')); Row() { Text('使用备份版本').fontColor($r('app.color.text')).layoutWeight(1); Toggle({ type: ToggleType.Switch, isOn: entry.useBackup }).selectedColor($r("app.color.primary")).onChange((value: boolean) => { if (this.preview) { this.preview.conflicts[index].useBackup = value; } }) } }.padding(16).backgroundColor($r('app.color.surface')).borderRadius(16)
           }, (entry: RestoreConflict) => entry.kind + entry.id + ':' + entry.useBackup)
         }
-        if (this.preview.expired) { Row() { Text(`将 ${this.preview.expired} 条已过回收期限的记录恢复后导入`).layoutWeight(1).fontColor($r('app.color.text')); Toggle({ type: ToggleType.Switch, isOn: this.restoreExpired }).onChange((value: boolean) => this.restoreExpired = value) } }
+        if (this.preview.expired) { Row() { Text(`将 ${this.preview.expired} 条已过回收期限的记录恢复后导入`).layoutWeight(1).fontColor($r('app.color.text')); Toggle({ type: ToggleType.Switch, isOn: this.restoreExpired }).selectedColor($r("app.color.primary")).onChange((value: boolean) => this.restoreExpired = value) } }
         Button('确认恢复').height(50).width('100%').backgroundColor($r('app.color.primary')).fontColor($r('app.color.onPrimary')).enabled(!this.busy && (!this.replace || this.agreed) && (!this.preview.warnings.length || this.acceptMissing)).onClick(() => this.restore())
         this.action('取消预览', () => { this.preview = undefined; this.service?.cleanup(); })
       } else {
         this.action('制作完整备份', () => this.run(() => this.service!.exportBackup()))
-        Row() { Text('清单包含归档记录').layoutWeight(1).fontColor($r('app.color.text')); Toggle({ type: ToggleType.Switch, isOn: this.includeArchived }).onChange((value: boolean) => this.includeArchived = value) }
+        Row() { Text('清单包含归档记录').layoutWeight(1).fontColor($r('app.color.text')); Toggle({ type: ToggleType.Switch, isOn: this.includeArchived }).selectedColor($r("app.color.primary")).onChange((value: boolean) => this.includeArchived = value) }
         this.action('导出 CSV 清单', () => this.run(() => this.service!.exportCsv(this.includeArchived)))
         this.action('从完整备份恢复', () => this.run(() => this.select()))
         this.action('查看替换前的保护快照', () => this.run(() => this.select(true)))

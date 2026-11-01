@@ -1,4 +1,4 @@
-import { ActionButton, MenuRow } from './Common';
+import { ActionButton, MenuRow, GroupCard, Segmented } from './Common';
 import { common } from '@kit.AbilityKit';
 import { Item, Draft, ItemDate, copy, uuid, expiryDate, setDate, displayName, validDate, normalize, shortDate, relativeDue, daysUntil, reminderClock, CATEGORY_CODES, CATEGORY_NAMES } from '../model/Models';
 import { Repository } from '../data/Repository';
@@ -137,22 +137,43 @@ export struct ItemEditor {
     catch (error) { this.error = (error as Error).message; if(this.draft.mode==='EDIT'){const current=this.repository.data.items.find((item:Item)=>item.id===this.item.id);this.conflict=current?copy(current):undefined;this.missingOriginal=!current;} this.persist(); }
     finally { this.busy = false; }
   }
+  private placeSaved(id: string): void {
+    this.choosingLocation = false;
+    if (!id) return;
+    try {
+      this.repository.mutate([this.receipt], '改位置', (item: Item) => item.locationId = id);
+      this.item.locationId = id; this.item = copy(this.item); this.onSaved(this.receipt);
+    } catch (error) { this.error = (error as Error).message; }
+  }
   private next(): void {
     const draft = new Draft(); draft.payload.locationId = this.item.locationId; draft.payload.kind = this.item.kind; draft.sessionId = this.draft.sessionId;
     this.draft = draft; this.item = copy(draft.payload); this.receipt = ''; this.candidates = ''; this.operation = uuid(); this.more = false; this.datesOpen = false;
     this.baselineLocation = this.item.locationId; this.continuous = true; this.error = ''; this.focusName();
   }
+  @Builder photoTile(icon: Resource, label: string, run: () => void) {
+    Column({ space: 6 }) {
+      SymbolGlyph(icon).fontSize(26).fontColor([$r('app.color.primary')])
+      Text(label).fontSize(13).fontColor($r('app.color.primary'))
+    }.width(84).height(84).justifyContent(FlexAlign.Center).backgroundColor($r('app.color.subtle')).borderRadius(16)
+    .accessibilityGroup(true).accessibilityText(label).onClick(() => run())
+  }
+  private moreSummary(): string {
+    const parts: string[] = [];
+    if (this.item.category) parts.push(CATEGORY_NAMES[CATEGORY_CODES.indexOf(this.item.category)]);
+    if (this.item.kind === 'SINGLE' && (this.item.quantity ?? 1) !== 1) parts.push(`${this.item.quantity} 件`);
+    if (this.item.aliases.length) parts.push('也叫 ' + this.item.aliases.join('、'));
+    if (this.item.tags.length) parts.push(this.item.tags.map((tag: string) => '#' + tag).join(' '));
+    if (this.item.kind === 'SINGLE' && this.item.notes) parts.push('有说明');
+    return parts.join(' · ') || (this.item.kind === 'GROUP' ? '分类、别名、标签' : '数量、说明、分类、别名');
+  }
   @Builder label(text: string) { Text(text).fontSize(14).fontColor($r('app.color.secondary')).width('100%') }
   @Builder dates() {
     this.label('到期日期 · 选填')
-    Row({ space: 8 }) {
-      ActionButton({ label: '直接填日期', tonal: this.item.expiryInput.mode === 'DIRECT', run: () => { this.item.expiryInput.mode = 'DIRECT'; this.changed(); } })
-      ActionButton({ label: '按保质期计算', tonal: this.item.expiryInput.mode === 'SHELF_LIFE', run: () => { this.item.expiryInput.mode = 'SHELF_LIFE'; this.changed(); } })
-    }
+    Segmented({ options: ['直接填日期', '按保质期计算'], selected: this.item.expiryInput.mode === 'SHELF_LIFE' ? 1 : 0, onSelect: (index: number) => { this.item.expiryInput.mode = index ? 'SHELF_LIFE' : 'DIRECT'; this.changed(); } })
     if (this.item.expiryInput.mode === 'DIRECT') {
-      ActionButton({ label: this.item.expiryInput.directDate ? '到期：' + shortDate(this.item.expiryInput.directDate) : '选择到期日期', tonal: true, run: () => this.pickDate('direct') })
+      ActionButton({ label: this.item.expiryInput.directDate ? '到期：' + shortDate(this.item.expiryInput.directDate) : '选择到期日期', icon: $r('sys.symbol.calendar'), tonal: true, run: () => this.pickDate('direct') })
     } else {
-      ActionButton({ label: this.item.expiryInput.producedOn ? '生产：' + shortDate(this.item.expiryInput.producedOn) : '选择生产日期', tonal: true, run: () => this.pickDate('produced') })
+      ActionButton({ label: this.item.expiryInput.producedOn ? '生产：' + shortDate(this.item.expiryInput.producedOn) : '选择生产日期', icon: $r('sys.symbol.calendar'), tonal: true, run: () => this.pickDate('produced') })
       Row({ space: 8 }) {
         TextInput({ placeholder: '保质期', text: this.item.expiryInput.value ? String(this.item.expiryInput.value) : '' }).type(InputType.Number).layoutWeight(1).onChange((value: string) => { this.item.expiryInput.value = Number(value); this.changed(); })
         Select([{ value: '天' }, { value: '月' }, { value: '年' }]).value(this.item.expiryInput.unit === 'DAY' ? '天' : this.item.expiryInput.unit === 'YEAR' ? '年' : '月').onSelect((index: number) => { this.item.expiryInput.unit = ['DAY', 'MONTH', 'YEAR'][index]; this.changed(); })
@@ -166,7 +187,7 @@ export struct ItemEditor {
     else { Text('到期当天 ' + reminderClock() + ' 提醒一次，同一天的合成一条').fontSize(13).fontColor($r('app.color.secondary')) }
     if (this.item.expiryInput.directDate || this.item.expiryInput.producedOn || this.item.expiryInput.value) { ActionButton({ label: '移除到期日期', run: () => { this.item.expiryInput.mode = 'DIRECT'; this.item.expiryInput.directDate = ''; this.item.expiryInput.producedOn = ''; this.item.expiryInput.value = 0; this.changed(); } }) }
     Row({ space: 8 }) {
-      ActionButton({ label: this.dateValue('WARRANTY') ? '保修至 ' + shortDate(this.dateValue('WARRANTY')) : '保修日期', tonal: !!this.dateValue('WARRANTY'), run: () => this.pickDate('WARRANTY') })
+      ActionButton({ label: this.dateValue('WARRANTY') ? '保修至 ' + shortDate(this.dateValue('WARRANTY')) : '保修日期', icon: $r('sys.symbol.checkmark_shield'), tonal: true, run: () => this.pickDate('WARRANTY') })
       if (this.dateValue('WARRANTY')) { ActionButton({ label: '清除保修', run: () => { setDate(this.item, 'WARRANTY', ''); this.changed(); } }) }
     }
     if (this.item.status === 'LENT') {
@@ -175,40 +196,50 @@ export struct ItemEditor {
   }
   @Builder form() {
     if (this.banner) { Text(this.banner).fontSize(14).fontColor($r('app.color.primary')).width('100%').padding(12).backgroundColor($r('app.color.subtle')).borderRadius(14) }
-    TextInput({ text: this.item.title, placeholder: this.item.kind === 'GROUP' ? '给这一组起个名字，例如：露营箱' : '给它起个容易想起的名字' }).id('nameInput').fontSize(22).height(60).backgroundColor($r('app.color.surface')).borderRadius(16).maxLength(80).enterKeyType(EnterKeyType.Done)
-      .onChange((value: string) => { this.item.title = value; this.changed(); })
-      .onSubmit(() => { if (this.item.title.trim() || this.item.photoIds.length) this.save(); })
-      .onAppear(() => this.focusName())
-    Row({ space: 10 }) {
-      ActionButton({ label: '记一件', tonal: this.item.kind === 'SINGLE', run: () => { this.item.kind = 'SINGLE'; this.item.quantity = Math.max(1, this.item.quantity ?? 1); this.changed(); } })
-      ActionButton({ label: '记一组', tonal: this.item.kind === 'GROUP', run: () => { this.item.kind = 'GROUP'; this.changed(); } })
-    }
+    Row() {
+      TextInput({ text: this.item.title, placeholder: this.item.kind === 'GROUP' ? '给这一组起个名字，例如：露营箱' : '给它起个容易想起的名字' }).id('nameInput').fontSize(22).height(60).backgroundColor(Color.Transparent).maxLength(80).enterKeyType(EnterKeyType.Done).layoutWeight(1)
+        .onChange((value: string) => { this.item.title = value; this.changed(); })
+        .onSubmit(() => { if (this.item.title.trim() || this.item.photoIds.length) this.save(); })
+        .onAppear(() => this.focusName())
+      Stack() { SymbolGlyph($r('sys.symbol.mic')).fontSize(22).fontColor([$r('app.color.primary')]) }
+        .width(48).height(48).borderRadius(24).accessibilityText('语音填写名称').accessibilityLevel('yes')
+        .onClick(() => { if (!this.voiceOpen) { this.voiceTarget = '名称'; this.voiceOpen = true; } })
+    }.width('100%').padding({ right: 6 }).backgroundColor($r('app.color.surface')).borderRadius(16)
+    Segmented({ options: ['记一件', '记一组'], selected: this.item.kind === 'GROUP' ? 1 : 0, onSelect: (index: number) => { if (index) { this.item.kind = 'GROUP'; } else { this.item.kind = 'SINGLE'; this.item.quantity = Math.max(1, this.item.quantity ?? 1); } this.changed(); } })
     if (this.item.kind === 'GROUP') {
       this.label('这组里面有什么 · 搜索时会用到')
-      TextArea({ text: this.item.notes, placeholder: '例如：炉头、气罐、折叠碗、头灯' }).maxLength(2000).constraintSize({ minHeight: 88 }).backgroundColor($r('app.color.surface')).borderRadius(16).onChange((value: string) => { this.item.notes = value; this.changed(); })
-      ActionButton({ label: '语音填写组里的东西', run: ()=>{if(!this.voiceOpen){this.voiceTarget='说明';this.voiceOpen=true;}} })
+      Stack({ alignContent: Alignment.BottomEnd }) {
+        TextArea({ text: this.item.notes, placeholder: '例如：炉头、气罐、折叠碗、头灯' }).maxLength(2000).constraintSize({ minHeight: 96 }).backgroundColor($r('app.color.surface')).borderRadius(16).padding({ right: 48 }).onChange((value: string) => { this.item.notes = value; this.changed(); })
+        Stack() { SymbolGlyph($r('sys.symbol.mic')).fontSize(20).fontColor([$r('app.color.primary')]) }
+          .width(44).height(44).borderRadius(22).margin(4).accessibilityText('语音填写组里的东西').accessibilityLevel('yes')
+          .onClick(() => { if (!this.voiceOpen) { this.voiceTarget = '说明'; this.voiceOpen = true; } })
+      }.width('100%')
     }
-    if (this.item.photoIds.length) {
-      Scroll() {
-        Row({ space: 8 }) {
-          ForEach(this.item.photoIds, (id: string, index: number) => {
-            Column({ space: 6 }) {
-              Image(this.media().uri(id, true)).width(100).height(100).objectFit(ImageFit.Cover).borderRadius(16).accessibilityText(`${index === 0 ? '主图' : '照片'}，第 ${index + 1} 张`).onClick(() => { this.previewId = id; this.zoom = 1; })
-              Button(index === 0 ? '主图 · 移除' : '移除').fontSize(12).height(36).onClick(() => { this.item.photoIds = this.item.photoIds.filter((value: string) => value !== id); this.changed(); })
-            }
-          }, (id: string, index: number) => id + ':' + index)
+    Scroll() {
+      Row({ space: 10 }) {
+        if (this.item.photoIds.length < 6) {
+          this.photoTile($r('sys.symbol.camera'), '拍照', () => this.photos(true))
+          this.photoTile($r('sys.symbol.picture'), '相册', () => this.photos(false))
         }
-      }.scrollable(ScrollDirection.Horizontal).width('100%')
+        ForEach(this.item.photoIds, (id: string, index: number) => {
+          Stack({ alignContent: Alignment.TopEnd }) {
+            Image(this.media().uri(id, true)).width(84).height(84).objectFit(ImageFit.Cover).borderRadius(16).accessibilityText(`${index === 0 ? '主图' : '照片'}，第 ${index + 1} 张`).onClick(() => { this.previewId = id; this.zoom = 1; })
+            Stack() { SymbolGlyph($r('sys.symbol.xmark')).fontSize(12).fontColor([Color.White]) }
+              .width(24).height(24).borderRadius(12).backgroundColor('#99000000').margin(4)
+              .accessibilityText(`移除第 ${index + 1} 张照片`).accessibilityLevel('yes')
+              .onClick(() => { this.item.photoIds = this.item.photoIds.filter((value: string) => value !== id); this.changed(); })
+            if (index === 0 && this.item.photoIds.length > 1) { Text('主图').fontSize(11).fontColor(Color.White).padding({ left: 6, right: 6, top: 2, bottom: 2 }).backgroundColor('#99000000').borderRadius(8).position({ left: 6, bottom: 6 }) }
+          }.width(84).height(84)
+        }, (id: string, index: number) => id + ':' + index)
+        if (this.busy) { Stack() { LoadingProgress().width(28).height(28) }.width(84).height(84).borderRadius(16).backgroundColor($r('app.color.subtle')) }
+      }
+    }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%').align(Alignment.Start).enabled(!this.busy)
+    GroupCard() {
+      MenuRow({ plain: true, first: true, icon: $r('sys.symbol.mappin_and_rectangle'), title: '放在哪里', subtitle: this.repository.path(this.item.locationId) || '稍后也能补充', action: () => this.choosingLocation = true })
+      MenuRow({ plain: true, icon: $r('sys.symbol.calendar'), title: '日期', subtitle: [this.resultDate() ? relativeDue(this.resultDate()) + '（' + shortDate(this.resultDate()) + '）' : '', this.dateValue('WARRANTY') ? '保修至 ' + shortDate(this.dateValue('WARRANTY')) : '', this.item.status === 'LENT' && this.dateValue('RETURN') ? '归还 ' + shortDate(this.dateValue('RETURN')) : ''].filter((value: string) => !!value).join(' · ') || '到期、保修，按需记下', value: this.datesOpen ? '收起' : '', chevron: !this.datesOpen, action: () => this.datesOpen = !this.datesOpen })
+      if (this.datesOpen) { Column({ space: 12 }) { this.dates() }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 16, right: 16, bottom: 16 }) }
+      MenuRow({ plain: true, icon: $r('sys.symbol.list_bullet'), title: '更多信息', subtitle: this.moreSummary(), value: this.more ? '收起' : '', chevron: !this.more, action: () => this.more = !this.more })
     }
-    if (this.item.photoIds.length < 6) {
-      Row({ space: 8 }) { ActionButton({ label: '拍照', run: () => this.photos(true) }); ActionButton({ label: '从相册选', run: () => this.photos(false) }); ActionButton({ label: '语音填写名称', run: ()=>{if(!this.voiceOpen){this.voiceTarget='名称';this.voiceOpen=true;}} }); }.enabled(!this.busy)
-    }
-    if (this.busy) { LoadingProgress().width(28).height(28); Text('正在处理照片或保存…').fontSize(14) }
-    if (this.item.photoIds.length >= 6) { ActionButton({ label: '语音填写名称', run: ()=>{if(!this.voiceOpen){this.voiceTarget='名称';this.voiceOpen=true;}} }) }
-    MenuRow({ title: '放在哪里', subtitle: this.repository.path(this.item.locationId) || '稍后也能补充', action: () => this.choosingLocation = true })
-    MenuRow({ title: '日期', subtitle: [this.resultDate() ? relativeDue(this.resultDate()) + '（' + shortDate(this.resultDate()) + '）' : '', this.dateValue('WARRANTY') ? '保修至 ' + shortDate(this.dateValue('WARRANTY')) : '', this.item.status === 'LENT' && this.dateValue('RETURN') ? '归还 ' + shortDate(this.dateValue('RETURN')) : ''].filter((value: string) => !!value).join(' · ') || '到期、保修，按需记下', action: () => this.datesOpen = !this.datesOpen })
-    if (this.datesOpen) { this.dates() }
-    ActionButton({ label: this.more ? '收起更多信息' : (this.item.kind === 'GROUP' ? '更多信息 · 分类、别名、标签' : '更多信息 · 数量、说明、分类'), run: () => this.more = !this.more })
     if (this.more) {
       this.label('分类')
       Select(CATEGORY_NAMES.map((name: string): SelectOption => ({ value: name }))).value(CATEGORY_NAMES[CATEGORY_CODES.indexOf(this.item.category)]).onSelect((index: number) => { this.item.category = CATEGORY_CODES[index]; this.changed(); })
@@ -222,12 +253,12 @@ export struct ItemEditor {
       TextInput({ text: this.item.tags.join('、'), placeholder: '旅行、备用' }).onChange((value: string) => { this.item.tags = value.split(/[、,，]/).map((part: string) => part.trim()).filter((part: string) => !!part); this.changed(); })
       if (this.item.kind === 'SINGLE') {
         this.label('说明')
-        ActionButton({ label: '语音填写说明', run: ()=>{if(!this.voiceOpen){this.voiceTarget='说明';this.voiceOpen=true;}} })
+        ActionButton({ label: '语音填写说明', icon: $r('sys.symbol.mic'), run: ()=>{if(!this.voiceOpen){this.voiceTarget='说明';this.voiceOpen=true;}} })
         TextArea({ text: this.item.notes, placeholder: '留一点线索，给下次寻找的自己。' }).maxLength(2000).constraintSize({ minHeight: 100 }).onChange((value: string) => { this.item.notes = value; this.changed(); })
       }
       if (this.item.barcodeValue) { Text('商品条码：' + this.item.barcodeValue).fontSize(14) }
     }
-    if (this.item.photoIds.length) { ActionButton({ label: this.recognizing ? '正在提取，可继续编辑或保存' : '提取照片文字', run: () => this.recognize() }) }
+    if (this.item.photoIds.length) { ActionButton({ label: this.recognizing ? '正在提取，可继续编辑或保存' : '提取照片文字', icon: $r('sys.symbol.doc_plaintext'), tonal: true, run: () => this.recognize() }) }
     if (this.candidates) {
       this.label('照片文字 · 选择后才会填入')
       Text('当前名称：' + (this.item.title || '未填写')).fontColor($r('app.color.secondary'))
@@ -252,18 +283,22 @@ export struct ItemEditor {
       }.padding({ left: 20, right: 12, top: 12 }).width('100%')
       Scroll() {
         Column({ space: 16 }) {
-          if (this.receipt) {
+          if (this.receipt && this.choosingLocation) {
+            // 保存后补位置：直接更新刚保存的记录，不再经过草稿
+            LocationPicker({ repository: this.repository, selected: '', title: '放在哪里', cancelLabel: '返回', onChoose: (id: string) => { this.placeSaved(id); }, onCancel: () => this.choosingLocation = false })
+          } else if (this.receipt) {
             Column({ space: 8 }) {
-              Text('✓ ' + displayName(this.item)).fontSize(24).fontWeight(FontWeight.Medium).fontColor($r('app.color.text'))
+              Row({ space: 10 }) { SymbolGlyph($r('sys.symbol.checkmark_circle_fill')).fontSize(28).fontColor([$r('app.color.primary')]); Text(displayName(this.item)).fontSize(24).fontWeight(FontWeight.Medium).fontColor($r('app.color.text')).layoutWeight(1).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }) }.width('100%')
               Text(this.repository.path(this.item.locationId) ? '放在 ' + this.repository.path(this.item.locationId) : '已记下，随时可以补上位置').fontSize(16).fontColor($r('app.color.secondary'))
               if (this.resultDate()) { Text(this.reminderNote(this.resultDate())).fontSize(15).fontColor(daysUntil(this.resultDate()) < 0 ? $r('app.color.warning') : $r('app.color.primary')) }
               if (this.sessionSaved > 1) { Text(`这次记下了 ${this.sessionSaved} 条`).fontSize(15).fontColor($r('app.color.secondary')) }
             }.alignItems(HorizontalAlign.Start).width('100%').padding(18).backgroundColor($r('app.color.surface')).borderRadius(20).margin({ top: 8 })
-            if (this.draft.mode !== 'EDIT') { ActionButton({ label: '继续记下', primary: true, run: () => this.next() }) }
+            if (!this.item.locationId && this.draft.mode !== 'EDIT') { ActionButton({ label: '现在补上位置', icon: $r('sys.symbol.mappin_and_rectangle'), tonal: true, run: () => this.choosingLocation = true }) }
+            if (this.draft.mode !== 'EDIT') { ActionButton({ label: '继续记下', icon: $r('sys.symbol.plus'), primary: true, run: () => this.next() }) }
             Row({ space: 8 }) {
-              ActionButton({ label: '查看这件', tonal: true, run: () => this.onView(this.receipt) })
-              if (this.item.title && this.repository.data.items.filter((value: Item) => !value.deletedAt).length === 1) { ActionButton({ label: '试着找一下', tonal: true, run: () => this.onFind(this.item.title) }) }
-              if (this.resultDate() && !this.repository.data.preference.reminderEnabled) { ActionButton({ label: '开启到期提醒', tonal: true, run: () => this.onReminder() }) }
+              ActionButton({ label: '查看这件', icon: $r('sys.symbol.eye'), tonal: true, run: () => this.onView(this.receipt) })
+              if (this.item.title && this.repository.data.items.filter((value: Item) => !value.deletedAt).length === 1) { ActionButton({ label: '试着找一下', icon: $r('sys.symbol.magnifyingglass'), tonal: true, run: () => this.onFind(this.item.title) }) }
+              if (this.resultDate() && !this.repository.data.preference.reminderEnabled) { ActionButton({ label: '开启到期提醒', icon: $r('sys.symbol.bell'), tonal: true, run: () => this.onReminder() }) }
             }
             ActionButton({ label: this.sessionSaved > 1 ? '完成这次整理' : '完成', run: () => this.close() })
           } else if (this.previewId) {
