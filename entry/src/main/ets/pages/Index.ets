@@ -17,6 +17,7 @@ import { IncomingShare } from '../services/ShareService';
 import { SharePanel } from '../components/SharePanel';
 import { CardService } from '../services/CardService';
 import { PhotoViewer } from '../components/PhotoViewer';
+import { readApplicationIcon } from '../services/ApplicationIcon';
 
 interface ItemRows { values: Item[]; here?: string; }
 interface DateRow { item: Item; date: ItemDate; }
@@ -81,6 +82,7 @@ struct Index {
   @State barcodeType: string = 'EAN13';
   @State scanning: boolean = false;
   @State activeIcon: string = '';
+  @LocalStorageProp('launchIcon') launchIcon: string = '';
   @State iconReady: boolean = false;
   @State iconBusy: boolean = false;
   @State iconError: string = '';
@@ -160,15 +162,21 @@ struct Index {
   }
   @Builder voice() { VoicePanel({target:'搜索词',currentValue:this.query,maxLength:100,onAdopt:(value:string)=>{this.query=value;this.voiceOpen=false;this.submitSearch();},onCancel:()=>this.voiceOpen=false}) }
 
-  aboutToAppear(): void { this.fontScale=(this.getUIContext().getHostContext() as common.UIAbilityContext).config.fontSizeScale??1;this.open(); }
+  aboutToAppear(): void {
+    this.activeIcon = this.launchIcon;
+    this.iconReady = !!this.activeIcon;
+    this.fontScale = (this.getUIContext().getHostContext() as common.UIAbilityContext).config.fontSizeScale ?? 1;
+    this.open();
+  }
   aboutToDisappear():void {clearTimeout(this.queryTimer);clearTimeout(this.cardTimer);this.tabsController.unbindScroller(this.homeScroller);this.tabsController.unbindScroller(this.locationScroller);this.tabsController.unbindScroller(this.mineScroller);}
   private async open(): Promise<void> {
+    this.failure = '';
+    if (!this.iconReady) this.loadIcon();
     try {
       await this.repository.open(this.getUIContext().getHostContext() as common.UIAbilityContext);
       this.repository.maintain(this.getUIContext().getHostContext() as common.UIAbilityContext);
       this.repository.onChange = () => this.refresh(); this.refresh(); this.tab = this.data.preference.lastTab;
       this.ready = true;
-      this.loadIcon();
       this.calendar = new CalendarService(this.getUIContext().getHostContext() as common.UIAbilityContext, this.repository);
       this.calendar.onChange = () => this.reminderResults = this.calendar?.results ?? [];
       this.calendar.sync(); this.applyTheme(); this.routeEntry(); this.readShares(); this.search();
@@ -333,7 +341,15 @@ struct Index {
     } catch (error) { this.panelError = (error as Error).message; }
   }
   @Builder empty(title: string, subtitle: string) {
-    Column({ space: 14 }) { Image(this.activeIcon === 'moving_buddy' ? $r('app.media.buddy_foreground') : $r('app.media.foreground')).width(150).height(150).objectFit(ImageFit.Contain); Text(title).fontSize(23).fontColor($r('app.color.text')); Text(subtitle).fontSize(15).fontColor($r('app.color.secondary')).textAlign(TextAlign.Center) }.width('100%').padding({ top: 28, bottom: 24 })
+    Column({ space: 14 }) { this.characterImage(150); Text(title).fontSize(23).fontColor($r('app.color.text')); Text(subtitle).fontSize(15).fontColor($r('app.color.secondary')).textAlign(TextAlign.Center) }.width('100%').padding({ top: 28, bottom: 24 })
+  }
+  @Builder characterImage(size: number) {
+    if (this.activeIcon) {
+      Image(this.activeIcon === 'moving_buddy' ? $r('app.media.buddy_foreground') : $r('app.media.foreground'))
+        .width(size).height(size).objectFit(ImageFit.Contain).syncLoad(true)
+    } else {
+      Blank().width(size).height(size).flexGrow(0)
+    }
   }
   // 整组和已选分类用系统图标表示，其余记录用名称首字，让没有照片的记录也容易分辨。
   private kindIcon(item: Item): Resource | undefined {
@@ -631,9 +647,9 @@ struct Index {
   private async loadIcon(): Promise<boolean> {
     const request = ++this.iconRequest;
     try {
-      const icons = await bundleManager.getAlternateIcons();
+      const icon = await readApplicationIcon();
       if (request !== this.iconRequest) return false;
-      this.activeIcon = icons.find((icon: bundleManager.AlternateIconInfo) => icon.enabled)?.iconName ?? 'moving_girl';
+      this.activeIcon = icon;
       this.iconReady = true; this.iconError = '';
       return true;
     } catch (_) {
@@ -861,7 +877,13 @@ struct Index {
         Blank().width(0).height(0).bindSheet($$this.editorOpen, this.editor, { height: SheetSize.LARGE, dragBar: true, showClose: false, backgroundColor: $r('app.color.background'), keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY, onDisappear: () => this.resumeEntry() })
         Blank().width(0).height(0).bindSheet($$this.panelOpen, this.actionPanel, { height: SheetSize.FIT_CONTENT, dragBar: true, showClose: true, backgroundColor: $r('app.color.background'), keyboardAvoidMode: SheetKeyboardAvoidMode.TRANSLATE_AND_SCROLL, onDisappear: () => this.resumeEntry() })
         Blank().width(0).height(0).bindSheet($$this.shareOpen, this.share, { height: SheetSize.LARGE, showClose: false, onDisappear: () => this.resumeEntry() })
-        if (!this.ready) { LoadingProgress().width(48).height(48); Text(this.failure || '正在打开自己的家当').fontColor($r('app.color.text')); if (this.failure) { ActionButton({ label: '重新读取', run: () => this.open() }) } }
+        if (!this.ready) {
+          Column({ space: 12 }) {
+            this.characterImage(128)
+            Text(this.failure || '正在打开自己的家当').fontColor($r('app.color.text'))
+            if (this.failure) { ActionButton({ label: '重新读取', run: () => this.open() }) }
+          }.width('100%').height('100%').justifyContent(FlexAlign.Center)
+        }
         else {
           HdsTabs({index:this.tab,controller:this.tabsController}) {
             TabContent(){Scroll(this.homeScroller){Column({space:12}){this.home()}.width('100%').alignItems(HorizontalAlign.Start).padding({left:20,right:20,bottom:110})}.width('100%').height('100%').align(Alignment.TopStart).onAppear(()=>this.tabsController.bindScroller(0,this.homeScroller))}.tabBar(this.tabLabel('家当',0))

@@ -2,6 +2,7 @@ import { UIAbility, Want, AbilityConstant, Configuration } from '@kit.AbilityKit
 import { window } from '@kit.ArkUI';
 import { commonEventManager } from '@kit.BasicServicesKit';
 import { ShareService } from '../services/ShareService';
+import { readApplicationIcon } from '../services/ApplicationIcon';
 
 export default class EntryAbility extends UIAbility {
   private timeSubscriber?: commonEventManager.CommonEventSubscriber;
@@ -25,8 +26,11 @@ export default class EntryAbility extends UIAbility {
       AppStorage.setOrCreate('entryAction',String(want.parameters?.action ?? ''));
     }
   }
-  onWindowStageCreate(stage: window.WindowStage): void {
-    stage.loadContent('pages/Index');
+  async onWindowStageCreate(stage: window.WindowStage): Promise<void> {
+    const icon = await readApplicationIcon().catch(() => '');
+    const storage = new LocalStorage();
+    storage.setOrCreate('launchIcon', icon);
+    stage.loadContent('pages/Index', storage);
   }
   onBackground(): void {
     AppStorage.setOrCreate('backgroundAt', Date.now());
