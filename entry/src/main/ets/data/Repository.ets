@@ -42,6 +42,7 @@ export class Repository {
   private searchDocuments: Map<string, SearchDocument> = new Map();
   data: Snapshot = new Snapshot();
   onChange: () => void = () => {};
+  onPreferenceChange: (value: Preference) => void = () => this.onChange();
 
   async open(context: common.Context): Promise<void> {
     this.context = context;
@@ -245,7 +246,14 @@ export class Repository {
     });
     this.reload();
   }
-  saveDraft(input: Draft): void { const draft = copy(input); draft.assetIds = [...draft.payload.photoIds, ...(draft.sharedItems ?? []).flatMap((item: Item) => item.photoIds)]; draft.updatedAt = Date.now(); this.put('draft', draft.id, draft); this.reload(); }
+  saveDraft(input: Draft): void {
+    const draft = copy(input);
+    draft.assetIds = [...draft.payload.photoIds, ...(draft.sharedItems ?? []).flatMap((item: Item) => item.photoIds)];
+    draft.updatedAt = Date.now();
+    this.put('draft', draft.id, draft);
+    this.data.drafts = [draft, ...this.data.drafts.filter((entry: Draft) => entry.id !== draft.id)]
+      .sort((a: Draft, b: Draft) => b.updatedAt - a.updatedAt);
+  }
   saveShared(draft: Draft, items: Item[]): string[] {
     if (!items.length || items.length > 9) throw new Error('请选择 1—9 张有效图片');
     const operation = draft.sessionId;
@@ -290,8 +298,19 @@ export class Repository {
     if(fs.accessSync(protection)){const info=JSON.parse(fs.readTextSync(protection)) as Record<string,number>;if(info.expiresAt<Date.now()){const archive=context.filesDir+'/protection.zip';if(fs.accessSync(archive))fs.unlinkSync(archive);fs.unlinkSync(protection);}}
   }
   addAsset(asset: Asset): void { this.put('asset', asset.id, asset); this.reload(); }
-  savePreference(pref: Preference): void { this.put('preference', pref.id, pref); this.reload(); this.onChange(); }
-  viewed(id: string): void { const old = this.data.items.find((item: Item) => item.id === id); if (!old) return; const item = copy(old); item.lastViewedAt = Date.now(); this.put('item', id, item); this.reload(); }
+  savePreference(pref: Preference): void {
+    this.put('preference', pref.id, pref);
+    this.data.preference = copy(pref);
+    this.onPreferenceChange(this.data.preference);
+  }
+  viewed(id: string): void {
+    const item = this.data.items.find((value: Item) => value.id === id);
+    if (!item) return;
+    const viewed = copy(item);
+    viewed.lastViewedAt = Date.now();
+    this.put('item', id, viewed);
+    item.lastViewedAt = viewed.lastViewedAt;
+  }
   private document(item: Item): SearchDocument {
     const existing = this.searchDocuments.get(item.id); if (existing) return existing;
     const document = new SearchDocument(); document.names = [item.title, ...item.aliases].map((value: string) => normalize(value));

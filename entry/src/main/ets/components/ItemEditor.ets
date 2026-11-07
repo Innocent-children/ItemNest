@@ -1,4 +1,4 @@
-import { ActionButton, MenuRow, GroupCard, Segmented } from './Common';
+import { focusVisibleInput, ActionButton, MenuRow, GroupCard, Segmented } from './Common';
 import { common } from '@kit.AbilityKit';
 import { Item, Draft, ItemDate, copy, uuid, editorContent, expiryDate, setDate, displayName, validDate, normalize, shortDate, relativeDue, daysUntil, reminderClock, CATEGORY_CODES, CATEGORY_NAMES } from '../model/Models';
 import { Repository } from '../data/Repository';
@@ -15,6 +15,8 @@ export struct ItemEditor {
   onView: (id: string) => void = () => {};
   onFind: (name: string) => void = () => {};
   onReminder: () => void = () => {};
+  registerBack: (handler?: () => boolean) => void = () => {};
+  @StorageProp('reducedMotion') reducedMotion: boolean = false;
   onClose: () => void = () => {};
   @State draft: Draft = new Draft();
   @State item: Item = new Item();
@@ -28,7 +30,7 @@ export struct ItemEditor {
   @State candidates: string = '';
   @State selectedText: string = '';
   @State previewId: string = '';
-  @State zoom: number = 1;
+  private stopVoice?: () => void;
   @State voiceTarget: string = '';
   @State voiceOpen: boolean = false;
   @State conflict?: Item = undefined;
@@ -46,6 +48,7 @@ export struct ItemEditor {
   private operation: string = uuid();
 
   aboutToAppear(): void {
+    this.registerBack(() => this.backToForm());
     this.alive = true; this.draft = copy(this.initial); this.item = copy(this.draft.payload);
     this.candidates = this.draft.candidates; this.more = false; this.baselineLocation = this.item.locationId;
     if (this.draft.mode === 'EDIT') {
@@ -55,13 +58,19 @@ export struct ItemEditor {
       }
     }
   }
-  private focusName(): void {
-    if (this.draft.mode !== 'CREATE' || this.item.title || this.item.photoIds.length) return;
-    setTimeout(() => { if (this.alive && !this.receipt) { try { this.getUIContext().getFocusController().requestFocus('nameInput'); } catch (_) {} } }, 350);
+  private backToForm(): boolean {
+    if (this.voiceOpen) this.voiceOpen = false;
+    else if (this.previewId) this.previewId = '';
+    else if (this.choosingLocation) this.choosingLocation = false;
+    else return false;
+    return true;
+  }
+  private changeSection(update: () => void): void {
+    this.getUIContext().animateTo({ duration: this.reducedMotion ? 0 : 180, curve: Curve.EaseOut }, update);
   }
   private notify(message: string): void { try { this.getUIContext().getPromptAction().showToast({ message, duration: 2500 }); } catch (_) {} }
   private close(): void { this.persist(); if (this.sessionSaved > 1) this.notify(`这次记下了 ${this.sessionSaved} 条`); this.onClose(); }
-  aboutToDisappear(): void { this.persist(); this.alive = false; clearTimeout(this.timer); clearTimeout(this.recognitionTimer); this.recognitionId=''; }
+  aboutToDisappear(): void { this.registerBack(undefined); this.persist(); this.alive = false; clearTimeout(this.timer); clearTimeout(this.recognitionTimer); this.recognitionId=''; }
   saveOnBackground(): void { this.persist(); }
   private media(): MediaService { return new MediaService(this.getUIContext().getHostContext() as common.UIAbilityContext, this.repository); }
   private changed(): void { this.item = copy(this.item); this.error = ''; clearTimeout(this.timer); this.timer = setTimeout(() => this.persist(), 500); }
@@ -152,7 +161,7 @@ export struct ItemEditor {
         const date = this.resultDate();
         this.banner = `已记下「${displayName(this.item)}」` + (date && daysUntil(date) < 0 ? ' · ' + relativeDue(date) : '') + ` · 这次第 ${this.sessionSaved} 条`;
         this.next(); this.continuous = true;
-      } else this.receipt = id;
+      } else this.changeSection(() => this.receipt = id);
     }
     catch (error) { this.error = (error as Error).message; if(this.draft.mode==='EDIT'){const current=this.repository.data.items.find((item:Item)=>item.id===this.item.id);this.conflict=current?copy(current):undefined;this.missingOriginal=!current;} this.persist(); }
     finally { this.busy = false; }
@@ -168,13 +177,14 @@ export struct ItemEditor {
   private next(): void {
     const draft = new Draft(); draft.payload.locationId = this.item.locationId; draft.payload.kind = this.item.kind; draft.sessionId = this.draft.sessionId;
     this.draft = draft; this.item = copy(draft.payload); this.receipt = ''; this.candidates = ''; this.operation = uuid(); this.more = false; this.datesOpen = false;
-    this.baselineLocation = this.item.locationId; this.continuous = true; this.error = ''; this.focusName();
+    this.baselineLocation = this.item.locationId; this.continuous = true; this.error = '';
+    focusVisibleInput(this.getUIContext(), 'nameInput');
   }
   @Builder photoTile(icon: Resource, label: string, run: () => void) {
     Column({ space: 6 }) {
       SymbolGlyph(icon).fontSize(26).fontColor([$r('app.color.primary')])
       Text(label).fontSize(13).fontColor($r('app.color.primary'))
-    }.width(84).height(84).justifyContent(FlexAlign.Center).backgroundColor($r('app.color.subtle')).borderRadius(16)
+    }.stateStyles({ pressed: { .opacity(0.75) } }).width(84).height(84).justifyContent(FlexAlign.Center).backgroundColor($r('app.color.subtle')).borderRadius(16)
     .accessibilityGroup(true).accessibilityText(label).onClick(() => run())
   }
   private moreSummary(): string {
@@ -220,7 +230,7 @@ export struct ItemEditor {
       TextInput({ text: this.item.title, placeholder: this.item.kind === 'GROUP' ? '给这一组起个名字，例如：露营箱' : '给它起个容易想起的名字' }).id('nameInput').fontSize(22).height(60).backgroundColor(Color.Transparent).maxLength(80).enterKeyType(EnterKeyType.Done).layoutWeight(1)
         .onChange((value: string) => { this.item.title = value; this.changed(); })
         .onSubmit(() => { if (this.item.title.trim() || this.item.photoIds.length) this.save(); })
-        .onAppear(() => this.focusName())
+        .onAppear(() => { if (this.continuous) focusVisibleInput(this.getUIContext(), 'nameInput'); })
       Stack() { SymbolGlyph($r('sys.symbol.mic')).fontSize(22).fontColor([$r('app.color.primary')]) }
         .width(48).height(48).borderRadius(24).accessibilityText('语音填写名称').accessibilityLevel('yes')
         .onClick(() => { if (!this.voiceOpen) { this.voiceTarget = '名称'; this.voiceOpen = true; } })
@@ -243,7 +253,7 @@ export struct ItemEditor {
         }
         ForEach(this.item.photoIds, (id: string, index: number) => {
           Stack({ alignContent: Alignment.TopEnd }) {
-            Image(this.media().uri(id, true)).width(84).height(84).objectFit(ImageFit.Cover).borderRadius(16).accessibilityText(`${index === 0 ? '主图' : '照片'}，第 ${index + 1} 张`).onClick(() => { this.previewId = id; this.zoom = 1; })
+            Image(this.media().uri(id, true)).width(84).height(84).objectFit(ImageFit.Cover).borderRadius(16).accessibilityText(`${index === 0 ? '主图' : '照片'}，第 ${index + 1} 张`).onClick(() => { this.previewId = id; })
             Stack() { SymbolGlyph($r('sys.symbol.xmark')).fontSize(12).fontColor([Color.White]) }
               .width(24).height(24).borderRadius(12).backgroundColor('#99000000').margin(4)
               .accessibilityText(`移除第 ${index + 1} 张照片`).accessibilityLevel('yes')
@@ -256,9 +266,9 @@ export struct ItemEditor {
     }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%').align(Alignment.Start).enabled(!this.busy)
     GroupCard() {
       MenuRow({ plain: true, first: true, icon: $r('sys.symbol.mappin_and_rectangle'), title: '放在哪里', subtitle: this.repository.path(this.item.locationId) || '稍后也能补充', action: () => this.choosingLocation = true })
-      MenuRow({ plain: true, icon: $r('sys.symbol.calendar'), title: '日期', subtitle: [this.resultDate() ? relativeDue(this.resultDate()) + '（' + shortDate(this.resultDate()) + '）' : '', this.dateValue('WARRANTY') ? '保修至 ' + shortDate(this.dateValue('WARRANTY')) : '', this.item.status === 'LENT' && this.dateValue('RETURN') ? '归还 ' + shortDate(this.dateValue('RETURN')) : ''].filter((value: string) => !!value).join(' · ') || '到期、保修，按需记下', value: this.datesOpen ? '收起' : '', chevron: !this.datesOpen, action: () => this.datesOpen = !this.datesOpen })
+      MenuRow({ plain: true, icon: $r('sys.symbol.calendar'), title: '日期', subtitle: [this.resultDate() ? relativeDue(this.resultDate()) + '（' + shortDate(this.resultDate()) + '）' : '', this.dateValue('WARRANTY') ? '保修至 ' + shortDate(this.dateValue('WARRANTY')) : '', this.item.status === 'LENT' && this.dateValue('RETURN') ? '归还 ' + shortDate(this.dateValue('RETURN')) : ''].filter((value: string) => !!value).join(' · ') || '到期、保修，按需记下', value: this.datesOpen ? '收起' : '', chevron: !this.datesOpen, action: () => this.changeSection(() => this.datesOpen = !this.datesOpen) })
       if (this.datesOpen) { Column({ space: 12 }) { this.dates() }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 16, right: 16, bottom: 16 }) }
-      MenuRow({ plain: true, icon: $r('sys.symbol.list_bullet'), title: '更多信息', subtitle: this.moreSummary(), value: this.more ? '收起' : '', chevron: !this.more, action: () => this.more = !this.more })
+      MenuRow({ plain: true, icon: $r('sys.symbol.list_bullet'), title: '更多信息', subtitle: this.moreSummary(), value: this.more ? '收起' : '', chevron: !this.more, action: () => this.changeSection(() => this.more = !this.more) })
     }
     if (this.more) {
       this.label('分类')
@@ -294,7 +304,7 @@ export struct ItemEditor {
       })
     }
   }
-  @Builder voice() { VoicePanel({target:this.voiceTarget,currentValue:this.voiceTarget==='名称'?this.item.title:this.item.notes,maxLength:this.voiceTarget==='名称'?80:2000,append:this.voiceTarget==='说明',onAdopt:(text:string)=>{if(this.voiceTarget==='名称')this.item.title=text;else this.item.notes=[this.item.notes,text].filter((value:string)=>!!value).join('\n');this.voiceOpen=false;this.changed();},onCancel:()=>this.voiceOpen=false}) }
+  @Builder voice() { VoicePanel({target:this.voiceTarget,registerStop:(stop?:()=>void)=>this.stopVoice=stop,currentValue:this.voiceTarget==='名称'?this.item.title:this.item.notes,maxLength:this.voiceTarget==='名称'?80:2000,append:this.voiceTarget==='说明',onAdopt:(text:string)=>{if(this.voiceTarget==='名称')this.item.title=text;else this.item.notes=[this.item.notes,text].filter((value:string)=>!!value).join('\n');this.voiceOpen=false;this.changed();},onCancel:()=>this.voiceOpen=false}) }
   build() {
     Column() {
       Row() {
@@ -341,14 +351,16 @@ export struct ItemEditor {
             ActionButton({label:'保留原记录，另存为新记录',run:()=>this.saveAsNew()})
           }
         }.width('100%').padding(20).alignItems(HorizontalAlign.Start)
-      }.layoutWeight(1).width('100%').align(Alignment.TopStart)
+      }.nestedScroll({ scrollForward: NestedScrollMode.PARENT_FIRST, scrollBackward: NestedScrollMode.SELF_FIRST })
+        .layoutWeight(1).width('100%').align(Alignment.TopStart)
       if (!this.receipt && !this.choosingLocation && !this.previewId) {
         Column({ space: 6 }) {
           if (!this.item.title.trim() && !this.item.photoIds.length) { Text('写个名称，或加张照片').fontSize(13).fontColor($r('app.color.secondary')) }
-          Button(this.busy ? '正在保存' : this.draft.mode === 'EDIT' ? '保存修改' : '保存').height(50).width('100%').backgroundColor($r('app.color.primary')).fontColor($r('app.color.onPrimary')).enabled(!this.busy && (!!this.item.title.trim() || !!this.item.photoIds.length)).onClick(() => this.save())
+          Button(this.busy ? '正在处理' : this.draft.mode === 'EDIT' ? '保存修改' : '保存').height(50).width('100%').backgroundColor($r('app.color.primary')).fontColor($r('app.color.onPrimary')).enabled(!this.busy && (!!this.item.title.trim() || !!this.item.photoIds.length)).onClick(() => this.save())
         }.padding({ left: 20, right: 20, top: 8, bottom: 16 }).backgroundColor($r('app.color.surface'))
       }
-      if (this.voiceOpen) { this.voice() }
     }.height('100%').width('100%').backgroundColor($r('app.color.background'))
+      .bindSheet($$this.voiceOpen, this.voice, { height: SheetSize.FIT_CONTENT, dragBar: true, showClose: false,
+        backgroundColor: $r('app.color.background'), onWillDisappear: () => this.stopVoice?.() })
   }
 }

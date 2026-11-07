@@ -1,8 +1,9 @@
+import { accessibility } from '@kit.AccessibilityKit';
 import { HdsTabs, HdsTabsController, hdsMaterial } from '@kit.UIDesignKit';
-import { ActionButton, SectionHeading, MenuRow, GroupCard, QuickAction, StatTile, Segmented, StatusTag } from '../components/Common';
+import { focusVisibleInput, ActionButton, SectionHeading, MenuRow, GroupCard, QuickAction, StatTile, Segmented, StatusTag } from '../components/Common';
 import { common, ConfigurationConstant, abilityAccessCtrl, bundleManager } from '@kit.AbilityKit';
 import { Item, Draft, ItemDate, Location, Snapshot, Preference, ChangeEvent, copy, uuid, displayName, statusText, localDate, setDate, shortDate, relativeDue, daysUntil, friendlyTime, firstGlyph, dateTypeName, reminderClock, CATEGORY_CODES, CATEGORY_NAMES } from '../model/Models';
-import { LengthMetrics } from '@kit.ArkUI';
+import { FrameCallback, LengthMetrics } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { LocationPicker } from '../components/LocationPicker';
 import { Repository } from '../data/Repository';
@@ -23,10 +24,20 @@ interface ItemRows { values: Item[]; here?: string; }
 interface DateRow { item: Item; date: ItemDate; }
 interface HomeDateSummary { next: DateRow[]; overdue: number; total: number; }
 
+class TabIdleCallback extends FrameCallback {
+  private run: () => void;
+  constructor(run: () => void) {
+    super();
+    this.run = run;
+  }
+  onIdle(_timeLeftInNano: number): void { this.run(); }
+}
+
 @Entry
 @Component
 struct Index {
   private repository: Repository = new Repository();
+  private tabsMounted: boolean = false;
   private tabsController:HdsTabsController=new HdsTabsController();
   private homeScroller:Scroller=new Scroller();
   private locationScroller:Scroller=new Scroller();
@@ -38,10 +49,21 @@ struct Index {
   @State ready: boolean = false;
   @State failure: string = '';
   @State tab: number = 0;
+  @State highlightedTab: number = 0;
+  @StorageLink('reducedMotion') reducedMotion: boolean = false;
+  private systemReducedMotion: boolean = false;
+  private motionChanged = (enabled: boolean): void => {
+    this.systemReducedMotion = enabled;
+    this.applyMotion();
+  };
+  private focusSearchOnShow: boolean = false;
+  private editorBack?: () => boolean;
+  private shareBack?: () => boolean;
+  private afterSheet?: () => void;
   @State filter: string = '全部';
   @State category: string = '';
-  @State @Watch('search') homeFilter: string = '全部';
-  @State @Watch('search') homeCategory: string = '';
+  @State @Watch('searchHome') homeFilter: string = '全部';
+  @State @Watch('searchHome') homeCategory: string = '';
   @State homeResults: Item[] = [];
   @State homeDates: HomeDateSummary = { next: [], overdue: 0, total: 0 };
   @State locationResults: Item[] = [];
@@ -54,8 +76,8 @@ struct Index {
   @State editorOpen: boolean = false;
   @State editorDraft: Draft = new Draft();
   @State focusedId: string = '';
-  @State @Watch('search') focusedLocation: string = '';
-  @State @Watch('search') includeChildren: boolean = true;
+  @State @Watch('searchLocation') focusedLocation: string = '';
+  @State @Watch('searchLocation') includeChildren: boolean = true;
   @State panel: string = '';
   @State panelOpen: boolean = false;
   @State value: string = '';
@@ -69,17 +91,17 @@ struct Index {
   @State handled: boolean = false;
   @State searchFilters: boolean = false;
   @State showAllSearchResults: boolean = false;
-  @State moreActions: boolean = false;
   @State historyOpen: boolean = false;
   @State previewPhoto: string = '';
   @State previewPhotos: string[] = [];
-  @State photoZoom: number = 1;
+  @State detailPhoto: string = '';
   @State example: boolean = false;
   @StorageProp('entryAction') @Watch('routeEntry') entryAction: string = '';
   @StorageProp('foregroundAt') @Watch('foreground') foregroundAt: number = 0;
   private queryTimer: number = -1;
   private calendar?: CalendarService;
   @State reminderResults: ReminderResult[] = [];
+  private stopVoice?: () => void;
   @State voiceOpen: boolean = false;
   @State barcode: string = '';
   @State barcodeType: string = 'EAN13';
@@ -105,7 +127,9 @@ struct Index {
     if(!this.ready)return;if(this.readingShares){this.readSharesAgain=true;return;}this.readingShares=true;
     try {
       const directory=(this.getUIContext().getHostContext() as common.UIAbilityContext).filesDir+'/incoming';if(!fs.accessSync(directory))return;
-      for(const name of fs.listFileSync(directory).filter((value:string)=>value.endsWith('.json'))) {
+      const files = fs.listFileSync(directory).filter((value: string) => value.endsWith('.json'));
+      if (!files.length) return;
+      for (const name of files) {
         const incoming=JSON.parse(fs.readTextSync(directory+'/'+name)) as IncomingShare;
         const existing=this.repository.data.drafts.find((draft:Draft)=>draft.sessionId===incoming.id);
         const draft=existing?copy(existing):new Draft();draft.mode='SHARE';draft.sessionId=incoming.id;draft.shareSourceCount=incoming.count;
@@ -123,7 +147,10 @@ struct Index {
       this.refresh();
     } catch(error){this.notify((error as Error).message);}finally{this.readingShares=false;if(this.readSharesAgain){this.readSharesAgain=false;this.readShares();}}
   }
-  @Builder share(){SharePanel({repository:this.repository,initial:this.shareDraft,onClose:()=>{this.shareOpen=false;this.refresh();},onView:(id:string)=>{this.shareOpen=false;this.refresh();this.detail(id);}})}
+  @Builder share() {
+    SharePanel({ repository: this.repository, initial: this.shareDraft, registerBack: (handler?: () => boolean) => this.shareBack = handler, onClose: () => this.shareOpen = false,
+      onView: (id: string) => { this.afterSheet = () => this.detail(id); this.shareOpen = false; } })
+  }
   private async scan(openResult: boolean = false): Promise<void> {
     if (this.scanning) return; this.scanning = true;
     try {
@@ -163,37 +190,62 @@ struct Index {
     Row() { Text('外部提醒显示物品名称').layoutWeight(1).fontColor($r('app.color.text')); Toggle({ type: ToggleType.Switch, isOn: this.data.preference.externalDetails }).selectedColor($r('app.color.primary')).onChange((value: boolean) => this.preference((pref: Preference) => pref.externalDetails = value)); }.width('100%')
     ForEach(this.reminderResults,(result:ReminderResult)=>{Text(result.message).fontSize(15).fontColor($r('app.color.secondary'));},(result:ReminderResult)=>result.day+result.state+result.message)
   }
-  @Builder voice() { VoicePanel({target:'搜索词',currentValue:this.query,maxLength:100,onAdopt:(value:string)=>{this.query=value;this.voiceOpen=false;this.submitSearch();},onCancel:()=>this.voiceOpen=false}) }
+  @Builder voice() { VoicePanel({target:'搜索词',registerStop:(stop?:()=>void)=>this.stopVoice=stop,currentValue:this.query,maxLength:100,onAdopt:(value:string)=>{this.query=value;this.voiceOpen=false;this.submitSearch();},onCancel:()=>this.voiceOpen=false}) }
 
   aboutToAppear(): void {
+    this.motionChanged(accessibility.isAnimationReduceEnabledSync());
+    accessibility.onAnimationReduceStateChange(this.motionChanged);
     this.activeIcon = this.launchIcon;
     this.iconReady = !!this.activeIcon;
     this.fontScale = (this.getUIContext().getHostContext() as common.UIAbilityContext).config.fontSizeScale ?? 1;
     this.open();
   }
-  aboutToDisappear():void {clearTimeout(this.queryTimer);clearTimeout(this.cardTimer);this.tabsController.unbindScroller(this.homeScroller);this.tabsController.unbindScroller(this.locationScroller);this.tabsController.unbindScroller(this.mineScroller);}
+  aboutToDisappear():void {accessibility.offAnimationReduceStateChange(this.motionChanged);clearTimeout(this.queryTimer);clearTimeout(this.cardTimer);this.tabsController.unbindScroller(this.homeScroller);this.tabsController.unbindScroller(this.locationScroller);this.tabsController.unbindScroller(this.mineScroller);}
   private async open(): Promise<void> {
     this.failure = '';
     if (!this.iconReady) this.loadIcon();
     try {
       await this.repository.open(this.getUIContext().getHostContext() as common.UIAbilityContext);
       this.repository.maintain(this.getUIContext().getHostContext() as common.UIAbilityContext);
-      this.repository.onChange = () => this.refresh(); this.refresh(); this.tab = this.data.preference.lastTab;
+      this.repository.onChange = () => this.refresh();
+      this.repository.onPreferenceChange = (value: Preference) => this.preferenceChanged(value);
+      this.refresh();
+      this.tab = this.data.preference.lastTab;
+      this.highlightedTab = this.tab;
       this.ready = true;
       this.calendar = new CalendarService(this.getUIContext().getHostContext() as common.UIAbilityContext, this.repository);
       this.calendar.onChange = () => this.reminderResults = this.calendar?.results ?? [];
-      this.calendar.sync(); this.applyTheme(); this.routeEntry(); this.readShares(); this.search();
+      this.calendar.sync(); this.applyTheme(); this.routeEntry(); this.readShares();
     } catch (error) { this.failure = `读取遇到问题：${(error as Error).message}`; }
   }
   private refresh(): void {
+    const previous = this.data.preference;
     this.data = copy(this.repository.data);
+    if (this.ready && previous.theme !== this.data.preference.theme) this.applyTheme();
+    else if (this.ready && previous.motion !== this.data.preference.motion) this.applyMotion();
     this.homeDates = this.homeDateSummary();
     this.search();
+    this.searchHome();
+    this.searchLocation();
     if (this.ready) {
       this.calendar?.sync();
-      clearTimeout(this.cardTimer);
-      this.cardTimer = setTimeout(() => CardService.refresh(this.repository).catch(() => {}), 250);
+      this.refreshCards();
     }
+  }
+  private preloadTab(index: number): void {
+    if (index > 2) return;
+    this.getUIContext().postFrameCallback(new TabIdleCallback(() => {
+      if (!this.tabsMounted || this.stack.size() || this.editorOpen || this.shareOpen || this.panelOpen || this.voiceOpen) return;
+      if (index === this.tab) { this.preloadTab(index + 1); return; }
+      // 分帧预加载较轻的位置页与我的页，首页物品网格仍按需创建。
+      try {
+        this.tabsController.preloadItems([index]).then(() => this.preloadTab(index + 1)).catch(() => {});
+      } catch (_) {}
+    }));
+  }
+  private refreshCards(): void {
+    clearTimeout(this.cardTimer);
+    this.cardTimer = setTimeout(() => CardService.refresh(this.repository).catch(() => {}), 250);
   }
   private media(): MediaService { return new MediaService(this.getUIContext().getHostContext() as common.UIAbilityContext, this.repository); }
   private foreground(): void { if (this.ready) { this.repository.reload(); this.repository.maintain(this.getUIContext().getHostContext() as common.UIAbilityContext); this.refresh(); this.readShares(); if (!this.iconBusy) this.loadIcon(); } }
@@ -206,22 +258,42 @@ struct Index {
     }
     if (action === 'capture') this.newItem();
     else if (action === 'search') this.beginSearch();
-    else if (action === 'dates') this.navigate('提醒');
+    else if (action === 'dates') { this.handled = false; this.navigate('提醒'); }
     else if (action === 'cardSettings') this.navigate('外观与隐私');
     else if (action === 'scan') this.scan(true);
     else if(action==='item'){const id=AppStorage.get<string>('entryItemId')??'';if(this.data.items.some((item:Item)=>item.id===id && !item.deletedAt))this.detail(id);else this.notify('这条记录已移除，可以继续查找');}
   }
   private resumeEntry(): void {
-    this.refresh(); if (!this.pendingAction) return;
+    this.data.drafts = copy(this.repository.data.drafts);
+    const next = this.afterSheet;
+    this.afterSheet = undefined;
+    if (next) next();
+    if (!this.pendingAction) return;
     const action = this.pendingAction; this.pendingAction = '';
     AppStorage.setOrCreate('entryItemId', this.pendingItemId); AppStorage.setOrCreate('entryAction', action);
   }
+  private applyMotion(): void {
+    this.reducedMotion = this.systemReducedMotion || this.data.preference.motion === 'SIMPLE';
+    this.stack.disableAnimation(this.reducedMotion);
+  }
   private applyTheme(): void {
-    this.stack.disableAnimation(this.data.preference.motion==='SIMPLE');
+    this.applyMotion();
     const mode = this.data.preference.theme;
     (this.getUIContext().getHostContext() as common.UIAbilityContext).getApplicationContext().setColorMode(mode === 'DARK' ? ConfigurationConstant.ColorMode.COLOR_MODE_DARK : mode === 'LIGHT' ? ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT : ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
   }
-  private preference(change: (value: Preference) => void): void { const value = copy(this.data.preference); change(value); this.repository.savePreference(value); this.applyTheme(); }
+  private preferenceChanged(value: Preference): void {
+    const previous = this.data.preference;
+    this.data.preference = copy(value);
+    if (previous.theme !== value.theme) this.applyTheme();
+    else if (previous.motion !== value.motion) this.applyMotion();
+    if (previous.externalDetails !== value.externalDetails || previous.reminderEnabled !== value.reminderEnabled) this.calendar?.sync();
+    if (previous.cardSummary !== value.cardSummary || previous.cardIds.join() !== value.cardIds.join()) this.refreshCards();
+  }
+  private preference(change: (value: Preference) => void): void {
+    const value = copy(this.repository.data.preference);
+    change(value);
+    this.repository.savePreference(value);
+  }
   private selectedCardIds(): string[] {
     return this.data.preference.cardIds.filter((value: string) => this.data.items.some((item: Item) => item.id === value && !item.deletedAt && item.status !== 'ARCHIVED'));
   }
@@ -231,12 +303,21 @@ struct Index {
     this.preference((pref: Preference) => pref.cardIds = selected ? (ids.includes(id) ? ids : [...ids, id]) : ids.filter((value: string) => value !== id));
   }
   private notify(message: string): void { this.getUIContext().getPromptAction().showToast({ message, duration: 3000 }); }
-  private act(run: () => void, message: string = '已保存'): void { try { run(); this.refresh(); if (message) this.notify(message); } catch (error) { this.notify((error as Error).message); } }
+  private act(run: () => void, message: string = '已保存'): void { try { run(); if (message) this.notify(message); } catch (error) { this.notify((error as Error).message); } }
   private navigate(name: string): void { this.endSelection(); this.stack.pushPath({ name, param: name==='位置详情'?this.focusedLocation:name==='物品详情'?this.focusedId:'' }); }
-  private detail(id: string): void { this.focusedId = id; this.moreActions = false; this.historyOpen = false; this.repository.viewed(id); this.refresh(); this.navigate('物品详情'); }
-  private current(): Item { return this.data.items.find((item: Item) => item.id === this.focusedId) ?? new Item(); }
+  private detail(id: string): void {
+    this.repository.viewed(id);
+    const item = this.repository.data.items.find((value: Item) => value.id === id);
+    if (!item) return;
+    this.data.items = this.data.items.map((value: Item) => value.id === id ? copy(item) : value);
+    this.focusedId = id;
+    this.historyOpen = false;
+    this.detailPhoto = item.photoIds[0] ?? '';
+    this.navigate('物品详情');
+  }
+  private current(id: string = this.focusedId): Item { return this.data.items.find((item: Item) => item.id === id) ?? new Item(); }
   private openPhoto(ids: string[], id: string): void { this.previewPhotos = [...ids]; this.previewPhoto = id; this.navigate('照片'); }
-  private location(): Location { return this.data.locations.find((location: Location) => location.id === this.focusedLocation) ?? new Location(); }
+  private location(id: string = this.focusedLocation): Location { return this.data.locations.find((location: Location) => location.id === id) ?? new Location(); }
   private locationParents(): Location[] { return this.data.locations.filter((node: Location) => this.repository.canReparent(this.locationForm.id, node.id)); }
   private dateRows(section: string): DateRow[] {
     const rows: DateRow[] = [];
@@ -309,12 +390,27 @@ struct Index {
   private search(): void {
     if (!this.ready && !this.repository.data.items.length) return;
     this.results = this.repository.search(this.query, this.scope, this.filter, this.category);
+  }
+  private searchHome(): void {
     this.homeResults = this.repository.search('', 'CURRENT', this.homeFilter, this.homeCategory);
-    this.locationResults = this.repository.search('', 'CURRENT', '', '', this.focusedLocation, this.includeChildren);
+  }
+  private searchLocation(): void {
+    this.locationResults = this.focusedLocation ? this.repository.search('', 'CURRENT', '', '', this.focusedLocation, this.includeChildren) : [];
   }
   private homeItems(): Item[] { return this.homeResults; }
-  private locationItems(): Item[] { return this.locationResults; }
+  private locationItems(id: string): Item[] {
+    return id === this.focusedLocation ? this.locationResults : this.repository.search('', 'CURRENT', '', '', id, this.includeChildren);
+  }
+  private changeList(update: () => void): void {
+    if (this.reducedMotion) update();
+    else this.getUIContext().animateTo({ duration: 160, curve: Curve.EaseOut }, update);
+  }
   private endSelection(): void { this.selecting = false; this.selected = []; }
+  onBackPress(): boolean {
+    if (this.stack.size() || !this.selecting || this.editorOpen || this.panelOpen || this.shareOpen) return false;
+    this.endSelection();
+    return true;
+  }
   private selectItem(id: string): void {
     const pages = this.stack.getAllPathName();
     const page = pages[pages.length - 1] ?? '';
@@ -324,9 +420,17 @@ struct Index {
   }
   private beginSearch(): void {
     clearTimeout(this.queryTimer);
+    this.focusSearchOnShow = true;
     this.showAllSearchResults = false;
     this.query = ''; this.scope = 'CURRENT'; this.filter = '全部'; this.category = ''; this.searchFilters = false;
-    this.search(); this.navigate('搜索');
+    this.search();
+    const pages = this.stack.getAllPathName();
+    if (pages[pages.length - 1] === '搜索') {
+      this.focusSearchOnShow = false;
+      focusVisibleInput(this.getUIContext(), 'searchInput');
+    } else {
+      this.navigate('搜索');
+    }
   }
   private showSearchSuggestions(): boolean {
     return !this.showAllSearchResults && !this.query.trim() && this.scope === 'CURRENT' && this.filter === '全部' && !this.category;
@@ -340,6 +444,26 @@ struct Index {
   private submitSearch(): void {
     this.search(); const query = this.query.trim();
     if (query) this.preference((pref: Preference) => pref.searchHistory = [query, ...pref.searchHistory.filter((entry: string) => entry !== query)].slice(0, 8));
+  }
+  private selectableItems(): Item[] {
+    const pages = this.stack.getAllPathName();
+    const page = pages[pages.length - 1];
+    if (!page) return this.homeResults;
+    if (page === '搜索' && !this.showSearchSuggestions()) return this.results;
+    if (page === '位置详情') return this.locationItems(this.focusedLocation);
+    return [];
+  }
+  private checkedTargets(ids: string[]): string[] {
+    const visible = new Set(this.selectableItems().map((item: Item) => item.id));
+    if (!ids.length || ids.some((id: string) => !visible.has(id))) throw new Error('当前列表已变化，请重新选择物品');
+    return [...ids];
+  }
+  private recycleSelection(): void {
+    const ids = [...this.selected];
+    this.confirm('移入回收站', `将 ${ids.length} 条记录移入回收站，保留 30 天。`, () => {
+      this.repository.recycle(this.checkedTargets(ids));
+      this.endSelection();
+    });
   }
   private toggle(id: string): void { this.selected = this.selected.includes(id) ? this.selected.filter((value: string) => value !== id) : [...this.selected, id]; }
   private confirm(title: string, message: string, action: () => void): void { this.getUIContext().showAlertDialog({ title, message, primaryButton: { value: '取消', action: () => {} }, secondaryButton: { value: title, action: () => this.act(action) } }); }
@@ -356,9 +480,9 @@ struct Index {
     try {
       const id = this.focusedId; const target = this.targetLocation;
       if (this.panel === '管理位置') this.repository.saveLocation(this.locationForm);
-      else if (this.panel === '移除位置') { this.repository.deleteLocation(this.focusedLocation, target); this.stack.pop(); }
-      else if (this.panel === '拆分数量') {const next=this.repository.split(id,Number(this.quantity),this.value,target,this.keepDates);this.detail(next);}
-      else if (this.panel === '批量移位置') this.repository.mutate(this.selected, '批量移位置', (item: Item) => item.locationId = target);
+      else if (this.panel === '移除位置') { this.repository.deleteLocation(this.focusedLocation, target); this.afterSheet = () => this.stack.pop(); }
+      else if (this.panel === '拆分数量') {const next=this.repository.split(id,Number(this.quantity),this.value,target,this.keepDates);this.afterSheet = () => this.detail(next);}
+      else if (this.panel === '批量移位置') this.repository.mutate(this.checkedTargets(this.selected), '批量移位置', (item: Item) => item.locationId = target);
       else this.repository.mutate([id], this.panel, (item: Item) => {
         if (this.panel === '改位置') item.locationId = target;
         if (this.panel === '调整数量') { item.quantity = Number(this.quantity); if (item.quantity === 0) { item.status = 'ARCHIVED'; item.archiveReason = 'USED_UP'; item.archivedAt = Date.now(); } }
@@ -368,16 +492,16 @@ struct Index {
         if (this.panel === '恢复到家当') { item.status = 'ACTIVE'; item.quantity = Number(this.quantity); item.locationId = target; item.archiveReason = ''; item.archivedAt = 0; }
         if (this.panel === '恢复记录') { item.deletedAt = 0; item.purgeAt = 0; item.locationId = target; }
       });
-      this.panelOpen = false; this.selected = []; this.selecting = false; this.refresh(); this.notify('已保存');
+      this.panelOpen = false; this.selected = []; this.selecting = false; this.notify('已保存');
     } catch (error) { this.panelError = (error as Error).message; }
   }
   @Builder empty(title: string, subtitle: string) {
     Column({ space: 14 }) { this.characterImage(150); Text(title).fontSize(23).fontColor($r('app.color.text')); Text(subtitle).fontSize(15).fontColor($r('app.color.secondary')).textAlign(TextAlign.Center) }.width('100%').padding({ top: 28, bottom: 24 })
   }
-  @Builder characterImage(size: number) {
+  @Builder characterImage(size: number, launch: boolean = false) {
     if (this.activeIcon) {
       Image(this.activeIcon === 'moving_buddy' ? $r('app.media.buddy_foreground') : $r('app.media.foreground'))
-        .width(size).height(size).objectFit(ImageFit.Contain).syncLoad(true)
+        .width(size).height(size).objectFit(ImageFit.Contain).syncLoad(launch)
     } else {
       Blank().width(size).height(size).flexGrow(0)
     }
@@ -430,7 +554,7 @@ struct Index {
         if (this.matchText(item)) { Text(this.matchText(item)).fontSize(13).fontColor($r('app.color.secondary')).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }) }
         this.statusTags(item)
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-    }.width('100%').padding(12).backgroundColor($r('app.color.surface')).borderRadius(20).onClick(() => this.selecting ? this.toggle(item.id) : this.detail(item.id)).gesture(LongPressGesture().onAction(() => this.selectItem(item.id)))
+    }.width('100%').padding(12).backgroundColor($r('app.color.surface')).borderRadius(20).stateStyles({ pressed: { .opacity(0.78) } }).onClick(() => this.selecting ? this.toggle(item.id) : this.detail(item.id)).gesture(LongPressGesture().onAction(() => this.selectItem(item.id)))
   }
   @Builder items($$: ItemRows) {
     ForEach($$.values.slice(0, this.pageSize), (item: Item) => this.itemRow(item, $$.here ?? ''), (item: Item) => item.id + ':' + item.revision)
@@ -439,18 +563,18 @@ struct Index {
   @Builder filters(home: boolean = false) {
     Scroll() {
       Row({ space: 6 }) {
-        ForEach(['全部', '常用', '借出', '整组', '待补位置'], (name: string) => { ActionButton({ label: name, tonal: (home ? this.homeFilter : this.filter) === name, run: () => { this.endSelection(); if (home) this.homeFilter = name; else this.filter = name; this.search(); } }) })
-        Select(CATEGORY_NAMES.map((name: string, index: number): SelectOption => ({ value: index ? name : '全部分类' }))).value((home ? this.homeCategory : this.category) ? CATEGORY_NAMES[CATEGORY_CODES.indexOf(home ? this.homeCategory : this.category)] : '全部分类').font({ size: 15 }).fontColor($r('app.color.primary')).backgroundColor($r('app.color.surface')).height(48).onSelect((index: number) => { this.endSelection(); if (home) this.homeCategory = CATEGORY_CODES[index]; else this.category = CATEGORY_CODES[index]; this.search(); })
-        if ((home ? this.homeCategory : this.category) || (home ? this.homeFilter : this.filter) !== '全部') { ActionButton({ label: '清除', run: () => { this.endSelection(); if (home) { this.homeFilter = '全部'; this.homeCategory = ''; } else { this.filter = '全部'; this.category = ''; } this.search(); } }) }
+        ForEach(['全部', '常用', '借出', '整组', '待补位置'], (name: string) => { ActionButton({ label: name, tonal: (home ? this.homeFilter : this.filter) === name, run: () => this.changeList(() => { this.endSelection(); if (home) this.homeFilter = name; else { this.filter = name; this.search(); } }) }) })
+        Select(CATEGORY_NAMES.map((name: string, index: number): SelectOption => ({ value: index ? name : '全部分类' }))).value((home ? this.homeCategory : this.category) ? CATEGORY_NAMES[CATEGORY_CODES.indexOf(home ? this.homeCategory : this.category)] : '全部分类').font({ size: 15 }).fontColor($r('app.color.primary')).backgroundColor($r('app.color.surface')).height(48).onSelect((index: number) => this.changeList(() => { this.endSelection(); if (home) this.homeCategory = CATEGORY_CODES[index]; else { this.category = CATEGORY_CODES[index]; this.search(); } }))
+        if ((home ? this.homeCategory : this.category) || (home ? this.homeFilter : this.filter) !== '全部') { ActionButton({ label: '清除', run: () => this.changeList(() => { this.endSelection(); if (home) { this.homeFilter = '全部'; this.homeCategory = ''; } else { this.filter = '全部'; this.category = ''; this.search(); } }) }) }
       }
     }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%')
   }
-  @Builder batch(values: Item[]) {
+  @Builder batch() {
     if (this.selecting) {
-      Row({ space: 8 }) { Text(`已选 ${this.selected.length} 条`).layoutWeight(1).fontColor($r('app.color.text')); ActionButton({ label: '全选', run: () => this.selected = values.map((item: Item) => item.id) }); ActionButton({ label: '完成', run: () => this.endSelection() }) }
+      Row({ space: 8 }) { Text(`已选 ${this.selected.length} 条`).layoutWeight(1).fontColor($r('app.color.text')); ActionButton({ label: '全选', run: () => this.selected = this.selectableItems().map((item: Item) => item.id) }); ActionButton({ label: '完成', run: () => this.endSelection() }) }
       Row({ space: 8 }) {
         ActionButton({ label: '移位置', run: () => this.openPanel('批量移位置') })
-        ActionButton({ label: '移入回收站', run: () => this.confirm('移入回收站', `将 ${this.selected.length} 条记录移入回收站，保留 30 天。`, () => { this.repository.recycle(this.selected); this.selected = []; this.selecting = false; }) })
+        ActionButton({ label: '移入回收站', run: () => this.recycleSelection() })
       }.enabled(this.selected.length > 0)
     }
   }
@@ -505,7 +629,7 @@ struct Index {
         Text(`${this.homeFilter}${this.homeCategory ? ' · ' + CATEGORY_NAMES[CATEGORY_CODES.indexOf(this.homeCategory)] : ''} · ${this.homeItems().length} 条`).fontSize(14).fontColor($r('app.color.secondary')).layoutWeight(1)
         ActionButton({ label: this.listView ? '看照片' : '看列表', run: () => this.listView = !this.listView })
       }.width('100%')
-      this.batch(this.homeItems())
+      this.batch()
     }
     if (!this.homeItems().length) {
       if (this.homeFilter !== '全部' || this.homeCategory) {
@@ -530,7 +654,7 @@ struct Index {
         Text(this.repository.path(item.locationId) || '位置待补充').fontSize(12).fontColor($r('app.color.secondary')).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
         this.statusTags(item)
       }.alignItems(HorizontalAlign.Start).padding({ left: 12, right: 12, top: 10, bottom: 12 }).width('100%').constraintSize({ minHeight: 96 })
-    }.width('100%').backgroundColor($r('app.color.surface')).borderRadius(20).clip(true)
+    }.width('100%').backgroundColor($r('app.color.surface')).borderRadius(20).clip(true).stateStyles({ pressed: { .opacity(0.78) } })
     .accessibilityGroup(true).accessibilityText(displayName(item) + '，' + (this.repository.path(item.locationId) || '位置待补充') + '，' + statusText(item))
     .onClick(() => this.selecting ? this.toggle(item.id) : this.detail(item.id)).gesture(LongPressGesture().onAction(() => { this.selecting = true; this.selected = [item.id]; }))
   }
@@ -539,16 +663,15 @@ struct Index {
       GridRow({columns:this.contentWidth>=600?3:2,gutter:12}){
         ForEach(this.homeItems().slice(0,this.pageSize),(item:Item)=>{
           GridCol(){ this.gridCard(item) }
-        },(item:Item)=>item.id+':'+item.revision+':'+this.selecting)
+        },(item:Item)=>item.id+':'+item.revision)
       }.width('100%')
       if(this.homeItems().length>this.pageSize){ActionButton({label:'继续显示更多',run:()=>this.pageSize+=60})}
     }
   }
   @Builder searchPage() {
-    if (this.voiceOpen) { this.voice() }
     Search({ value: this.query, placeholder: '名称、拼音、说明、位置' }).id('searchInput').height(52).maxLength(100).defaultFocus(true)
-      .onAppear(() => setTimeout(() => { try { this.getUIContext().getFocusController().requestFocus('searchInput'); } catch (_) {} }, 350)).onChange((value: string, preview: PreviewText) => { this.endSelection(); this.showAllSearchResults = false; this.query = value; clearTimeout(this.queryTimer); if (!preview.value) this.queryTimer = setTimeout(() => this.search(), 200); }).onSubmit(() => this.submitSearch())
-    Row({space:8}) {ActionButton({ label: '扫一扫', icon: $r('sys.symbol.barcode_viewfinder'), tonal: true, run: ()=>this.navigate('扫码查同款') });ActionButton({ label: '语音', icon: $r('sys.symbol.mic'), tonal: true, run: ()=>this.voiceOpen=true });ActionButton({label: this.searchFilters ? '收起筛选' : (this.category || this.filter !== '全部' || this.scope !== 'CURRENT' ? '筛选 · 已选' : '筛选'), tonal: this.searchFilters, run:()=>this.searchFilters=!this.searchFilters});}
+      .onChange((value: string, preview: PreviewText) => { this.endSelection(); this.showAllSearchResults = false; this.query = value; clearTimeout(this.queryTimer); if (!preview.value) this.queryTimer = setTimeout(() => this.search(), 200); }).onSubmit(() => this.submitSearch())
+    Row({space:8}) {ActionButton({ label: '扫一扫', icon: $r('sys.symbol.barcode_viewfinder'), tonal: true, run: ()=>this.navigate('扫码查同款') });ActionButton({ label: '语音', icon: $r('sys.symbol.mic'), tonal: true, run: ()=>this.voiceOpen=true });ActionButton({label: this.searchFilters ? '收起筛选' : (this.category || this.filter !== '全部' || this.scope !== 'CURRENT' ? '筛选 · 已选' : '筛选'), tonal: this.searchFilters, run:()=>this.changeList(() => this.searchFilters=!this.searchFilters)});}
     if (this.searchFilters) {
     Row({ space: 8 }) { ActionButton({ label: this.scope === 'CURRENT' ? '✓ 在手与借出' : '在手与借出', run: () => { this.endSelection(); this.scope = 'CURRENT'; this.search(); } }); ActionButton({ label: this.scope === 'ARCHIVED' ? '✓ 归档' : '归档', run: () => { this.endSelection(); this.scope = 'ARCHIVED'; this.search(); } }) }
     this.filters()
@@ -556,7 +679,7 @@ struct Index {
     if (!this.showSearchSuggestions()) {
       Text(`${this.scope === 'ARCHIVED' ? '归档' : '在手与借出'} · ${this.filter}${this.category ? ' · ' + CATEGORY_NAMES[CATEGORY_CODES.indexOf(this.category)] : ''} · ${this.results.length} 条`).fontSize(14).fontColor($r('app.color.secondary'))
     }
-    this.batch(this.results)
+    this.batch()
     if (this.showSearchSuggestions()) {
       if (this.data.preference.searchHistory.length) {
         Row() { Text('最近搜索').fontSize(16).fontColor($r('app.color.secondary')); Blank(); ActionButton({ label: '清空', run: () => this.preference((pref: Preference) => pref.searchHistory = []) }) }.width('100%')
@@ -591,11 +714,11 @@ struct Index {
     }
   }
   private childLocations(parentId: string): Location[] { return this.data.locations.filter((location: Location) => location.parentId === parentId).sort((a: Location, b: Location) => a.sortOrder - b.sortOrder); }
-  @Builder locations(root: boolean = false) {
+  @Builder locations(root: boolean, parentId: string = '') {
     if (root) SectionHeading({ title: '位置', subtitle: '按存放位置，找到你的物品' })
-    if (this.childLocations(root ? '' : this.focusedLocation).length) {
+    if (this.childLocations(parentId).length) {
       GroupCard({ header: root ? '' : '里面的位置' }) {
-        ForEach(this.childLocations(root ? '' : this.focusedLocation), (location: Location, index: number) => {
+        ForEach(this.childLocations(parentId), (location: Location, index: number) => {
           MenuRow({ plain: true, first: index === 0, icon: root ? $r('sys.symbol.house') : $r('sys.symbol.folder'), title: location.name, subtitle: `${this.repository.search('', 'CURRENT', '', '', location.id).length} 条记录` + (this.data.locations.some((node: Location) => node.parentId === location.id) ? ` · ${this.data.locations.filter((node: Location) => node.parentId === location.id).length} 个子位置` : ''), action: () => { this.focusedLocation = location.id; this.navigate('位置详情'); } })
         }, (location: Location) => location.id + ':' + location.revision)
       }
@@ -604,18 +727,18 @@ struct Index {
     }
     ActionButton({ label: root ? '新建位置' : '新建子位置', icon: $r('sys.symbol.plus'), tonal: true, run: () => { if (root) this.focusedLocation = ''; this.openLocationForm(); } })
   }
-  @Builder locationDetail() {
-    SectionHeading({ title: this.location().name, subtitle: this.location().parentId ? '在 ' + this.repository.path(this.location().parentId) : '' })
-    if(this.location().photoAssetId){Image(this.media().uri(this.location().photoAssetId)).width('100%').aspectRatio(1.5).objectFit(ImageFit.Cover).borderRadius(20).onClick(()=>this.openPhoto([this.location().photoAssetId],this.location().photoAssetId))}
-    if (this.location().notes) { Text(this.location().notes).fontColor($r('app.color.secondary')) }
-    Row({ space: 8 }) { ActionButton({ label: '在这里记下', icon: $r('sys.symbol.plus'), run: () => this.newItem(this.focusedLocation), primary: true }); ActionButton({ label: '编辑位置', icon: $r('sys.symbol.square_and_pencil'), tonal: true, run: () => this.openLocationForm(true) }); }
-    this.locations()
-    if (this.data.locations.some((node: Location) => node.parentId === this.focusedLocation)) {
+  @Builder locationDetail(id: string) {
+    SectionHeading({ title: this.location(id).name, subtitle: this.location(id).parentId ? '在 ' + this.repository.path(this.location(id).parentId) : '' })
+    if(this.location(id).photoAssetId){Image(this.media().uri(this.location(id).photoAssetId)).width('100%').aspectRatio(1.5).objectFit(ImageFit.Cover).borderRadius(20).onClick(()=>this.openPhoto([this.location(id).photoAssetId],this.location(id).photoAssetId))}
+    if (this.location(id).notes) { Text(this.location(id).notes).fontColor($r('app.color.secondary')) }
+    Row({ space: 8 }) { ActionButton({ label: '在这里记下', icon: $r('sys.symbol.plus'), run: () => this.newItem(id), primary: true }); ActionButton({ label: '编辑位置', icon: $r('sys.symbol.square_and_pencil'), tonal: true, run: () => this.openLocationForm(true) }); }
+    this.locations(false, id)
+    if (this.data.locations.some((node: Location) => node.parentId === id)) {
       Segmented({ options: ['包含子位置', '只看这一层'], selected: this.includeChildren ? 0 : 1, onSelect: (index: number) => { this.endSelection(); this.includeChildren = index === 0; } })
     }
-    Text(`${this.includeChildren ? '包含子位置' : '只看这一层'} · ${this.locationItems().length} 条记录`).fontSize(14).fontColor($r('app.color.secondary'))
-    this.batch(this.locationItems())
-    this.items({ values: this.locationItems(), here: this.focusedLocation })
+    Text(`${this.includeChildren ? '包含子位置' : '只看这一层'} · ${this.locationItems(id).length} 条记录`).fontSize(14).fontColor($r('app.color.secondary'))
+    this.batch()
+    this.items({ values: this.locationItems(id), here: id })
     ActionButton({ label: '移除这个位置', icon: $r('sys.symbol.trash'), danger: true, run: () => this.openPanel('移除位置') })
   }
   private confirmFound(): void { this.act(() => this.repository.mutate([this.focusedId], '确认位置', (item: Item) => item.locationConfirmedAt = Date.now()), '位置已确认'); }
@@ -625,69 +748,71 @@ struct Index {
     if (item.status !== 'ACTIVE' || item.deletedAt || !item.locationId) return path;
     return path + '\n' + (item.locationConfirmedAt ? '上次确认在这里：' + friendlyTime(item.locationConfirmedAt) : '找到实物后点“找到了”，下次更放心');
   }
-  @Builder details() {
-    if (!this.data.items.some((item: Item) => item.id === this.focusedId)) { this.empty('这条记录已移除', '返回家当查看其他记录') }
+  @Builder details(id: string) {
+    if (!this.data.items.some((item: Item) => item.id === id)) { this.empty('这条记录已移除', '返回家当查看其他记录') }
     else {
-      if (this.current().photoIds.length) {
-        Swiper() { ForEach(this.current().photoIds, (id: string) => { Image(this.media().uri(id)).width('100%').height('100%').objectFit(ImageFit.Cover).onClick(() => this.openPhoto(this.current().photoIds, id)) }, (id: string) => id) }
-          .width('100%').aspectRatio(4 / 3).borderRadius(24).clip(true).loop(false).indicator(this.current().photoIds.length > 1)
+      if (this.current(id).photoIds.length) {
+        Swiper() { ForEach(this.current(id).photoIds, (photo: string) => { Image(this.media().uri(photo)).width('100%').height('100%').objectFit(ImageFit.Cover).onClick(() => this.openPhoto(this.current(id).photoIds, photo)) }, (id: string) => id) }
+          .width('100%').aspectRatio(4 / 3).borderRadius(24).clip(true).loop(false).indicator(this.current(id).photoIds.length > 1)
+          .index(Math.max(0, this.current(id).photoIds.indexOf(this.detailPhoto)))
+          .onChange((index: number) => { this.detailPhoto = this.current(id).photoIds[index] ?? ''; })
       }
       Row({ space: 14 }) {
-        if (!this.current().photoIds.length) { this.glyph(this.current(), 60) }
+        if (!this.current(id).photoIds.length) { this.glyph(this.current(id), 60) }
         Column({ space: 8 }) {
-          Text(displayName(this.current())).fontSize(26).fontWeight(FontWeight.Medium).fontColor($r('app.color.text')).maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(displayName(this.current(id))).fontSize(26).fontWeight(FontWeight.Medium).fontColor($r('app.color.text')).maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
           Flex({ wrap: FlexWrap.Wrap, space: { main: LengthMetrics.vp(6), cross: LengthMetrics.vp(4) } }) {
-            StatusTag({ label: statusText(this.current()), warning: !!this.current().deletedAt })
-            if (this.dueBadge(this.current())) { StatusTag({ label: this.dueBadge(this.current()), warning: this.dueDays(this.current()) <= 7 }) }
+            StatusTag({ label: statusText(this.current(id)), warning: !!this.current(id).deletedAt })
+            if (this.dueBadge(this.current(id))) { StatusTag({ label: this.dueBadge(this.current(id)), warning: this.dueDays(this.current(id)) <= 7 }) }
           }
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        if (!this.current().deletedAt && this.current().status !== 'ARCHIVED') {
-          Stack() { SymbolGlyph(this.current().favorite ? $r('sys.symbol.star_fill') : $r('sys.symbol.star')).fontSize(24).fontColor([this.current().favorite ? $r('app.color.star') : $r('app.color.secondary')]) }
+        if (!this.current(id).deletedAt && this.current(id).status !== 'ARCHIVED') {
+          Stack() { SymbolGlyph(this.current(id).favorite ? $r('sys.symbol.star_fill') : $r('sys.symbol.star')).fontSize(24).fontColor([this.current(id).favorite ? $r('app.color.star') : $r('app.color.secondary')]) }
             .width(48).height(48).borderRadius(24).onClick(() => this.toggleFavorite())
-            .accessibilityText(this.current().favorite ? '取消常用' : '设为常用').accessibilityLevel('yes')
+            .accessibilityText(this.current(id).favorite ? '取消常用' : '设为常用').accessibilityLevel('yes')
         }
       }.width('100%').alignItems(VerticalAlign.Top).padding({ top: 4 })
-      if (!this.current().deletedAt && this.current().status !== 'ARCHIVED') {
+      if (!this.current(id).deletedAt && this.current(id).status !== 'ARCHIVED') {
         Row() {
-          if (this.current().status === 'ACTIVE' && this.current().locationId) { QuickAction({ label: '找到了', icon: $r('sys.symbol.checkmark_circle'), run: () => this.confirmFound() }) }
-          QuickAction({ label: this.current().locationId ? '改位置' : '补位置', icon: this.current().locationId ? $r('sys.symbol.arrow_left_arrow_right') : $r('sys.symbol.mappin_and_rectangle'), accent: !this.current().locationId && this.current().status === 'ACTIVE', run: () => this.openPanel('改位置') })
-          if (this.current().status === 'LENT') { QuickAction({ label: '已归还', icon: $r('sys.symbol.arrowshape_turn_up_left'), accent: true, run: () => this.openPanel('已归还') }) }
+          if (this.current(id).status === 'ACTIVE' && this.current(id).locationId) { QuickAction({ label: '找到了', icon: $r('sys.symbol.checkmark_circle'), run: () => this.confirmFound() }) }
+          QuickAction({ label: this.current(id).locationId ? '改位置' : '补位置', icon: this.current(id).locationId ? $r('sys.symbol.arrow_left_arrow_right') : $r('sys.symbol.mappin_and_rectangle'), accent: !this.current(id).locationId && this.current(id).status === 'ACTIVE', run: () => this.openPanel('改位置') })
+          if (this.current(id).status === 'LENT') { QuickAction({ label: '已归还', icon: $r('sys.symbol.arrowshape_turn_up_left'), accent: true, run: () => this.openPanel('已归还') }) }
           else { QuickAction({ label: '借出', icon: $r('sys.symbol.arrowshape_turn_up_right'), run: () => this.openPanel('借出') }) }
-          QuickAction({ label: '编辑', icon: $r('sys.symbol.square_and_pencil'), run: () => this.edit(this.current()) })
+          QuickAction({ label: '编辑', icon: $r('sys.symbol.square_and_pencil'), run: () => this.edit(this.current(id)) })
         }.width('100%')
       }
       GroupCard() {
-        MenuRow({ plain: true, first: true, icon: $r('sys.symbol.mappin_and_rectangle'), title: this.current().status === 'LENT' ? '归还时放回' : this.current().deletedAt ? '回收时的位置' : '放在这里', subtitle: this.current().deletedAt ? (this.current().previousLocationPath || '位置待补充') : this.locationSubtitle(this.current()), chevron: !this.current().deletedAt, action: () => { if (!this.current().deletedAt) this.openPanel('改位置'); } })
-        ForEach(this.current().dates, (date: ItemDate) => { MenuRow({ plain: true, icon: date.type === 'RETURN' ? $r('sys.symbol.arrowshape_turn_up_left') : $r('sys.symbol.calendar'), title: date.handledAt ? dateTypeName(date.type) + ' · ' + shortDate(date.date) : relativeDue(date.date, date.type) + '（' + shortDate(date.date) + '）', subtitle: date.handledAt ? '已处理' : this.dateArrangement(date), action: () => this.navigate('提醒') }) }, (date: ItemDate) => date.id + ':' + date.dateVersion + ':' + date.handledAt)
-        if (this.current().sourceItemId) { MenuRow({ plain: true, icon: $r('sys.symbol.rectangle_on_rectangle'), title: '从原记录拆出', subtitle: this.data.items.find((item: Item) => item.id === this.current().sourceItemId)?.title || '查看来源记录', action: () => { const source = this.data.items.find((item: Item) => item.id === this.current().sourceItemId); if (source) this.detail(source.id); else this.notify('来源记录已移除，拆分历史仍保留'); } }) }
-        if (this.current().missingPhotoCount) { MenuRow({ plain: true, icon: $r('sys.symbol.picture'), title: `${this.current().missingPhotoCount} 张原照片待补充`, subtitle: '可在编辑中重新添加', action: () => this.edit(this.current()) }) }
+        MenuRow({ plain: true, first: true, icon: $r('sys.symbol.mappin_and_rectangle'), title: this.current(id).status === 'LENT' ? '归还时放回' : this.current(id).deletedAt ? '回收时的位置' : '放在这里', subtitle: this.current(id).deletedAt ? (this.current(id).previousLocationPath || '位置待补充') : this.locationSubtitle(this.current(id)), action: this.current(id).deletedAt ? undefined : () => this.openPanel('改位置') })
+        ForEach(this.current(id).dates, (date: ItemDate) => { MenuRow({ plain: true, icon: date.type === 'RETURN' ? $r('sys.symbol.arrowshape_turn_up_left') : $r('sys.symbol.calendar'), title: date.handledAt ? dateTypeName(date.type) + ' · ' + shortDate(date.date) : relativeDue(date.date, date.type) + '（' + shortDate(date.date) + '）', subtitle: date.handledAt ? '已处理' : this.dateArrangement(date), action: () => this.navigate('提醒') }) }, (date: ItemDate) => date.id + ':' + date.dateVersion + ':' + date.handledAt)
+        if (this.current(id).sourceItemId) { MenuRow({ plain: true, icon: $r('sys.symbol.rectangle_on_rectangle'), title: '从原记录拆出', subtitle: this.data.items.find((item: Item) => item.id === this.current(id).sourceItemId)?.title || '查看来源记录', action: () => { const source = this.data.items.find((item: Item) => item.id === this.current(id).sourceItemId); if (source) this.detail(source.id); else this.notify('来源记录已移除，拆分历史仍保留'); } }) }
+        if (this.current(id).missingPhotoCount) { MenuRow({ plain: true, icon: $r('sys.symbol.picture'), title: `${this.current(id).missingPhotoCount} 张原照片待补充`, subtitle: '可在编辑中重新添加', action: () => this.edit(this.current(id)) }) }
       }
-      if (this.current().notes || this.current().aliases.length || this.current().tags.length || this.current().barcodeValue) {
+      if (this.current(id).notes || this.current(id).aliases.length || this.current(id).tags.length || this.current(id).barcodeValue) {
         Column({ space: 8 }) {
-          if (this.current().notes) { Text(this.current().notes).fontSize(16).fontColor($r('app.color.text')).copyOption(CopyOptions.InApp).width('100%') }
-          if (this.current().aliases.length) { Text('也叫：' + this.current().aliases.join('、')).fontSize(14).fontColor($r('app.color.secondary')) }
-          if (this.current().tags.length) { Flex({ wrap: FlexWrap.Wrap, space: { main: LengthMetrics.vp(6), cross: LengthMetrics.vp(6) } }) { ForEach(this.current().tags, (tag: string) => { StatusTag({ label: '# ' + tag }) }, (tag: string) => tag) } }
-          if (this.current().barcodeValue) { Text('商品条码：' + this.current().barcodeValue).fontSize(13).fontColor($r('app.color.secondary')) }
+          if (this.current(id).notes) { Text(this.current(id).notes).fontSize(16).fontColor($r('app.color.text')).copyOption(CopyOptions.InApp).width('100%') }
+          if (this.current(id).aliases.length) { Text('也叫：' + this.current(id).aliases.join('、')).fontSize(14).fontColor($r('app.color.secondary')) }
+          if (this.current(id).tags.length) { Flex({ wrap: FlexWrap.Wrap, space: { main: LengthMetrics.vp(6), cross: LengthMetrics.vp(6) } }) { ForEach(this.current(id).tags, (tag: string) => { StatusTag({ label: '# ' + tag }) }, (tag: string) => tag) } }
+          if (this.current(id).barcodeValue) { Text('商品条码：' + this.current(id).barcodeValue).fontSize(13).fontColor($r('app.color.secondary')) }
         }.width('100%').alignItems(HorizontalAlign.Start).padding(16).backgroundColor($r('app.color.surface')).borderRadius(20)
       }
-      if (this.current().deletedAt) {
-        Text('保留至 ' + friendlyTime(this.current().purgeAt)).fontColor($r('app.color.warning'))
+      if (this.current(id).deletedAt) {
+        Text('保留至 ' + friendlyTime(this.current(id).purgeAt)).fontColor($r('app.color.warning'))
         ActionButton({ label: '恢复记录', icon: $r('sys.symbol.arrow_counterclockwise'), run: () => this.openPanel('恢复记录'), primary: true })
-        ActionButton({ label: '永久删除', icon: $r('sys.symbol.trash'), danger: true, run: () => this.confirm('永久删除', `删除“${displayName(this.current())}”及 ${this.repository.unreferencedPhotoCount(this.focusedId)} 张不再被其他记录引用的照片。此操作无法撤销。`, () => { this.repository.purge([this.focusedId]); this.stack.pop(); }) })
-      } else if (this.current().status === 'ARCHIVED') { ActionButton({ label: '恢复到家当', icon: $r('sys.symbol.arrow_counterclockwise'), run: () => this.openPanel('恢复到家当'), primary: true }) }
+        ActionButton({ label: '永久删除', icon: $r('sys.symbol.trash'), danger: true, run: () => this.confirm('永久删除', `删除“${displayName(this.current(id))}”及 ${this.repository.unreferencedPhotoCount(id)} 张不再被其他记录引用的照片。此操作无法撤销。`, () => { this.repository.purge([id]); this.stack.pop(); }) })
+      } else if (this.current(id).status === 'ARCHIVED') { ActionButton({ label: '恢复到家当', icon: $r('sys.symbol.arrow_counterclockwise'), run: () => this.openPanel('恢复到家当'), primary: true }) }
       else {
         GroupCard({ header: '更多操作' }) {
-          if (this.current().kind === 'SINGLE') { MenuRow({ plain: true, first: true, icon: $r('sys.symbol.list_number'), title: '调整数量', subtitle: '用掉一些，或又买了几件', value: `${this.current().quantity ?? 0} 件`, action: () => this.openPanel('调整数量') }) }
-          if (this.current().kind === 'SINGLE' && (this.current().quantity ?? 0) > 1 && this.current().status === 'ACTIVE') { MenuRow({ plain: true, icon: $r('sys.symbol.rectangle_on_rectangle'), title: '拆分数量', subtitle: '例如只借出其中几件', action: () => this.openPanel('拆分数量') }) }
-          MenuRow({ plain: true, first: this.current().kind !== 'SINGLE', icon: $r('sys.symbol.plus_circle'), title: '在这里再记一件', subtitle: this.repository.path(this.current().locationId) || '同样先不选位置', action: () => this.newItem(this.current().locationId) })
+          if (this.current(id).kind === 'SINGLE') { MenuRow({ plain: true, first: true, icon: $r('sys.symbol.list_number'), title: '调整数量', subtitle: '用掉一些，或又买了几件', value: `${this.current(id).quantity ?? 0} 件`, action: () => this.openPanel('调整数量') }) }
+          if (this.current(id).kind === 'SINGLE' && (this.current(id).quantity ?? 0) > 1 && this.current(id).status === 'ACTIVE') { MenuRow({ plain: true, icon: $r('sys.symbol.rectangle_on_rectangle'), title: '拆分数量', subtitle: '例如只借出其中几件', action: () => this.openPanel('拆分数量') }) }
+          MenuRow({ plain: true, first: this.current(id).kind !== 'SINGLE', icon: $r('sys.symbol.plus_circle'), title: '在这里再记一件', subtitle: this.repository.path(this.current(id).locationId) || '同样先不选位置', action: () => this.newItem(this.current(id).locationId) })
           MenuRow({ plain: true, icon: $r('sys.symbol.archivebox'), title: '归档', subtitle: '用完、送出、出售或丢弃', action: () => this.openPanel('归档') })
-          MenuRow({ plain: true, icon: $r('sys.symbol.trash'), title: '移入回收站', danger: true, chevron: false, action: () => this.confirm('移入回收站', '记录与照片保留 30 天，可从“我的 → 归档与回收站”恢复。', () => { this.repository.recycle([this.focusedId]); this.stack.pop(); }) })
+          MenuRow({ plain: true, icon: $r('sys.symbol.trash'), title: '移入回收站', danger: true, chevron: false, action: () => this.confirm('移入回收站', '记录与照片保留 30 天，可从“我的 → 归档与回收站”恢复。', () => { this.repository.recycle([id]); this.stack.pop(); }) })
         }
       }
       GroupCard() {
-        MenuRow({ plain: true, first: true, icon: $r('sys.symbol.clock_arrow_2_circlepath'), title: '变化记录', value: this.historyOpen ? '收起' : `${this.data.events.filter((event: ChangeEvent) => event.itemId === this.focusedId).length} 条`, chevron: !this.historyOpen, action: () => this.historyOpen = !this.historyOpen })
+        MenuRow({ plain: true, first: true, icon: $r('sys.symbol.clock_arrow_2_circlepath'), title: '变化记录', value: this.historyOpen ? '收起' : `${this.data.events.filter((event: ChangeEvent) => event.itemId === id).length} 条`, chevron: !this.historyOpen, action: () => this.getUIContext().animateTo({ duration: this.reducedMotion ? 0 : 180, curve: Curve.EaseOut }, () => this.historyOpen = !this.historyOpen) })
         if (this.historyOpen) {
-          ForEach(this.data.events.filter((event: ChangeEvent) => event.itemId === this.focusedId).sort((a: ChangeEvent, b: ChangeEvent) => b.createdAt - a.createdAt), (event: ChangeEvent) => {
+          ForEach(this.data.events.filter((event: ChangeEvent) => event.itemId === id).sort((a: ChangeEvent, b: ChangeEvent) => b.createdAt - a.createdAt), (event: ChangeEvent) => {
             Column({ space: 4 }) { Text(event.type + ' · ' + friendlyTime(event.createdAt)).fontSize(14).fontColor($r('app.color.text')); ForEach(this.historyLines(event), (line: string) => { Text(line).fontSize(13).fontColor($r('app.color.secondary')) }, (line: string, index: number) => index + line) }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 56, right: 16, top: 6, bottom: 10 })
           }, (event: ChangeEvent) => event.id)
         }
@@ -886,15 +1011,16 @@ struct Index {
       ActionButton({ label: this.panel === '管理位置' ? '保存位置' : '确认' + this.panel, run: () => this.submitPanel(), primary: true })
       }
     }.padding({ left: 24, right: 24, top: 8, bottom: 32 }).width('100%').alignItems(HorizontalAlign.Start)
-    }.width('100%').align(Alignment.TopStart).backgroundColor($r('app.color.background'))
+    }.nestedScroll({ scrollForward: NestedScrollMode.PARENT_FIRST, scrollBackward: NestedScrollMode.SELF_FIRST })
+      .width('100%').align(Alignment.TopStart).backgroundColor($r('app.color.background'))
   }
-  @Builder destination(name: string) {
+  @Builder destination(name: string, id: string) {
     NavDestination() {
       Scroll() {
         Column({ space: 14 }) {
           if (name === '搜索') { this.searchPage() }
-          else if (name === '物品详情') { this.details() }
-          else if (name === '位置详情') { this.locationDetail() }
+          else if (name === '物品详情') { this.details(id) }
+          else if (name === '位置详情') { this.locationDetail(id) }
           else if (name === '草稿') { this.drafts() }
           else if (name === '提醒') { this.reminders() }
           else if (name === '归档与回收站') { this.history() }
@@ -905,31 +1031,66 @@ struct Index {
           else if (name === '到期提醒') { this.reminderSettings() }
           else if (name === '扫码查同款') { this.scanPage() }
           else if(name==='快捷入口'){SectionHeading({ title: '桌面卡片', subtitle: '长按桌面的我的家当图标 → 卡片，选择适合你的用途' });MenuRow({ title: '随手记 · 2×2', subtitle: '找东西与记一件，两个清楚的快捷入口', action: ()=>this.beginSearch() });MenuRow({ title: '常用位置 · 4×2', subtitle: '最多三条物品的位置，借出后显示借用人', action: ()=>this.navigate('外观与隐私') });MenuRow({ title: '日期关注 · 2×2 / 4×2', subtitle: '小卡关注一条，横向卡展示三条到期、归还或保修日期', action: ()=>this.navigate('提醒') });Text('常用位置和日期关注可以同时添加。开启桌面摘要后显示详情；关闭时隐藏所有物品信息，保留操作入口。').fontColor($r('app.color.secondary'));}
-          else if (name === '照片') { PhotoViewer({ repository: this.repository, ids: this.previewPhotos, initialId: this.previewPhoto, onSelect: (id: string) => this.previewPhoto = id }); if (this.current().photoIds.includes(this.previewPhoto) && !this.current().deletedAt && this.current().status !== 'ARCHIVED') { ActionButton({ label: '设为主图', run: () => this.confirm('设为主图', '将当前照片放到这条记录的第一张', () => this.repository.mutate([this.focusedId], '调整主图', (item: Item) => item.photoIds = [this.previewPhoto, ...item.photoIds.filter((id: string) => id !== this.previewPhoto)])) }); ActionButton({ label: '编辑照片与提取文字', run: () => this.edit(this.current()) }); } }
-          else if (name === '示例家当') { SectionHeading({ title: '示例家当', subtitle: '此处展示独立示例' }); MenuRow({ title: '旅行充电器', subtitle: '书房 / 书桌抽屉 · 在手 1 件', action: () => {} }); MenuRow({ title: '露营箱', subtitle: '储物间 / 上层 · 整组记录', action: () => {} }); MenuRow({ title: '备用钥匙', subtitle: '玄关 / 小抽屉 · 常用', action: () => {} }); ActionButton({ label: '开始记录自己的物品', run: () => { this.stack.pop(); this.newItem(); }, primary: true }); }
+          else if (name === '照片') { PhotoViewer({ repository: this.repository, ids: this.previewPhotos, initialId: this.previewPhoto, onSelect: (photo: string) => { this.previewPhoto = photo; this.detailPhoto = photo; } }); if (this.current().photoIds.includes(this.previewPhoto) && !this.current().deletedAt && this.current().status !== 'ARCHIVED') { ActionButton({ label: '设为主图', run: () => this.confirm('设为主图', '将当前照片放到这条记录的第一张', () => this.repository.mutate([this.focusedId], '调整主图', (item: Item) => item.photoIds = [this.previewPhoto, ...item.photoIds.filter((id: string) => id !== this.previewPhoto)])) }); ActionButton({ label: '编辑照片与提取文字', run: () => this.edit(this.current()) }); } }
+          else if (name === '示例家当') { SectionHeading({ title: '示例家当', subtitle: '此处展示独立示例' }); MenuRow({ title: '旅行充电器', subtitle: '书房 / 书桌抽屉 · 在手 1 件' }); MenuRow({ title: '露营箱', subtitle: '储物间 / 上层 · 整组记录' }); MenuRow({ title: '备用钥匙', subtitle: '玄关 / 小抽屉 · 常用' }); ActionButton({ label: '开始记录自己的物品', run: () => { this.stack.pop(); this.newItem(); }, primary: true }); }
         }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 20, right: 20, top: 12, bottom: 32 })
       }.width('100%').height('100%').align(Alignment.TopStart)
-    }.title(name).onShown(()=>{const index=this.stack.getAllPathName().lastIndexOf(name);const id=this.stack.getParamByIndex(index) as string;if(name==='位置详情' && id)this.focusedLocation=id;if(name==='物品详情' && id)this.focusedId=id;}).backgroundColor($r('app.color.background')).onBackPressed(() => { if (this.selecting) { this.endSelection(); return true; } if (name === '归档与回收站' || name === '搜索') { clearTimeout(this.queryTimer); this.scope = 'CURRENT'; this.query = ''; this.search(); } return false; })
+    }.title(name).onShown(()=>{if (name === '搜索' && this.focusSearchOnShow) { this.focusSearchOnShow = false; focusVisibleInput(this.getUIContext(), 'searchInput'); } if(name==='位置详情' && id)this.focusedLocation=id;if(name==='物品详情' && id)this.focusedId=id;}).backgroundColor($r('app.color.background')).onBackPressed(() => { if (this.selecting) { this.endSelection(); return true; } if (name === '归档与回收站' || name === '搜索') { clearTimeout(this.queryTimer); this.scope = 'CURRENT'; this.query = ''; this.search(); } return false; })
   }
-  @Builder editor() { ItemEditor({ repository: this.repository, initial: this.editorDraft, onView:(id:string)=>{this.editorOpen=false;this.refresh();this.detail(id);}, onFind:(name:string)=>{this.editorOpen=false;this.query=name;this.scope='CURRENT';this.filter='全部';this.category='';this.submitSearch();this.navigate('搜索');}, onReminder:()=>{this.editorOpen=false;this.navigate('到期提醒');}, onSaved: (id: string) => { this.focusedId = id; this.refresh(); if (this.editorDraft.mode === 'EDIT' && id === this.editorDraft.itemId) { this.editorOpen = false; this.notify('已保存'); } }, onClose: () => { this.editorOpen = false; this.refresh(); } }) }
+  @Builder editor() {
+    ItemEditor({ repository: this.repository, initial: this.editorDraft,
+      registerBack: (handler?: () => boolean) => this.editorBack = handler,
+      onView: (id: string) => { this.afterSheet = () => this.detail(id); this.editorOpen = false; },
+      onFind: (name: string) => {
+        this.afterSheet = () => {
+          this.query = name; this.scope = 'CURRENT'; this.filter = '全部'; this.category = '';
+          this.submitSearch(); this.navigate('搜索');
+        };
+        this.editorOpen = false;
+      },
+      onReminder: () => { this.afterSheet = () => this.navigate('到期提醒'); this.editorOpen = false; },
+      onSaved: (id: string) => {
+        this.focusedId = id;
+        if (this.editorDraft.mode === 'EDIT' && id === this.editorDraft.itemId) {
+          this.editorOpen = false; this.notify('已保存');
+        }
+      },
+      onClose: () => this.editorOpen = false })
+  }
   @Builder tabLabel(label:string,index:number){
     Column({ space: 2 }) {
-      if (index === 0) { SymbolGlyph(this.tab===index?$r('sys.symbol.house_fill'):$r('sys.symbol.house')).fontSize(20).fontColor([this.tab===index?$r('app.color.primary'):$r('app.color.secondary')]) }
-      else if (index === 1) { SymbolGlyph(this.tab===index?$r('sys.symbol.local_fill'):$r('sys.symbol.local')).fontSize(20).fontColor([this.tab===index?$r('app.color.primary'):$r('app.color.secondary')]) }
-      else { SymbolGlyph(this.tab===index?$r('sys.symbol.person_fill'):$r('sys.symbol.person')).fontSize(20).fontColor([this.tab===index?$r('app.color.primary'):$r('app.color.secondary')]) }
-      Text(label).fontSize(11).fontColor(this.tab===index?$r('app.color.primary'):$r('app.color.secondary')).fontWeight(this.tab===index?FontWeight.Medium:FontWeight.Regular)
-    }.justifyContent(FlexAlign.Center).height(48).constraintSize({minWidth:64}).padding({left:10,right:10}).accessibilityGroup(true).accessibilityText(label).accessibilitySelected(this.tab===index)
+      if (index === 0) { SymbolGlyph(this.highlightedTab===index?$r('sys.symbol.house_fill'):$r('sys.symbol.house')).fontSize(20).fontColor([this.highlightedTab===index?$r('app.color.primary'):$r('app.color.secondary')]) }
+      else if (index === 1) { SymbolGlyph(this.highlightedTab===index?$r('sys.symbol.local_fill'):$r('sys.symbol.local')).fontSize(20).fontColor([this.highlightedTab===index?$r('app.color.primary'):$r('app.color.secondary')]) }
+      else { SymbolGlyph(this.highlightedTab===index?$r('sys.symbol.person_fill'):$r('sys.symbol.person')).fontSize(20).fontColor([this.highlightedTab===index?$r('app.color.primary'):$r('app.color.secondary')]) }
+      Text(label).fontSize(11).fontColor(this.highlightedTab===index?$r('app.color.primary'):$r('app.color.secondary')).fontWeight(this.highlightedTab===index?FontWeight.Medium:FontWeight.Regular)
+    }.justifyContent(FlexAlign.Center).height(48).constraintSize({minWidth:64}).padding({left:10,right:10}).accessibilityGroup(true).accessibilityText(label).accessibilitySelected(this.highlightedTab===index)
   }
   @Builder captureButton(){Button({type:ButtonType.Circle}){SymbolGlyph($r('sys.symbol.plus')).fontSize(28).fontColor([$r('app.color.onPrimary')])}.width(56).height(56).backgroundColor($r('app.color.primary')).accessibilityText('记下一件').onClick(()=>this.newItem())}
   build() {
     Navigation(this.stack) {
       Column() {
-        Blank().width(0).height(0).bindSheet($$this.editorOpen, this.editor, { height: SheetSize.LARGE, dragBar: true, showClose: false, backgroundColor: $r('app.color.background'), keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY, onDisappear: () => this.resumeEntry() })
+        Blank().width(0).height(0).bindSheet($$this.editorOpen, this.editor, { height: SheetSize.LARGE, dragBar: true, showClose: false, backgroundColor: $r('app.color.background'), keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
+          onAppear: () => {
+            if (this.editorOpen && this.editorDraft.mode === 'CREATE' && !this.editorDraft.payload.title && !this.editorDraft.payload.photoIds.length) {
+              focusVisibleInput(this.getUIContext(), 'nameInput');
+            }
+          },
+          onWillDismiss: (action: DismissSheetAction) => {
+            if (action.reason === DismissReason.PRESS_BACK && this.editorBack?.()) return;
+            action.dismiss();
+          }, onDisappear: () => this.resumeEntry() })
         Blank().width(0).height(0).bindSheet($$this.panelOpen, this.actionPanel, { height: SheetSize.FIT_CONTENT, dragBar: true, showClose: true, backgroundColor: $r('app.color.background'), keyboardAvoidMode: SheetKeyboardAvoidMode.TRANSLATE_AND_SCROLL, onDisappear: () => this.resumeEntry() })
-        Blank().width(0).height(0).bindSheet($$this.shareOpen, this.share, { height: SheetSize.LARGE, showClose: false, onDisappear: () => this.resumeEntry() })
+        Blank().width(0).height(0).bindSheet($$this.shareOpen, this.share, { height: SheetSize.LARGE, showClose: false,
+          onWillDismiss: (action: DismissSheetAction) => {
+            if (action.reason === DismissReason.PRESS_BACK && this.shareBack?.()) return;
+            action.dismiss();
+          }, onDisappear: () => this.resumeEntry() })
+        Blank().width(0).height(0).bindSheet($$this.voiceOpen, this.voice, { height: SheetSize.FIT_CONTENT, dragBar: true,
+          showClose: false, backgroundColor: $r('app.color.background'),
+          onWillDisappear: () => this.stopVoice?.(), onDisappear: () => this.resumeEntry() })
         if (!this.ready) {
           Column({ space: 12 }) {
-            this.characterImage(128)
+            this.characterImage(128, true)
             Text(this.failure || '正在打开自己的家当').fontColor($r('app.color.text'))
             if (this.failure) { ActionButton({ label: '重新读取', run: () => this.open() }) }
           }.width('100%').height('100%').justifyContent(FlexAlign.Center)
@@ -939,9 +1100,17 @@ struct Index {
             TabContent(){Scroll(this.homeScroller){Column({space:12}){this.home()}.width('100%').alignItems(HorizontalAlign.Start).padding({left:20,right:20,bottom:110})}.width('100%').height('100%').align(Alignment.TopStart).onAppear(()=>this.tabsController.bindScroller(0,this.homeScroller))}.tabBar(this.tabLabel('家当',0))
             TabContent(){Scroll(this.locationScroller){Column({space:12}){this.locations(true)}.width('100%').alignItems(HorizontalAlign.Start).padding({left:20,right:20,bottom:110})}.width('100%').height('100%').align(Alignment.TopStart).onAppear(()=>this.tabsController.bindScroller(1,this.locationScroller))}.tabBar(this.tabLabel('位置',1))
             TabContent(){Scroll(this.mineScroller){Column({space:12}){this.mine()}.width('100%').alignItems(HorizontalAlign.Start).padding({left:20,right:20,bottom:110})}.width('100%').height('100%').align(Alignment.TopStart).onAppear(()=>this.tabsController.bindScroller(2,this.mineScroller))}.tabBar(this.tabLabel('我的',2))
-          }.barPosition(BarPosition.End).vertical(false).barOverlap(true).scrollable(false).animationDuration(0)
+          }.barPosition(BarPosition.End).vertical(false).barOverlap(true).scrollable(false).animationDuration(this.reducedMotion ? 0 : 200)
+          .onAppear(() => { this.tabsMounted = true; this.preloadTab(1); })
+          .onDisAppear(() => { this.tabsMounted = false; })
+          .onAnimationStart((_from: number, to: number) => this.highlightedTab = to)
           .barFloatingStyle({barWidth:{smallWidth:236,mediumWidth:300,largeWidth:360},barSideMargin:20,barBottomMargin:12,systemMaterialEffect:{materialType:hdsMaterial.MaterialType.IMMERSIVE,materialLevel:hdsMaterial.MaterialLevel.ADAPTIVE},miniBar:{miniBarBuilder:()=>{this.captureButton()},miniBarWidth:{smallWidth:56,mediumWidth:56,largeWidth:56}}})
-          .onChange((index:number)=>{this.endSelection();this.tab=index;this.preference((pref:Preference)=>pref.lastTab=index);}).width('100%').layoutWeight(1).onAreaChange((oldArea:Area,newArea:Area)=>this.contentWidth=Number(newArea.width))
+          .onChange((index: number) => {
+            this.endSelection();
+            this.highlightedTab = index;
+            this.tab = index;
+            if (this.repository.data.preference.lastTab !== index) this.preference((pref: Preference) => pref.lastTab = index);
+          }).width('100%').layoutWeight(1).onAreaChange((oldArea:Area,newArea:Area)=>this.contentWidth=Number(newArea.width))
         }
       }.width('100%').height('100%').backgroundColor($r('app.color.background'))
     }.hideTitleBar(true).mode(NavigationMode.Auto).navBarWidth(360).navBarWidthRange([320, 480]).minContentWidth(360).navDestination(this.destination).backgroundColor($r('app.color.background'))

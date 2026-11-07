@@ -1,5 +1,14 @@
 // 公共界面组件。图标统一使用系统 HM Symbol，颜色取自应用色板，深浅色自动跟随。
 
+/**
+ * 转场被打断时输入框可能已经卸载，此时保留系统选定的焦点。
+ */
+export function focusVisibleInput(context: UIContext, id: string): void {
+  try {
+    context.getFocusController().requestFocus(id);
+  } catch (_) {}
+}
+
 @Component
 export struct ActionButton {
   @Prop label: string = '';
@@ -55,7 +64,7 @@ export struct MenuRow {
   @Prop first: boolean = false;
   @Prop danger: boolean = false;
   @Prop chevron: boolean = true;
-  action: () => void = () => {};
+  action?: () => void;
 
   build() {
     Column() {
@@ -77,7 +86,7 @@ export struct MenuRow {
         if (this.value) {
           Text(this.value).fontSize(14).fontColor($r('app.color.secondary')).maxLines(1)
         }
-        if (this.chevron) {
+        if (this.chevron && this.action) {
           SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(16).fontColor([$r('app.color.tertiary')])
         }
       }
@@ -88,7 +97,8 @@ export struct MenuRow {
     .width('100%')
     .backgroundColor(this.plain ? Color.Transparent : $r('app.color.surface'))
     .borderRadius(this.plain ? 0 : 20)
-    .onClick(() => this.action())
+    .stateStyles({ pressed: { .opacity(this.action ? 0.72 : 1) } })
+    .onClick(this.action)
     .accessibilityGroup(true)
     .accessibilityLevel('yes')
     .accessibilityText(this.title + (this.subtitle ? '，' + this.subtitle : '') + (this.value ? '，' + this.value : ''))
@@ -135,6 +145,7 @@ export struct QuickAction {
     }
     .layoutWeight(1)
     .padding({ top: 4, bottom: 4 })
+    .stateStyles({ pressed: { .opacity(0.72) } })
     .onClick(() => this.run())
     .accessibilityGroup(true)
     .accessibilityLevel('yes')
@@ -160,6 +171,7 @@ export struct StatTile {
 // 两到三个互斥选项的分段选择。
 @Component
 export struct Segmented {
+  @StorageProp('reducedMotion') reducedMotion: boolean = false;
   @Prop options: string[] = [];
   @Prop selected: number = 0;
   onSelect: (index: number) => void = () => {};
@@ -174,7 +186,7 @@ export struct Segmented {
           .backgroundColor(this.selected === index ? $r('app.color.surface') : Color.Transparent)
           .borderRadius(19)
           .shadow(this.selected === index ? { radius: 6, color: $r('app.color.shadow'), offsetY: 1 } : { radius: 0, color: Color.Transparent })
-          .animation({ duration: 180, curve: Curve.FastOutSlowIn })
+          .animation({ duration: this.reducedMotion ? 0 : 180, curve: Curve.FastOutSlowIn })
           .onClick(() => this.onSelect(index))
           .accessibilityText(option).accessibilitySelected(this.selected === index)
       }, (option: string) => option)

@@ -8,6 +8,7 @@ export struct VoicePanel {
   currentValue: string = '';
   maxLength: number = 80;
   append: boolean = false;
+  registerStop: (stop?: () => void) => void = () => {};
   onAdopt: (text: string) => void = () => {};
   onCancel: () => void = () => {};
   @State candidate: string = '';
@@ -20,8 +21,11 @@ export struct VoicePanel {
   private timer: number = -1;
   private generation: number = 0;
   private settled: boolean = false;
-  aboutToAppear(): void { this.start(); }
-  aboutToDisappear(): void { this.alive = false; this.cancelSession(); try { this.engine?.shutdown(); } catch (_) {} }
+  aboutToAppear(): void {
+    this.registerStop(() => { this.settled = true; this.cancelSession(); });
+    this.start();
+  }
+  aboutToDisappear(): void { this.registerStop(undefined); this.alive = false; this.cancelSession(); try { this.engine?.shutdown(); } catch (_) {} }
   backgroundChanged(): void { this.cancel(); }
   private cancelSession(): void {
     this.generation++; clearTimeout(this.timer); this.recording = false;
@@ -69,13 +73,14 @@ export struct VoicePanel {
     } catch (_) { if (generation === this.generation) this.fail('暂时无法使用语音，请重试或直接打字'); }
   }
   build() {
-    Column({ space: 8 }) {
+    Column({ space: 12 }) {
+      Text(this.target === '搜索词' ? '语音查找' : '语音填写' + this.target).fontSize(20).fontColor($r('app.color.text'))
       Text(this.state).fontSize(14).fontColor($r('app.color.primary'))
       if (this.candidate) { Text(this.candidate).fontSize(14).maxLines(3).fontColor($r('app.color.secondary')) }
       Row({ space: 12 }) {
         if (this.recording) { Button('说完了').height(48).onClick(() => this.finish()) }
         Button('取消').height(48).onClick(() => this.cancel())
       }
-    }.width('100%').padding(12).backgroundColor($r('app.color.subtle')).borderRadius(16)
+    }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 24 })
   }
 }
