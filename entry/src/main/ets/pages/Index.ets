@@ -21,6 +21,7 @@ import { readApplicationIcon } from '../services/ApplicationIcon';
 
 interface ItemRows { values: Item[]; here?: string; }
 interface DateRow { item: Item; date: ItemDate; }
+interface HomeDateSummary { next: DateRow[]; overdue: number; total: number; }
 
 @Entry
 @Component
@@ -42,6 +43,7 @@ struct Index {
   @State @Watch('search') homeFilter: string = '全部';
   @State @Watch('search') homeCategory: string = '';
   @State homeResults: Item[] = [];
+  @State homeDates: HomeDateSummary = { next: [], overdue: 0, total: 0 };
   @State locationResults: Item[] = [];
   @State listView: boolean = false;
   @State query: string = '';
@@ -66,6 +68,7 @@ struct Index {
   @State panelError: string = '';
   @State handled: boolean = false;
   @State searchFilters: boolean = false;
+  @State showAllSearchResults: boolean = false;
   @State moreActions: boolean = false;
   @State historyOpen: boolean = false;
   @State previewPhoto: string = '';
@@ -182,7 +185,16 @@ struct Index {
       this.calendar.sync(); this.applyTheme(); this.routeEntry(); this.readShares(); this.search();
     } catch (error) { this.failure = `读取遇到问题：${(error as Error).message}`; }
   }
-  private refresh(): void { this.data = copy(this.repository.data); this.search(); if(this.ready) {this.calendar?.sync();clearTimeout(this.cardTimer);this.cardTimer=setTimeout(()=>CardService.refresh(this.repository).catch(()=>{}),250);} }
+  private refresh(): void {
+    this.data = copy(this.repository.data);
+    this.homeDates = this.homeDateSummary();
+    this.search();
+    if (this.ready) {
+      this.calendar?.sync();
+      clearTimeout(this.cardTimer);
+      this.cardTimer = setTimeout(() => CardService.refresh(this.repository).catch(() => {}), 250);
+    }
+  }
   private media(): MediaService { return new MediaService(this.getUIContext().getHostContext() as common.UIAbilityContext, this.repository); }
   private foreground(): void { if (this.ready) { this.repository.reload(); this.repository.maintain(this.getUIContext().getHostContext() as common.UIAbilityContext); this.refresh(); this.readShares(); if (!this.iconBusy) this.loadIcon(); } }
   private routeEntry(): void {
@@ -244,11 +256,20 @@ struct Index {
     if (!this.data.preference.reminderEnabled) return '提醒未开启';
     return this.reminderResults.find((result: ReminderResult) => result.day === date.date)?.message ?? '等待写入系统日历';
   }
-  // 30 天内到期或已经过期、尚未处理的日期，按日期先后排列
-  private upcoming(): DateRow[] {
+  private homeDateSummary(): HomeDateSummary {
     const rows: DateRow[] = [];
-    this.data.items.filter((item: Item) => !item.deletedAt && item.status !== 'ARCHIVED').forEach((item: Item) => item.dates.forEach((date: ItemDate) => { if (!date.handledAt && daysUntil(date.date) <= 30) rows.push({ item, date }); }));
-    return rows.sort((a: DateRow, b: DateRow) => a.date.date.localeCompare(b.date.date));
+    let overdue = 0;
+    for (const item of this.data.items) {
+      if (item.deletedAt || item.status === 'ARCHIVED') continue;
+      for (const date of item.dates) {
+        if (date.handledAt) continue;
+        const days = daysUntil(date.date);
+        if (days < 0) overdue++;
+        else if (days <= 30) rows.push({ item, date });
+      }
+    }
+    rows.sort((a: DateRow, b: DateRow) => a.date.date.localeCompare(b.date.date) || a.date.id.localeCompare(b.date.id));
+    return { next: rows.slice(0, 3), overdue, total: rows.length + overdue };
   }
   private dueBadge(item: Item): string {
     const dates = item.dates.filter((date: ItemDate) => !date.handledAt && daysUntil(date.date) <= 30).sort((a: ItemDate, b: ItemDate) => a.date.localeCompare(b.date));
@@ -297,14 +318,24 @@ struct Index {
   private selectItem(id: string): void {
     const pages = this.stack.getAllPathName();
     const page = pages[pages.length - 1] ?? '';
-    if (!page || page === '位置详情' || (page === '搜索' && (!!this.query.trim() || this.filter !== '全部' || !!this.category))) {
+    if (!page || page === '位置详情' || (page === '搜索' && !this.showSearchSuggestions())) {
       this.selecting = true; this.selected = [id];
     }
   }
   private beginSearch(): void {
     clearTimeout(this.queryTimer);
+    this.showAllSearchResults = false;
     this.query = ''; this.scope = 'CURRENT'; this.filter = '全部'; this.category = ''; this.searchFilters = false;
     this.search(); this.navigate('搜索');
+  }
+  private showSearchSuggestions(): boolean {
+    return !this.showAllSearchResults && !this.query.trim() && this.scope === 'CURRENT' && this.filter === '全部' && !this.category;
+  }
+  private viewAllSearchResults(): void {
+    this.endSelection();
+    this.filter = '全部'; this.category = ''; this.scope = 'CURRENT';
+    this.showAllSearchResults = true;
+    this.search();
   }
   private submitSearch(): void {
     this.search(); const query = this.query.trim();
@@ -423,6 +454,25 @@ struct Index {
       }.enabled(this.selected.length > 0)
     }
   }
+  @Builder homeDateCard() {
+    if (this.homeDates.total) {
+      Column({ space: 8 }) {
+        Row({ space: 8 }) {
+          SymbolGlyph($r('sys.symbol.bell')).fontSize(18).fontColor([$r('app.color.warning')])
+          Text(this.homeDates.overdue ? '有日期需要处理' : '快到期了').fontSize(16).fontWeight(FontWeight.Medium).fontColor($r('app.color.warning'))
+          Blank()
+          Text(`${this.homeDates.total} 项`).fontSize(14).fontColor($r('app.color.secondary'))
+          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([$r('app.color.tertiary')])
+        }.width('100%')
+        ForEach(this.homeDates.next, (row: DateRow) => {
+          Row() { Text(displayName(row.item)).fontSize(15).fontColor($r('app.color.text')).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }); Text(relativeDue(row.date.date, row.date.type)).fontSize(14).fontColor(daysUntil(row.date.date) <= 2 ? $r('app.color.warning') : $r('app.color.secondary')) }.width('100%').padding({ left: 26 })
+        }, (row: DateRow) => row.date.id + ':' + row.item.revision + ':' + localDate(new Date()))
+        if (this.homeDates.overdue) {
+          Text((this.homeDates.next.length ? '另有 ' : '') + this.homeDates.overdue + ' 项已过期').fontSize(14).fontColor($r('app.color.warning')).width('100%').padding({ left: 26 })
+        }
+      }.width('100%').padding(16).backgroundColor($r('app.color.surface')).borderRadius(20).onClick(() => { this.handled = false; this.navigate('提醒'); }).accessibilityLevel('yes')
+    }
+  }
   @Builder home() {
     Row() {
       Column({ space: 2 }) {
@@ -441,20 +491,7 @@ struct Index {
         .onClick(() => this.scan(true))
     }
       .width('100%').height(52).padding({ left: 18, right: 4 }).backgroundColor($r('app.color.surface')).borderRadius(26)
-    if (this.upcoming().length) {
-      Column({ space: 8 }) {
-        Row({ space: 8 }) {
-          SymbolGlyph($r('sys.symbol.bell')).fontSize(18).fontColor([$r('app.color.warning')])
-          Text(this.upcoming().some((row: DateRow) => daysUntil(row.date.date) < 0) ? '有日期需要处理' : '快到期了').fontSize(16).fontWeight(FontWeight.Medium).fontColor($r('app.color.warning'))
-          Blank()
-          Text(`${this.upcoming().length} 项`).fontSize(14).fontColor($r('app.color.secondary'))
-          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([$r('app.color.tertiary')])
-        }.width('100%')
-        ForEach(this.upcoming().slice(0, 3), (row: DateRow) => {
-          Row() { Text(displayName(row.item)).fontSize(15).fontColor($r('app.color.text')).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }); Text(relativeDue(row.date.date, row.date.type)).fontSize(14).fontColor(daysUntil(row.date.date) <= 2 ? $r('app.color.warning') : $r('app.color.secondary')) }.width('100%').padding({ left: 26 })
-        }, (row: DateRow) => row.date.id + ':' + row.date.date)
-      }.width('100%').padding(16).backgroundColor($r('app.color.surface')).borderRadius(20).onClick(() => this.navigate('提醒')).accessibilityLevel('yes')
-    }
+    this.homeDateCard()
     if (this.latestDraft()) {
       Row({ space: 10 }) {
         SymbolGlyph($r('sys.symbol.square_and_pencil')).fontSize(18).fontColor([$r('app.color.primary')])
@@ -510,17 +547,17 @@ struct Index {
   @Builder searchPage() {
     if (this.voiceOpen) { this.voice() }
     Search({ value: this.query, placeholder: '名称、拼音、说明、位置' }).id('searchInput').height(52).maxLength(100).defaultFocus(true)
-      .onAppear(() => setTimeout(() => { try { this.getUIContext().getFocusController().requestFocus('searchInput'); } catch (_) {} }, 350)).onChange((value: string, preview: PreviewText) => { this.endSelection(); this.query = value; clearTimeout(this.queryTimer); if (!preview.value) this.queryTimer = setTimeout(() => this.search(), 200); }).onSubmit(() => this.submitSearch())
+      .onAppear(() => setTimeout(() => { try { this.getUIContext().getFocusController().requestFocus('searchInput'); } catch (_) {} }, 350)).onChange((value: string, preview: PreviewText) => { this.endSelection(); this.showAllSearchResults = false; this.query = value; clearTimeout(this.queryTimer); if (!preview.value) this.queryTimer = setTimeout(() => this.search(), 200); }).onSubmit(() => this.submitSearch())
     Row({space:8}) {ActionButton({ label: '扫一扫', icon: $r('sys.symbol.barcode_viewfinder'), tonal: true, run: ()=>this.navigate('扫码查同款') });ActionButton({ label: '语音', icon: $r('sys.symbol.mic'), tonal: true, run: ()=>this.voiceOpen=true });ActionButton({label: this.searchFilters ? '收起筛选' : (this.category || this.filter !== '全部' || this.scope !== 'CURRENT' ? '筛选 · 已选' : '筛选'), tonal: this.searchFilters, run:()=>this.searchFilters=!this.searchFilters});}
     if (this.searchFilters) {
     Row({ space: 8 }) { ActionButton({ label: this.scope === 'CURRENT' ? '✓ 在手与借出' : '在手与借出', run: () => { this.endSelection(); this.scope = 'CURRENT'; this.search(); } }); ActionButton({ label: this.scope === 'ARCHIVED' ? '✓ 归档' : '归档', run: () => { this.endSelection(); this.scope = 'ARCHIVED'; this.search(); } }) }
     this.filters()
     }
-    if (this.query.trim() || this.filter !== '全部' || this.category) {
+    if (!this.showSearchSuggestions()) {
       Text(`${this.scope === 'ARCHIVED' ? '归档' : '在手与借出'} · ${this.filter}${this.category ? ' · ' + CATEGORY_NAMES[CATEGORY_CODES.indexOf(this.category)] : ''} · ${this.results.length} 条`).fontSize(14).fontColor($r('app.color.secondary'))
     }
     this.batch(this.results)
-    if (!this.query.trim() && this.filter === '全部' && !this.category) {
+    if (this.showSearchSuggestions()) {
       if (this.data.preference.searchHistory.length) {
         Row() { Text('最近搜索').fontSize(16).fontColor($r('app.color.secondary')); Blank(); ActionButton({ label: '清空', run: () => this.preference((pref: Preference) => pref.searchHistory = []) }) }.width('100%')
         Flex({ wrap: FlexWrap.Wrap, space: { main: LengthMetrics.vp(8), cross: LengthMetrics.vp(8) } }) {
@@ -531,12 +568,25 @@ struct Index {
       if (this.data.items.some((item: Item) => item.lastViewedAt > 0 && !item.deletedAt && (this.scope === 'ARCHIVED' ? item.status === 'ARCHIVED' : item.status !== 'ARCHIVED'))) { Text('最近查看').fontSize(16).fontColor($r('app.color.secondary')) }
       this.items({ values: this.data.items.filter((item: Item) => item.lastViewedAt > 0 && !item.deletedAt && (this.scope === 'ARCHIVED' ? item.status === 'ARCHIVED' : item.status !== 'ARCHIVED')).sort((a: Item, b: Item) => b.lastViewedAt - a.lastViewedAt).slice(0, 6) })
     } else if (this.results.length) { this.items({ values: this.results }) }
-    else {
+    else if (this.query.trim()) {
       Column({ space: 10 }) {
-        Text(`没有找到“${this.query}”`).fontSize(20).fontColor($r('app.color.text'))
+        Text(`没有找到“${this.query.trim()}”`).fontSize(20).fontColor($r('app.color.text'))
         Text('如果它就在手边，现在记下来，下次一搜就有。').fontSize(15).fontColor($r('app.color.secondary'))
-        ActionButton({ label: `记下“${this.query}”`, run: () => this.newItem('', this.query), primary: true })
+        ActionButton({ label: `记下“${this.query.trim()}”`, run: () => this.newItem('', this.query.trim()), primary: true })
         ActionButton({ label: '按位置找', run: () => { this.stack.clear(); this.tab = 1; } })
+      }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 24 })
+    } else {
+      Column({ space: 10 }) {
+        if (this.filter === '常用' && !this.category && this.scope === 'CURRENT') {
+          Text('还没有设为常用的物品').fontSize(20).fontColor($r('app.color.text'))
+        } else if (this.scope === 'CURRENT' && this.filter === '全部' && !this.category) {
+          Text('还没有在手或借出的物品').fontSize(20).fontColor($r('app.color.text'))
+        } else {
+          Text('没有符合当前筛选条件的物品').fontSize(20).fontColor($r('app.color.text'))
+        }
+        if (this.filter !== '全部' || this.category || this.scope !== 'CURRENT') {
+          ActionButton({ label: '查看全部', primary: true, run: () => this.viewAllSearchResults() })
+        }
       }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 24 })
     }
   }
@@ -710,7 +760,7 @@ struct Index {
     GroupCard() {
       MenuRow({ plain: true, first: true, icon: $r('sys.symbol.star'), title: '常用', subtitle: '常找的物品放在手边', value: String(this.data.items.filter((item: Item) => !item.deletedAt && item.status !== 'ARCHIVED' && item.favorite).length), action: () => { this.endSelection(); this.tab = 0; this.homeFilter = '常用'; this.homeCategory = ''; } })
       MenuRow({ plain: true, icon: $r('sys.symbol.square_and_pencil'), title: '草稿', subtitle: this.data.drafts.length ? '还没保存的记录' : '没有未完成的记录', value: this.data.drafts.length ? String(this.data.drafts.length) : '', action: () => this.navigate('草稿') })
-      MenuRow({ plain: true, icon: $r('sys.symbol.bell'), title: '提醒', subtitle: this.upcoming().length ? `${this.upcoming().length} 项 30 天内到期或已过期` : '到期、保修、归还日期', action: () => this.navigate('提醒') })
+      MenuRow({ plain: true, icon: $r('sys.symbol.bell'), title: '提醒', subtitle: this.homeDates.total ? `${this.homeDates.total} 项 30 天内到期或已过期` : '到期、保修、归还日期', action: () => this.navigate('提醒') })
     }
     GroupCard() {
       MenuRow({ plain: true, first: true, icon: $r('sys.symbol.archivebox'), title: '归档与回收站', subtitle: '查看历史，恢复记录', action: () => { this.scope = 'ARCHIVED'; this.query = ''; this.filter = '全部'; this.category = ''; this.search(); this.navigate('归档与回收站'); } })

@@ -1,6 +1,6 @@
 import { relationalStore } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
-import { Snapshot, Item, Location, Asset, Draft, ChangeEvent, Preference, copy, normalize, length, uuid, displayName, expiryDate, setDate, CATEGORY_CODES, statusText } from '../model/Models';
+import { Snapshot, Item, Location, Asset, Draft, ChangeEvent, Preference, copy, normalize, length, uuid, displayName, editorContent, expiryDate, setDate, CATEGORY_CODES, statusText } from '../model/Models';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { i18n } from '@kit.LocalizationKit';
 
@@ -264,8 +264,19 @@ export class Repository {
   maintain(context: common.Context): void {
     const expired=this.data.items.filter((item:Item)=>item.deletedAt && item.purgeAt<=Date.now()).map((item:Item)=>item.id);
     if(expired.length)this.purge(expired);
-    // 清理旧版本误存的空草稿：新建草稿里既没有名称、照片，也没有任何填写内容
-    const empty=this.data.drafts.filter((draft:Draft)=>{const item=draft.payload;return draft.mode==='CREATE' && !item.title.trim() && !item.photoIds.length && !draft.assetIds.length && !item.notes.trim() && !item.expiryInput.directDate && !item.expiryInput.producedOn && !item.expiryInput.value && !item.aliases.length && !item.tags.length && !item.category && !item.barcodeValue && !item.dates.length && !draft.candidates;}).map((draft:Draft)=>draft.id);
+    const empty = this.data.drafts.filter((draft: Draft) => {
+      if (draft.candidates) return false;
+      const item = draft.payload;
+      if (draft.mode === 'EDIT') {
+        // 只清理能与原修订核对的旧草稿，记录有冲突时由用户决定保留哪一份。
+        const original = this.data.items.find((value: Item) => value.id === draft.itemId);
+        return !!original && !original.deletedAt && original.revision === draft.baseRevision &&
+          editorContent(item) === editorContent(original);
+      }
+      return draft.mode === 'CREATE' && !item.title.trim() && !item.photoIds.length && !draft.assetIds.length &&
+        !item.notes.trim() && !item.expiryInput.directDate && !item.expiryInput.producedOn && !item.expiryInput.value &&
+        !item.aliases.length && !item.tags.length && !item.category && !item.barcodeValue && !item.dates.length;
+    }).map((draft: Draft) => draft.id);
     if(empty.length){this.transaction(()=>empty.forEach((id:string)=>this.remove('draft',id)));this.data.drafts=this.data.drafts.filter((draft:Draft)=>!empty.includes(draft.id));}
     const refs=new Set<string>();
     this.data.items.forEach((item:Item)=>item.photoIds.forEach((id:string)=>refs.add(id)));

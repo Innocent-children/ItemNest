@@ -94,6 +94,16 @@ export class Draft {
   shareAsGroup: boolean = false;
   shareSourceCount: number = 0;
 }
+// 编辑是否有变化取决于表单字段；查看时间和日期对象的内部修订都可能独立变化。
+export function editorContent(item: Item): string {
+  const expiry = item.expiryInput;
+  const warranty = item.dates.find((date: ItemDate) => date.type === 'WARRANTY');
+  const dueReturn = item.dates.find((date: ItemDate) => date.type === 'RETURN');
+  return JSON.stringify([item.title, item.kind, item.notes, item.category, item.aliases, item.tags,
+    item.locationId, item.quantity, item.photoIds, item.barcodeType, item.barcodeValue,
+    expiry.mode, expiry.directDate, expiry.producedOn, expiry.value, expiry.unit,
+    warranty?.date ?? '', dueReturn?.date ?? '']);
+}
 export class ChangeEvent {
   id: string = uuid();
   itemId: string = '';

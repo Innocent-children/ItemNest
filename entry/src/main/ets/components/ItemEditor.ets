@@ -1,6 +1,6 @@
 import { ActionButton, MenuRow, GroupCard, Segmented } from './Common';
 import { common } from '@kit.AbilityKit';
-import { Item, Draft, ItemDate, copy, uuid, expiryDate, setDate, displayName, validDate, normalize, shortDate, relativeDue, daysUntil, reminderClock, CATEGORY_CODES, CATEGORY_NAMES } from '../model/Models';
+import { Item, Draft, ItemDate, copy, uuid, editorContent, expiryDate, setDate, displayName, validDate, normalize, shortDate, relativeDue, daysUntil, reminderClock, CATEGORY_CODES, CATEGORY_NAMES } from '../model/Models';
 import { Repository } from '../data/Repository';
 import { MediaService } from '../services/MediaService';
 import { VoicePanel } from './VoicePanel';
@@ -37,6 +37,7 @@ export struct ItemEditor {
   @State sessionSaved: number = 0;
   @State banner: string = '';
   private baselineLocation: string = '';
+  private editBaseline?: string;
   private recognitionId: string = '';
   private recognitionTimer: number = -1;
   @StorageProp('backgroundAt') @Watch('saveOnBackground') backgroundAt: number = 0;
@@ -44,7 +45,16 @@ export struct ItemEditor {
   private alive: boolean = false;
   private operation: string = uuid();
 
-  aboutToAppear(): void { this.alive = true; this.draft = copy(this.initial); this.item = copy(this.draft.payload); this.candidates = this.draft.candidates; this.more = false; this.baselineLocation = this.item.locationId; }
+  aboutToAppear(): void {
+    this.alive = true; this.draft = copy(this.initial); this.item = copy(this.draft.payload);
+    this.candidates = this.draft.candidates; this.more = false; this.baselineLocation = this.item.locationId;
+    if (this.draft.mode === 'EDIT') {
+      const original = this.repository.data.items.find((item: Item) => item.id === this.draft.itemId);
+      if (original && !original.deletedAt && original.revision === this.draft.baseRevision) {
+        this.editBaseline = editorContent(original);
+      }
+    }
+  }
   private focusName(): void {
     if (this.draft.mode !== 'CREATE' || this.item.title || this.item.photoIds.length) return;
     setTimeout(() => { if (this.alive && !this.receipt) { try { this.getUIContext().getFocusController().requestFocus('nameInput'); } catch (_) {} } }, 350);
@@ -59,9 +69,18 @@ export struct ItemEditor {
     if (this.receipt || !this.alive) return;
     // 记录类型和带入的位置只是上下文，用户没有填写内容时不生成草稿
     const hasInput = !!(this.item.title.trim() || this.item.photoIds.length || this.item.notes.trim() || this.item.locationId !== this.baselineLocation || this.item.expiryInput.directDate || this.item.expiryInput.producedOn || this.item.expiryInput.value || this.item.aliases.length || this.item.tags.length || this.item.category || this.item.barcodeValue || this.item.dates.length || (this.item.kind === 'SINGLE' && this.item.quantity !== 1));
-    if (this.draft.mode === 'CREATE' && !hasInput) { if (this.repository.data.drafts.some((draft: Draft) => draft.id === this.draft.id)) this.repository.deleteDraft(this.draft.id); return; }
-    this.draft.payload = copy(this.item); this.draft.candidates = this.candidates;
-    try { this.repository.saveDraft(this.draft); } catch (error) { this.error = `草稿暂未保存：${(error as Error).message}`; }
+    const unchangedEdit = this.draft.mode === 'EDIT' && !this.candidates && this.editBaseline === editorContent(this.item);
+    const stored = this.repository.data.drafts.find((draft: Draft) => draft.id === this.draft.id);
+    try {
+      if ((this.draft.mode === 'CREATE' && !hasInput) || unchangedEdit) {
+        if (stored) this.repository.deleteDraft(this.draft.id);
+        return;
+      }
+      if (stored && stored.baseRevision === this.draft.baseRevision && stored.candidates === this.candidates &&
+        JSON.stringify(stored.payload) === JSON.stringify(this.item)) return;
+      this.draft.payload = copy(this.item); this.draft.candidates = this.candidates;
+      this.repository.saveDraft(this.draft);
+    } catch (error) { this.error = `草稿暂未保存：${(error as Error).message}`; }
   }
   private async photos(camera: boolean): Promise<void> {
     if (this.busy) return; this.busy = true; this.error = ''; const session = this.draft.id;
@@ -126,6 +145,7 @@ export struct ItemEditor {
     if (this.busy || this.receipt) return; this.busy = true;
     try {
       const id = this.repository.saveItem(this.item, this.draft.id, this.operation);
+      if (this.draft.mode === 'EDIT') this.receipt = id;
       if (this.draft.mode === 'CREATE') this.sessionSaved++;
       this.onSaved(id);
       if (this.continuous && this.draft.mode === 'CREATE') {
@@ -315,7 +335,7 @@ export struct ItemEditor {
             Text('这份草稿：'+displayName(this.item)+' · '+this.item.notes).fontColor($r('app.color.text'))
             if(this.conflict){
               Text('当前记录：'+displayName(this.conflict)+' · '+this.conflict.notes+' · '+this.repository.path(this.conflict.locationId)).fontColor($r('app.color.secondary'))
-              ActionButton({label:'采用当前记录继续编辑',run:()=>{if(this.conflict){this.item=copy(this.conflict);this.draft.baseRevision=this.item.revision;this.conflict=undefined;this.changed();}}})
+              ActionButton({label:'采用当前记录继续编辑',run:()=>{if(this.conflict){this.item=copy(this.conflict);this.draft.baseRevision=this.item.revision;this.editBaseline=editorContent(this.item);this.conflict=undefined;this.changed();}}})
               if(!this.conflict.deletedAt){ActionButton({label:'确认用这份草稿保存',run:()=>{if(this.conflict){this.item.revision=this.conflict.revision;this.conflict=undefined;this.save();}}});}
             }
             ActionButton({label:'保留原记录，另存为新记录',run:()=>this.saveAsNew()})
